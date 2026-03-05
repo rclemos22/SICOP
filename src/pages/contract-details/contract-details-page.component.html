@@ -13,7 +13,7 @@
       
       <div class="flex-1">
         <div class="flex items-center gap-3">
-          <h1 class="text-xl font-bold text-gray-900 dark:text-white font-mono tracking-tight">{{ c.number }}</h1>
+          <h1 class="text-xl font-bold text-gray-900 dark:text-white font-mono tracking-tight">{{ c.contrato }}</h1>
           <span 
             class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase border shadow-sm" 
             [class]="statusClass()"
@@ -21,7 +21,7 @@
             {{ statusLabel() }}
           </span>
         </div>
-        <p class="text-sm text-gray-500 truncate max-w-2xl">{{ c.supplierName }}</p>
+        <p class="text-sm text-gray-500 truncate max-w-2xl">{{ c.contratada }}</p>
       </div>
 
       <!-- Action Buttons -->
@@ -38,6 +38,23 @@
 
     <div class="p-6 md:px-10 md:py-8 max-w-7xl mx-auto space-y-8">
       
+      <!-- Prorrogação Alert Banner -->
+      @if (prorrogacaoInfo(); as prorrog) {
+        <div class="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl animate-in fade-in duration-300">
+          <div class="bg-blue-100 dark:bg-blue-800 p-2 rounded-lg">
+            <span class="material-symbols-outlined text-blue-600 dark:text-blue-300">update</span>
+          </div>
+          <div class="flex-1">
+            <p class="text-sm font-bold text-blue-900 dark:text-blue-200">Vigência Alterada por Aditivo</p>
+            <p class="text-xs text-blue-700 dark:text-blue-300">
+              A data de término original foi alterada pelo Aditivo nº {{ prorrog.numeroAditivo }}.
+              Nova vigência: <strong>{{ prorrog.novaVigencia | date:'dd/MM/yyyy' }}</strong>
+            </p>
+          </div>
+          <span class="material-symbols-outlined text-blue-400">info</span>
+        </div>
+      }
+
       <!-- Key Metrics Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         
@@ -45,14 +62,14 @@
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Valor Global</span>
           <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-            {{ c.valorTotal | currency:'BRL':'symbol':'1.2-2' }}
+            {{ c.valor_anual | currency:'BRL':'symbol':'1.2-2' }}
           </div>
           <div class="h-1 w-full bg-blue-100 dark:bg-blue-900/30 rounded-full mt-2">
             <div class="h-1 bg-sco-blue rounded-full w-full"></div>
           </div>
         </div>
 
-        <!-- Executed Value (Mocked Calculation) -->
+        <!-- Executed Value -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Pago</span>
           <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
@@ -62,11 +79,11 @@
            <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-2">
              <div 
                class="h-1 bg-green-500 rounded-full transition-all duration-500"
-               [style.width.%]="(financialSummary().totalPaid / c.valorTotal) * 100"
+               [style.width.%]="(financialSummary().totalPaid / c.valor_anual) * 100"
              ></div>
            </div>
            <p class="text-[10px] text-gray-400 mt-2 text-right">
-             {{ (financialSummary().totalPaid / c.valorTotal) * 100 | number:'1.0-1' }}% Executado
+             {{ (financialSummary().totalPaid / c.valor_anual) * 100 | number:'1.0-1' }}% Executado
            </p>
         </div>
 
@@ -74,7 +91,7 @@
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Saldo Contratual</span>
           <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-            {{ (c.valorTotal - financialSummary().totalPaid) | currency:'BRL':'symbol':'1.2-2' }}
+            {{ (c.valor_anual - financialSummary().totalPaid) | currency:'BRL':'symbol':'1.2-2' }}
           </div>
           <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
              Disponível para execução
@@ -88,7 +105,7 @@
             {{ daysRemaining() < 0 ? 'Vencido' : daysRemaining() + ' dias' }}
           </div>
           <p class="text-xs text-gray-500 mt-1">
-             Fim: {{ c.endDate | date:'dd/MM/yyyy' }}
+             Fim: {{ c.data_fim | date:'dd/MM/yyyy' }}
           </p>
         </div>
       </div>
@@ -107,6 +124,16 @@
           >
             <span class="material-symbols-outlined text-[20px]">info</span>
             Visão Geral
+          </button>
+          <button 
+            (click)="activeTab.set('ADITIVOS')"
+            class="py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2"
+            [class]="activeTab() === 'ADITIVOS' 
+              ? 'border-sco-blue text-sco-blue' 
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+          >
+            <span class="material-symbols-outlined text-[20px]">history</span>
+            Aditivos ({{ aditivos().length }})
           </button>
           <button 
             (click)="activeTab.set('BUDGETS')"
@@ -141,7 +168,7 @@
                  <div>
                    <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-3">Objeto do Contrato</h3>
                    <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg text-sm text-gray-700 dark:text-gray-300 leading-relaxed border border-gray-100 dark:border-gray-700">
-                     Este contrato tem como objeto a prestação de serviços continuados de {{ c.supplierName }}, conforme especificações técnicas detalhadas no Termo de Referência anexo ao processo SEI nº 00000.00000/2025. Inclui manutenção preventiva e corretiva.
+                     {{ c.objeto || 'Este contrato tem como objeto a prestação de serviços continuados de ' + c.contratada + ', conforme especificações técnicas detalhadas no Termo de Referência.' }}
                    </div>
                  </div>
                  
@@ -175,8 +202,12 @@
                            <dd class="text-sm font-medium text-sco-blue cursor-pointer hover:underline">000000.11111/2025</dd>
                         </div>
                         <div>
-                           <dt class="text-xs text-gray-500 uppercase">Data Assinatura</dt>
-                           <dd class="text-sm font-medium text-gray-900 dark:text-white">01/01/2025</dd>
+                           <dt class="text-xs text-gray-500 uppercase">Data Início</dt>
+                           <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ c.data_inicio | date:'dd/MM/yyyy' }}</dd>
+                        </div>
+                        <div>
+                           <dt class="text-xs text-gray-500 uppercase">Data Término</dt>
+                           <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ c.data_fim | date:'dd/MM/yyyy' }}</dd>
                         </div>
                         <div>
                            <dt class="text-xs text-gray-500 uppercase">Fiscal do Contrato</dt>
@@ -195,6 +226,117 @@
                      </dl>
                   </div>
                </div>
+            </div>
+          }
+
+          <!-- ADITIVOS TAB -->
+          @if (activeTab() === 'ADITIVOS') {
+            <div class="animate-in fade-in duration-300">
+              
+              <!-- Loading State -->
+              @if (aditivosLoading()) {
+                <div class="text-center py-10 text-gray-400">
+                  <span class="material-symbols-outlined text-4xl mb-2 animate-spin">progress_activity</span>
+                  <p>Carregando aditivos...</p>
+                </div>
+              }
+
+              <!-- Error State -->
+              @if (aditivosError(); as err) {
+                <div class="text-center py-10">
+                  <span class="material-symbols-outlined text-4xl mb-2 text-red-300">error</span>
+                  <p class="text-sm text-red-500">{{ err }}</p>
+                </div>
+              }
+
+              <!-- Aditivos Content -->
+              @if (!aditivosLoading() && !aditivosError()) {
+                @if (aditivos().length > 0) {
+
+                  <!-- Prorrogação Highlight -->
+                  @if (prorrogacaoInfo(); as prorrog) {
+                    <div class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="material-symbols-outlined text-blue-600 text-[18px]">swap_horiz</span>
+                        <span class="text-sm font-bold text-blue-900 dark:text-blue-200">Data de término alterada por prorrogação</span>
+                      </div>
+                      <p class="text-xs text-blue-700 dark:text-blue-300 ml-7">
+                        O Aditivo nº <strong>{{ prorrog.numeroAditivo }}</strong> alterou a vigência para 
+                        <strong>{{ prorrog.novaVigencia | date:'dd/MM/yyyy' }}</strong>.
+                      </p>
+                    </div>
+                  }
+
+                  <!-- Aditivos Table -->
+                  <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead class="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº Aditivo</th>
+                          <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
+                          <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Assinatura</th>
+                          <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nova Vigência</th>
+                          <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
+                        @for (aditivo of aditivos(); track aditivo.id) {
+                          <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <!-- Nº Aditivo -->
+                            <td class="px-5 py-4 whitespace-nowrap">
+                              <span class="text-sm font-semibold text-gray-900 dark:text-white font-mono">{{ aditivo.numero_aditivo }}</span>
+                            </td>
+
+                            <!-- Tipo (Badge) -->
+                            <td class="px-5 py-4 text-center whitespace-nowrap">
+                              <span 
+                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border"
+                                [class]="getAditivoTipoBadge(aditivo.tipo)"
+                              >
+                                {{ getAditivoTipoLabel(aditivo.tipo) }}
+                              </span>
+                            </td>
+
+                            <!-- Data Assinatura -->
+                            <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                              {{ aditivo.data_assinatura ? (aditivo.data_assinatura | date:'dd/MM/yyyy') : '---' }}
+                            </td>
+
+                            <!-- Nova Vigência -->
+                            <td class="px-5 py-4 whitespace-nowrap">
+                              @if (aditivo.nova_vigencia) {
+                                <div class="flex items-center gap-1.5">
+                                  <span class="material-symbols-outlined text-blue-500 text-[16px]">event</span>
+                                  <span class="text-sm font-medium text-gray-900 dark:text-white">{{ aditivo.nova_vigencia | date:'dd/MM/yyyy' }}</span>
+                                </div>
+                              } @else {
+                                <span class="text-sm text-gray-400">---</span>
+                              }
+                            </td>
+
+                            <!-- Valor -->
+                            <td class="px-5 py-4 text-right whitespace-nowrap">
+                              @if (aditivo.valor_aditivo != null && aditivo.valor_aditivo > 0) {
+                                <span class="text-sm font-bold text-gray-900 dark:text-white">
+                                  {{ aditivo.valor_aditivo | currency:'BRL':'symbol':'1.2-2' }}
+                                </span>
+                              } @else {
+                                <span class="text-sm text-gray-400">---</span>
+                              }
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <!-- Empty State -->
+                  <div class="text-center py-16 text-gray-400">
+                    <span class="material-symbols-outlined text-4xl mb-2 text-gray-300">note_add</span>
+                    <p class="text-sm font-medium">Nenhum aditivo registrado para este contrato.</p>
+                  </div>
+                }
+              }
             </div>
           }
 

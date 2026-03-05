@@ -25,7 +25,7 @@ export class SuppliersPageComponent {
   // Drawer / Editing State
   selectedSupplier = signal<Supplier | null>(null);
   isEditing = signal(false);
-  
+
   // Form
   supplierForm: FormGroup = this.fb.group({
     name: ['', Validators.required],
@@ -50,7 +50,7 @@ export class SuppliersPageComponent {
 
     return all.filter(s => {
       // 1. Search
-      const matchesSearch = !query || 
+      const matchesSearch = !query ||
         s.name.toLowerCase().includes(query) ||
         s.tradeName.toLowerCase().includes(query) ||
         s.cnpj.includes(query);
@@ -67,10 +67,10 @@ export class SuppliersPageComponent {
   linkedContracts = computed(() => {
     const supplier = this.selectedSupplier();
     if (!supplier) return [];
-    
-    return this.contractService.contracts().filter(c => 
-      c.supplierName.toLowerCase() === supplier.name.toLowerCase() ||
-      c.supplierName.toLowerCase().includes(supplier.tradeName.toLowerCase())
+
+    return this.contractService.contracts().filter(c =>
+      c.contratada.toLowerCase() === supplier.name.toLowerCase() ||
+      c.contratada.toLowerCase().includes(supplier.tradeName.toLowerCase())
     );
   });
 
@@ -127,9 +127,9 @@ export class SuppliersPageComponent {
     if (this.supplierForm.valid && this.selectedSupplier()) {
       const id = this.selectedSupplier()!.id;
       const updates = this.supplierForm.value;
-      
+
       this.supplierService.updateSupplier(id, updates);
-      
+
       // Update local selected state to reflect changes immediately in UI
       this.selectedSupplier.set({ ...this.selectedSupplier()!, ...updates });
       this.isEditing.set(false);

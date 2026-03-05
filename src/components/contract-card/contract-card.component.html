@@ -1,29 +1,24 @@
-<div 
-  (click)="select.emit()"
+<div (click)="select.emit()"
   class="group bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col p-6 min-h-[220px] cursor-pointer"
-  [ngClass]="cardBorderClass()"
->
+  [ngClass]="cardBorderClass()">
   <!-- Header -->
   <div class="flex justify-between items-start mb-auto">
     <div class="flex flex-col gap-0.5">
       <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Contrato</span>
-      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300 font-mono tracking-tight">{{ contract().number }}</span>
+      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300 font-mono tracking-tight">{{
+        contract().contrato }}</span>
     </div>
-    <span 
-      class="text-[10px] px-2.5 py-1 rounded-full font-bold border uppercase tracking-wide"
-      [ngClass]="badgeClass()"
-    >
+    <span class="text-[10px] px-2.5 py-1 rounded-full font-bold border uppercase tracking-wide"
+      [ngClass]="badgeClass()">
       {{ badgeText() }}
     </span>
   </div>
 
   <!-- Body -->
   <div class="py-6">
-    <h3 
-      class="font-semibold text-[15px] leading-snug text-gray-900 dark:text-white transition-colors line-clamp-2"
-      [ngClass]="titleHoverClass()"
-    >
-      {{ contract().supplierName }}
+    <h3 class="font-semibold text-[15px] leading-snug text-gray-900 dark:text-white transition-colors line-clamp-2"
+      [ngClass]="titleHoverClass()">
+      {{ contract().contratada }}
     </h3>
   </div>
 

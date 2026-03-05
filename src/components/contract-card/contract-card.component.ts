@@ -1,6 +1,6 @@
 import { Component, computed, input, output } from '@angular/core';
 import { CommonModule, NgClass } from '@angular/common';
-import { Contract, ContractStatus, calculateDaysRemaining, getEffectiveStatus } from '../../models/contract.model';
+import { Contract, ContractStatus } from '../../models/contract.model';
 
 @Component({
   selector: 'app-contract-card',
@@ -10,26 +10,24 @@ import { Contract, ContractStatus, calculateDaysRemaining, getEffectiveStatus } 
 })
 export class ContractCardComponent {
   contract = input.required<Contract>();
-  
+
   // Output event when card is clicked
   select = output<void>();
 
-  daysRemaining = computed(() => {
-    return calculateDaysRemaining(this.contract().endDate);
-  });
+  /** Usa daysRemaining pré-calculado pelo mapper do service */
+  daysRemaining = computed(() => this.contract().daysRemaining);
 
-  effectiveStatus = computed(() => {
-    return getEffectiveStatus(this.contract(), this.daysRemaining());
-  });
+  /** Usa statusEfetivo pré-calculado pelo mapper do service */
+  effectiveStatus = computed(() => this.contract().statusEfetivo);
 
   // UI Helpers based on status
-  
+
   isRescinded = computed(() => this.effectiveStatus() === ContractStatus.RESCINDIDO);
   isFinalizing = computed(() => this.effectiveStatus() === ContractStatus.FINALIZANDO);
   isVigente = computed(() => this.effectiveStatus() === ContractStatus.VIGENTE);
 
   // Dynamic Classes
-  
+
   cardBorderClass = computed(() => {
     if (this.isRescinded()) return 'hover:border-red-200';
     if (this.isFinalizing()) return 'hover:border-yellow-300';
@@ -60,9 +58,9 @@ export class ContractCardComponent {
   });
 
   footerIcon = computed(() => {
-    if (this.isRescinded()) return 'block'; // Block icon for rescinded/encerrado
-    if (this.isFinalizing()) return 'priority_high'; // Alert icon
-    return 'event_upcoming'; // Calendar icon
+    if (this.isRescinded()) return 'block';
+    if (this.isFinalizing()) return 'priority_high';
+    return 'event_upcoming';
   });
 
   footerTextClass = computed(() => {
@@ -70,7 +68,7 @@ export class ContractCardComponent {
     if (this.isFinalizing()) return 'text-orange-600 dark:text-orange-400';
     return 'text-gray-500 dark:text-gray-400';
   });
-  
+
   footerMessage = computed(() => {
     if (this.isRescinded()) return 'Encerrado';
     const days = this.daysRemaining();
