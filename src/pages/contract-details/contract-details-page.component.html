@@ -251,7 +251,16 @@
 
               <!-- Toolbar Action -->
               <div class="flex justify-between items-center mb-6">
-                 <div></div>
+                 <!-- Toggle -->
+                 <div class="flex bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-0.5">
+                   <button (click)="aditivosViewMode.set('cards')" class="p-1.5 rounded transition-colors" [class]="aditivosViewMode() === 'cards' ? 'text-sco-blue bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'" title="Cards">
+                     <span class="material-symbols-outlined text-[20px]">grid_view</span>
+                   </button>
+                   <button (click)="aditivosViewMode.set('list')" class="p-1.5 rounded transition-colors" [class]="aditivosViewMode() === 'list' ? 'text-sco-blue bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'" title="Lista">
+                     <span class="material-symbols-outlined text-[20px]">view_list</span>
+                   </button>
+                 </div>
+                 
                  <button (click)="openAditivoModal()" class="bg-sco-blue hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors text-sm shadow-sm">
                    <span class="material-symbols-outlined text-[18px]">add</span>
                    Novo Aditivo
@@ -276,6 +285,31 @@
                     </div>
                   }
 
+                  <!-- Aditivos Content -->
+                  @if (aditivosViewMode() === 'cards') {
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      @for (aditivo of sortedAditivos(); track aditivo.id) {
+                        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col gap-3">
+                          <div class="flex justify-between items-start">
+                             <span class="text-sm font-semibold text-gray-900 dark:text-white font-mono">Aditivo {{ aditivo.numero_aditivo }}</span>
+                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border" [class]="getAditivoTipoBadge(aditivo.tipo)">
+                               {{ getAditivoTipoLabel(aditivo.tipo) }}
+                             </span>
+                          </div>
+                          <div class="flex flex-col gap-1 text-sm">
+                            <span class="text-gray-500">Data de Ass.: <span class="font-medium text-gray-900 dark:text-white">{{ aditivo.data_assinatura ? (aditivo.data_assinatura | date:'dd/MM/yyyy') : '---' }}</span></span>
+                            <span class="text-gray-500">Nova Vig.: <span class="font-medium text-gray-900 dark:text-white">{{ aditivo.nova_vigencia ? (aditivo.nova_vigencia | date:'dd/MM/yyyy') : '---' }}</span></span>
+                          </div>
+                          <div class="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800">
+                             <div class="flex justify-between items-center">
+                               <span class="text-xs text-gray-500">Valor</span>
+                               <span class="font-bold text-gray-900 dark:text-white">{{ aditivo.valor_aditivo != null && aditivo.valor_aditivo > 0 ? (aditivo.valor_aditivo | currency:'BRL':'symbol':'1.2-2') : '---' }}</span>
+                             </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
                   <!-- Aditivos Table -->
                   <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -289,7 +323,7 @@
                         </tr>
                       </thead>
                       <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
-                        @for (aditivo of aditivos(); track aditivo.id) {
+                        @for (aditivo of sortedAditivos(); track aditivo.id) {
                           <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <!-- Nº Aditivo -->
                             <td class="px-5 py-4 whitespace-nowrap">
@@ -338,6 +372,7 @@
                       </tbody>
                     </table>
                   </div>
+                  }
                 } @else {
                   <!-- Empty State -->
                   <div class="text-center py-16 text-gray-400">
@@ -354,7 +389,16 @@
              <div class="animate-in fade-in duration-300">
                 <!-- Toolbar Action -->
                 <div class="flex justify-between items-center mb-6">
-                   <div></div>
+                   <!-- Toggle -->
+                   <div class="flex bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-0.5">
+                     <button (click)="budgetsViewMode.set('cards')" class="p-1.5 rounded transition-colors" [class]="budgetsViewMode() === 'cards' ? 'text-sco-blue bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'" title="Cards">
+                       <span class="material-symbols-outlined text-[20px]">grid_view</span>
+                     </button>
+                     <button (click)="budgetsViewMode.set('list')" class="p-1.5 rounded transition-colors" [class]="budgetsViewMode() === 'list' ? 'text-sco-blue bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'" title="Lista">
+                       <span class="material-symbols-outlined text-[20px]">view_list</span>
+                     </button>
+                   </div>
+
                    <button (click)="openDotacaoModal()" class="bg-sco-blue hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors text-sm shadow-sm">
                      <span class="material-symbols-outlined text-[18px]">add</span>
                      Nova Dotação
@@ -362,8 +406,9 @@
                 </div>
 
                 @if (budgets().length > 0) {
+                  @if (budgetsViewMode() === 'cards') {
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     @for (budget of budgets(); track budget.id) {
+                     @for (budget of sortedBudgets(); track budget.id) {
                         <div class="bg-gray-50 dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
                            <div class="flex justify-between items-start mb-2">
                               <span 
@@ -374,7 +419,8 @@
                               </span>
                               <span class="text-xs font-mono text-gray-500">{{ budget.dotacao }}</span>
                            </div>
-                           <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-4">{{ budget.credito }}</h4>
+                           <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-1">{{ budget.credito }}</h4>
+                           <span class="block text-xs text-gray-500 mb-4">Disp.: {{ budget.data_disponibilidade | date:'dd/MM/yyyy' }}</span>
                            
                            <div class="flex justify-between text-sm mb-1">
                               <span class="text-gray-500">Valor Total</span>
@@ -394,6 +440,48 @@
                         </div>
                      }
                   </div>
+                  } @else {
+                  <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                          <tr>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Unidade</th>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dotação</th>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Crédito</th>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Disp.</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saldo</th>
+                          </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
+                          @for (budget of sortedBudgets(); track budget.id) {
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                              <td class="px-5 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border" [class]="getBadgeClass(budget.unid_gestora)">
+                                  {{ budget.unid_gestora }}
+                                </span>
+                              </td>
+                              <td class="px-5 py-4 whitespace-nowrap">
+                                <span class="text-sm font-semibold text-gray-900 dark:text-white font-mono">{{ budget.dotacao }}</span>
+                              </td>
+                              <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                                {{ budget.credito }}
+                              </td>
+                              <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                                {{ budget.data_disponibilidade | date:'dd/MM/yyyy' }}
+                              </td>
+                              <td class="px-5 py-4 text-right whitespace-nowrap">
+                                <span class="text-sm text-gray-900 dark:text-white">{{ budget.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </td>
+                              <td class="px-5 py-4 text-right whitespace-nowrap">
+                                <span class="text-sm font-bold text-green-600">{{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  }
                 } @else {
                   <div class="text-center py-10 text-gray-400">
                      <span class="material-symbols-outlined text-4xl mb-2">money_off</span>

@@ -33,10 +33,22 @@ export class ContractDetailsPageComponent {
   // Active Tab State
   activeTab = signal<'OVERVIEW' | 'ADITIVOS' | 'BUDGETS' | 'FINANCIAL'>('OVERVIEW');
 
+  // View Modes
+  aditivosViewMode = signal<'cards' | 'list'>('cards');
+  budgetsViewMode = signal<'cards' | 'list'>('cards');
+
   // ── Aditivos State ──────────────────────────────────────────────────────
 
   /** Lista de aditivos carregados do Supabase */
   aditivos = signal<Aditivo[]>([]);
+
+  sortedAditivos = computed(() => {
+    return [...this.aditivos()].sort((a, b) => {
+      const dateA = a.data_assinatura ? new Date(a.data_assinatura).getTime() : 0;
+      const dateB = b.data_assinatura ? new Date(b.data_assinatura).getTime() : 0;
+      return dateB - dateA; // Descendente
+    });
+  });
 
   /** Erro ao carregar aditivos */
   aditivosError = signal<string | null>(null);
@@ -109,6 +121,14 @@ export class ContractDetailsPageComponent {
   // ── Budgets & Financial State ───────────────────────────────────────────
 
   budgets = signal<Dotacao[]>([]);
+
+  sortedBudgets = computed(() => {
+    return [...this.budgets()].sort((a, b) => {
+      const dateA = a.data_disponibilidade ? new Date(a.data_disponibilidade).getTime() : 0;
+      const dateB = b.data_disponibilidade ? new Date(b.data_disponibilidade).getTime() : 0;
+      return dateB - dateA; // Descendente
+    });
+  });
   budgetsLoading = signal<boolean>(false);
   budgetsError = signal<string | null>(null);
 

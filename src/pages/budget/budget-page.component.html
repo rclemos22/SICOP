@@ -288,8 +288,10 @@
       <!-- Panel Header -->
       <div
         class="px-6 py-5 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-card-dark flex items-center justify-between shrink-0">
-        <div>
-          <h2 class="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Detalhes da Dotação</h2>
+        <div class="flex-1 min-w-0 pr-4">
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white tracking-tight truncate" [title]="selectedBudget()?.contratada || 'Detalhes da Dotação'">
+            {{ selectedBudget()?.contratada || 'Detalhes da Dotação' }}
+          </h2>
           <p class="text-sm text-gray-500 font-mono mt-0.5 flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px]">folder_open</span>
             {{ selectedBudget()?.dotacao }}

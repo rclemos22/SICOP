@@ -78,7 +78,7 @@ export class BudgetService {
       id: raw.id,
       contract_id: raw.contract_id,
       numero_contrato: raw.numero_contrato || '---',
-      contratada: raw.contratada || '---',
+      contratada: raw.contratada,
       dotacao: raw.dotacao,
       credito: raw.credito || '---',
       data_disponibilidade: raw.data_disponibilidade ? new Date(raw.data_disponibilidade) : new Date(),
