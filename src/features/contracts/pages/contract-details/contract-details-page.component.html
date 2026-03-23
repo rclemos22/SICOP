@@ -382,6 +382,7 @@
           <!-- BUDGETS TAB -->
           @if (activeTab() === 'BUDGETS') {
              <div class="animate-in fade-in duration-300">
+                
                 <!-- Toolbar Action -->
                 <div class="flex justify-between items-center mb-6">
                    <!-- Toggle -->
@@ -400,41 +401,52 @@
                    </button>
                 </div>
 
-                @if (budgets().length > 0) {
-                  @if (budgetsViewMode() === 'cards') {
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     @for (budget of sortedBudgets(); track budget.id) {
-                        <div class="bg-gray-50 dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
-                           <div class="flex justify-between items-start mb-2">
-                              <span 
-                                 class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border"
-                                 [class]="getBadgeClass(budget.unid_gestora)"
-                              >
-                                 {{ budget.unid_gestora }}
-                              </span>
-                              <span class="text-xs font-mono text-gray-500">{{ budget.dotacao }}</span>
-                           </div>
-                           <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-1">{{ budget.credito }}</h4>
-                           <span class="block text-xs text-gray-500 mb-4">Disp.: {{ budget.data_disponibilidade | date:'dd/MM/yyyy' }}</span>
+                 @if (budgets().length > 0) {
+                   @if (budgetsViewMode() === 'cards') {
+                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      @for (budget of sortedBudgets(); track budget.id) {
+                         <div class="bg-gray-50 dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 relative group">
+                           <button (click)="openDotacaoModal(budget)" class="absolute top-2 right-2 p-1.5 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar dotação">
+                             <span class="material-symbols-outlined text-[16px] text-gray-500 dark:text-gray-400">edit</span>
+                           </button>
                            
-                           <div class="flex justify-between text-sm mb-1">
-                              <span class="text-gray-500">Valor Total</span>
-                              <span class="font-semibold">{{ budget.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}</span>
-                           </div>
-                           <div class="flex justify-between text-sm mb-3">
-                              <span class="text-gray-500">Saldo</span>
-                              <span class="font-bold text-green-600">{{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}</span>
-                           </div>
+                           @if (budget.nunotaempenho) {
+                             <div class="mb-3 flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-800">
+                               <span class="material-symbols-outlined text-[14px] text-blue-600 dark:text-blue-400">receipt</span>
+                               <span class="text-xs font-bold text-blue-700 dark:text-blue-300">{{ budget.nunotaempenho }}</span>
+                             </div>
+                           }
 
-                           <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                              <div 
-                                class="h-1.5 bg-green-500" 
-                                [style.width.%]="((budget.total_empenhado) / budget.valor_dotacao) * 100"
-                              ></div>
-                           </div>
-                        </div>
-                     }
-                  </div>
+                            <div class="flex justify-between items-start mb-2">
+                               <span 
+                                  class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border"
+                                  [class]="getBadgeClass(budget.unid_gestora)"
+                               >
+                                  {{ budget.unid_gestora }}
+                               </span>
+                               <span class="text-xs font-mono text-gray-500">{{ budget.dotacao }}</span>
+                            </div>
+                            <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-1">{{ budget.credito }}</h4>
+                            <span class="block text-xs text-gray-500 mb-4">Disp.: {{ budget.data_disponibilidade | date:'dd/MM/yyyy' }}</span>
+                            
+                            <div class="flex justify-between text-sm mb-1">
+                               <span class="text-gray-500">Valor Total</span>
+                               <span class="font-semibold">{{ budget.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}</span>
+                            </div>
+                            <div class="flex justify-between text-sm mb-3">
+                               <span class="text-gray-500">Saldo</span>
+                               <span class="font-bold text-green-600">{{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}</span>
+                            </div>
+
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                               <div 
+                                 class="h-1.5 bg-green-500" 
+                                 [style.width.%]="((budget.total_empenhado) / budget.valor_dotacao) * 100"
+                               ></div>
+                            </div>
+                         </div>
+                      }
+                   </div>
                   } @else {
                   <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -542,6 +554,7 @@
                          <tr>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Data</th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Descrição</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-gray-400 uppercase">NE</th>
                             <th class="px-4 py-3 text-center text-xs font-bold text-gray-400 uppercase">Tipo</th>
                             <th class="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Valor</th>
                          </tr>
@@ -555,6 +568,15 @@
                                <td class="px-4 py-3">
                                   <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t.description }}</div>
                                   <div class="text-xs text-gray-500 font-mono mt-0.5">{{ t.commitment_id }}</div>
+                               </td>
+                               <td class="px-4 py-3 text-center">
+                                  @if (t.nunotaempenho) {
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
+                                      {{ t.nunotaempenho }}
+                                    </span>
+                                  } @else {
+                                    <span class="text-xs text-gray-400">---</span>
+                                  }
                                </td>
                                <td class="px-4 py-3 text-center">
                                   <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border" [class]="getTypeClass(t.type)">
@@ -609,12 +631,13 @@
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" (click)="closeDotacaoModal()"></div>
       <div class="relative w-full max-w-lg z-10 animate-in zoom-in-95 duration-200">
-         <app-dotacao-form
-            [contractId]="contractId()"
-            [numeroContrato]="c.contrato"
-            (save)="onDotacaoSaved($event)"
-            (cancel)="closeDotacaoModal()"
-         ></app-dotacao-form>
+          <app-dotacao-form
+             [contractId]="contractId()"
+             [numeroContrato]="c?.contrato || ''"
+             [editingDotacao]="editingDotacao()"
+             (save)="onDotacaoSaved($event)"
+             (cancel)="closeDotacaoModal()"
+          ></app-dotacao-form>
       </div>
     </div>
   }

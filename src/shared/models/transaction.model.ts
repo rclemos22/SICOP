@@ -15,6 +15,8 @@ export interface Transaction {
   amount: number;
   department: string;
   budget_description: string;
+  nunotaempenho?: string;
+  dotacao_id?: string;
 }
 
 // Helpers for UI logic (Icons, Colors, Labels) based on Type

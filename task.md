@@ -19,3 +19,6 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 5. Alertas automáticos para contratos com menos de 90 dias restantes
 6. Selector de ano fiscal para filtragem de dados
 7. Interface responsiva com sidebar de navegação
+8. **Gestão de Dotações**: Cadastro, edição e exclusão de dotações vinculadas a contratos
+9. **Vinculação de NE**: Associar Notas de Empenho às dotações via API SIGEF
+10. **Controle por Unidade Gestora**: Suporte a UG 080101 (DPEMA) e 080901 (FADEP)

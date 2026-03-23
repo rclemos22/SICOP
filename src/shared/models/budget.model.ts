@@ -14,6 +14,7 @@ export interface Dotacao {
   total_cancelado?: number;
   total_pago?: number;
   saldo_disponivel?: number;
+  nunotaempenho?: string;
 }
 
 export interface DotacaoPayload {
@@ -21,9 +22,19 @@ export interface DotacaoPayload {
   numero_contrato: string;
   dotacao: string;
   credito: string;
-  data_disponibilidade: string; // ISO format for DB
+  data_disponibilidade: string;
   unid_gestora: string;
   valor_dotacao: number;
+  nunotaempenho?: string;
+}
+
+export interface NotaEmpenhoVinculada {
+  nunotaempenho: string;
+  cdunidadegestora: string;
+  vlnotaempenho: number;
+  dtlancamento: string;
+  cdnaturezadespesa: string;
+  dehistorico: string;
 }
 
 /**

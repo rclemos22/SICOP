@@ -61,6 +61,7 @@ export class ContractDetailsPageComponent {
   // ── Modals State ────────────────────────────────────────────────────────
   isAditivoModalOpen = signal(false);
   isDotacaoModalOpen = signal(false);
+  editingDotacao = signal<Dotacao | null>(null);
 
   // ── Computed Contract ───────────────────────────────────────────────────
 
@@ -246,16 +247,34 @@ export class ContractDetailsPageComponent {
     this.closeAditivoModal();
   }
 
-  openDotacaoModal() {
+  openDotacaoModal(dotacao?: Dotacao) {
+    if (dotacao) {
+      this.editingDotacao.set(dotacao);
+    } else {
+      this.editingDotacao.set(null);
+    }
     this.isDotacaoModalOpen.set(true);
   }
 
   closeDotacaoModal() {
     this.isDotacaoModalOpen.set(false);
+    this.editingDotacao.set(null);
   }
 
-  onDotacaoSaved(dotacao: Dotacao) {
-    this.budgets.update(current => [dotacao, ...current]);
+  onDotacaoSaved(dotacao: Dotacao | null) {
+    if (dotacao) {
+      this.budgets.update(current => {
+        const idx = current.findIndex(b => b.id === dotacao.id);
+        if (idx >= 0) {
+          const updated = [...current];
+          updated[idx] = dotacao;
+          return updated;
+        }
+        return [dotacao, ...current];
+      });
+    } else {
+      this.loadBudgets(this.contractId());
+    }
     this.closeDotacaoModal();
   }
 }

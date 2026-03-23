@@ -106,6 +106,39 @@ export class BudgetService {
       total_cancelado: Number(raw.total_cancelado) || 0,
       total_pago: Number(raw.total_pago) || 0,
       saldo_disponivel: Number(raw.saldo_disponivel) || 0,
+      nunotaempenho: raw.nunotaempenho || null,
     };
+  }
+
+  async updateDotacao(id: string, payload: Partial<DotacaoPayload>): Promise<Result<null>> {
+    try {
+      const { error } = await this.supabaseService.client
+        .from('dotacoes')
+        .update(payload)
+        .eq('id', id);
+
+      if (error) throw error;
+      await this.loadDotacoes();
+      return ok(null);
+    } catch (err: any) {
+      this.errorHandler.handle(err, 'BudgetService.updateDotacao');
+      return fail(err.message || 'Erro ao atualizar dotação');
+    }
+  }
+
+  async deleteDotacao(id: string): Promise<Result<null>> {
+    try {
+      const { error } = await this.supabaseService.client
+        .from('dotacoes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await this.loadDotacoes();
+      return ok(null);
+    } catch (err: any) {
+      this.errorHandler.handle(err, 'BudgetService.deleteDotacao');
+      return fail(err.message || 'Erro ao excluir dotação');
+    }
   }
 }
