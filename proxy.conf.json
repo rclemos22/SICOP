@@ -1,0 +1,8 @@
+{
+  "/sigef-api": {
+    "target": "https://sigef-api-gateway.ma.def.br",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}

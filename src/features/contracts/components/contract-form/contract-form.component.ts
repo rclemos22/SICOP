@@ -18,7 +18,7 @@ export class ContractFormComponent {
   save = output<any>();
 
   // FUTURE: Fetch Data for Selects
-  unidadesGestoras = signal<Array<{ id: string, name: string }>>([{ id: 'GABINETE', name: 'GABINETE' }, { id: 'JURIDICO', name: 'JURIDICO' }]);
+  departments = signal<Array<{ id: string, name: string }>>([{ id: 'GABINETE', name: 'GABINETE' }, { id: 'JURIDICO', name: 'JURIDICO' }]);
   statusOptions = ['VIGENTE', 'ASSINADO', 'EM ELABORAÇÃO'];
 
   contractForm: FormGroup = this.fb.group({

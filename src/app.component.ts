@@ -11,6 +11,7 @@ import { ContractsPageComponent } from './features/contracts/pages/contracts/con
 import { DashboardPageComponent } from './features/dashboard/pages/dashboard/dashboard-page.component';
 import { FinancialPageComponent } from './features/financial/pages/financial/financial-page.component';
 import { SuppliersPageComponent } from './features/suppliers/pages/suppliers/suppliers-page.component';
+import { NotaEmpenhoPageComponent } from './features/nota-empenho/pages/nota-empenho/nota-empenho-page.component';
 
 registerLocaleData(localePt);
 
@@ -26,7 +27,8 @@ registerLocaleData(localePt);
     BudgetPageComponent,
     ContractDetailsPageComponent,
     DashboardPageComponent,
-    SuppliersPageComponent
+    SuppliersPageComponent,
+    NotaEmpenhoPageComponent
   ],
   providers: [{ provide: LOCALE_ID, useValue: 'pt-BR' }],
   templateUrl: './app.component.html',
@@ -36,7 +38,7 @@ export class AppComponent {
   public contextService = inject(AppContextService);
 
   // Navigation State
-  view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers'>('dashboard');
+  view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho'>('nota-empenho');
   selectedContractId = signal<string | null>(null);
   
   sidebarOpen = false;
@@ -69,6 +71,10 @@ export class AppComponent {
   
   showSuppliers() {
     this.view.set('suppliers');
+  }
+
+  showNotaEmpenho() {
+    this.view.set('nota-empenho');
   }
 
   openContractDetails(id: string) {

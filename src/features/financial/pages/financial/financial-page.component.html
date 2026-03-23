@@ -250,24 +250,23 @@
 
             </tr>
           }
-        </tbody>
-      </table>
-    </div>
+          </tbody>
+        </table>
+      </div>
 
-    <!-- Footer / Pagination -->
-    <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-      <div class="text-sm text-gray-500 dark:text-gray-400">
-        Exibindo <span class="font-medium text-gray-900 dark:text-white">1-{{ filteredTransactions().length }}</span> de <span class="font-medium text-gray-900 dark:text-white">{{ filteredTransactions().length }}</span> lançamentos
-      </div>
-      <div class="flex gap-2">
-        <button class="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors">
-          Anterior
-        </button>
-        <button class="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-          Próximo
-        </button>
-      </div>
-    </div>
+      <!-- Footer / Pagination -->
+      <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <div class="text-sm text-gray-500 dark:text-gray-400">
+          Exibindo <span class="font-medium text-gray-900 dark:text-white">1-{{ filteredTransactions().length }}</span> de <span class="font-medium text-gray-900 dark:text-white">{{ filteredTransactions().length }}</span> lançamentos
+        </div>
+        <div class="flex gap-2">
+          <button class="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors">
+            Anterior
+          </button>
+          <button class="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            Próximo
+          </button>
+        </div>
       </div>
     }
   </div>

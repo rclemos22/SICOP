@@ -64,6 +64,18 @@
         <span class="material-symbols-outlined text-[22px]">business</span>
         Fornecedores
       </a>
+
+      <!-- Nota de Empenho Link -->
+      <a 
+        (click)="showNotaEmpenho()"
+        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
+        [class]="view() === 'nota-empenho' 
+          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
+          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
+      >
+        <span class="material-symbols-outlined text-[22px]">receipt_long</span>
+        Nota de Empenho
+      </a>
     </nav>
   </aside>
 
@@ -138,6 +150,8 @@
       <app-budget-page class="flex-1 min-h-0"></app-budget-page>
     } @else if (view() === 'suppliers') {
       <app-suppliers-page class="flex-1 min-h-0"></app-suppliers-page>
+    } @else if (view() === 'nota-empenho') {
+      <app-nota-empenho-page class="flex-1 min-h-0"></app-nota-empenho-page>
     } @else if (view() === 'contract-details' && selectedContractId()) {
       <app-contract-details-page 
         class="flex-1 min-h-0"

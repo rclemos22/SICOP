@@ -1,0 +1,3671 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "title": "API GATEWAY - Web Service da SEPLAN: Módulo SIGEF",
+        "description": "\nUm web service desenvolvido pela Secretaria de Estado de Estado de Planejamento e Orçamento do Maranhão, \nvoltado para o módulo orçamentário\n",
+        "termsOfService": "https://seplan.ma.gov.br/",
+        "contact": {
+            "email": "ricardo.meirino@seplan.ma.gov.br"
+        },
+        "version": "v1"
+    },
+    "host": "sigef-api-gateway.ma.def.br",
+    "schemes": [
+        "https"
+    ],
+    "basePath": "/api/v1",
+    "consumes": [
+        "application/json"
+    ],
+    "produces": [
+        "application/json"
+    ],
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "Token Bearer no header Authorization. Formato: \"Bearer <token>\"."
+        }
+    },
+    "security": [
+        {
+            "Bearer": []
+        }
+    ],
+    "paths": {
+        "/sigef/acao/": {
+            "get": {
+                "operationId": "sigef_acao_list",
+                "description": "Retorna ações orçamentárias filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Acao"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/certificacaodespesa/": {
+            "get": {
+                "operationId": "sigef_certificacaodespesa_list",
+                "description": "Retorna certificações de despesas filtradas por período.",
+                "parameters": [
+                    {
+                        "name": "datainicio",
+                        "in": "query",
+                        "description": "Data inicial",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "datafim",
+                        "in": "query",
+                        "description": "Data final",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/CertificacaoDespesa"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/contacontabil/": {
+            "get": {
+                "operationId": "sigef_contacontabil_list",
+                "description": "Retorna contas contábeis filtradas por ano.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/ContaContabil"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/contas/": {
+            "get": {
+                "operationId": "sigef_contas_list",
+                "description": "Retorna dados de contas contábeis filtrados por período e conta contábil.",
+                "parameters": [
+                    {
+                        "name": "datainicio",
+                        "in": "query",
+                        "description": "Data inicial",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "datafim",
+                        "in": "query",
+                        "description": "Data final",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "cdcontacontabil",
+                        "in": "query",
+                        "description": "Número da conta contábil",
+                        "required": true,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Contas"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/cotaautorizada/": {
+            "get": {
+                "operationId": "sigef_cotaautorizada_list",
+                "description": "Retorna cotas autorizadas filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/CotaAutorizada"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/credor/": {
+            "get": {
+                "operationId": "sigef_credor_list",
+                "description": "Retorna credores filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Credor"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/eventos/": {
+            "get": {
+                "operationId": "sigef_eventos_list",
+                "description": "Retorna eventos contábeis filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Eventos"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/execucao/": {
+            "get": {
+                "operationId": "sigef_execucao_list",
+                "description": "Retorna dados de execução orçamentária filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Execucao"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/execucaofinanceiranl/": {
+            "get": {
+                "operationId": "sigef_execucaofinanceiranl_list",
+                "description": "Retorna execução financeira de notas de lançamento filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/ExecucaoFinanceiraNl"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/fonte/": {
+            "get": {
+                "operationId": "sigef_fonte_list",
+                "description": "Retorna fontes de recursos filtradas por ano.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Fonte"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/funcao/": {
+            "get": {
+                "operationId": "sigef_funcao_list",
+                "description": "Retorna funções orçamentárias filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Funcao"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/guiarecebimento/": {
+            "get": {
+                "operationId": "sigef_guiarecebimento_list",
+                "description": "Retorna guias de recebimento filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/GuiaRecebimento"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/institucional/": {
+            "get": {
+                "operationId": "sigef_institucional_list",
+                "description": "Retorna dados da tabela institucional filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/TabInstitucional"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/naturezadespesa/": {
+            "get": {
+                "operationId": "sigef_naturezadespesa_list",
+                "description": "Retorna naturezas de despesa filtradas por ano.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/NaturezaDespesa"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/notaempenho/": {
+            "get": {
+                "operationId": "sigef_notaempenho_list",
+                "description": "Retorna notas de empenho filtradas por ano e unidade gestora. Utiliza consulta SQL dinâmica.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/NotaEmpenho"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/notaempenhocelula/": {
+            "get": {
+                "operationId": "sigef_notaempenhocelula_list",
+                "description": "Retorna notas de empenho por célula filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/NotaEmpenhoCelula"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/notaempenhoitem/": {
+            "get": {
+                "operationId": "sigef_notaempenhoitem_list",
+                "description": "Retorna itens de notas de empenho filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/NotaEmpenhoItem"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/notalancamento/": {
+            "get": {
+                "operationId": "sigef_notalancamento_list",
+                "description": "Retorna notas de lançamento filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/NotaLancamento"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/notaorcamentaria/": {
+            "get": {
+                "operationId": "sigef_notaorcamentaria_list",
+                "description": "Retorna notas orçamentárias filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/NotaOrcamentaria"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/notasistema/": {
+            "get": {
+                "operationId": "sigef_notasistema_list",
+                "description": "Retorna notas de sistema filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/NotaSistema"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/ordembancaria/": {
+            "get": {
+                "operationId": "sigef_ordembancaria_list",
+                "description": "Retorna ordens bancárias filtradas por período e opcionalmente por número de ordem bancária. Utiliza consulta SQL dinâmica.",
+                "parameters": [
+                    {
+                        "name": "datainicio",
+                        "in": "query",
+                        "description": "Data inicial",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "datafim",
+                        "in": "query",
+                        "description": "Data final",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "nuordembancaria",
+                        "in": "query",
+                        "description": "Número da ordem bancária",
+                        "required": false,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/OrdemBancaria"
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/ordemcronologica/": {
+            "get": {
+                "operationId": "sigef_ordemcronologica_list",
+                "description": "\n⚠️ **Atenção:** Este endpoint possui acesso restrito aos usuários autorizados.\n\n- Caso necessite de acesso, entre em contato com o administrador.\n- Retorna a ordem cronológica de pagamentos filtrada por ano.\n\n",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/OrdemCronologica"
+                        }
+                    },
+                    "403": {
+                        "description": "Acesso restrito."
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/preempenho/": {
+            "get": {
+                "operationId": "sigef_preempenho_list",
+                "description": "Retorna pré-empenhos filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/PreEmpenho"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/prestacaocontas/": {
+            "get": {
+                "operationId": "sigef_prestacaocontas_list",
+                "description": "\n⚠️ **Atenção:** Este endpoint possui acesso restrito aos usuários autorizados.\n\n- Caso necessite de acesso, entre em contato com o administrador.\n\n",
+                "parameters": [
+                    {
+                        "name": "datainicio",
+                        "in": "query",
+                        "description": "Data inicial",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "datafim",
+                        "in": "query",
+                        "description": "Data final",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/PrestacaoContas"
+                        }
+                    },
+                    "403": {
+                        "description": "Acesso restrito."
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/programa/": {
+            "get": {
+                "operationId": "sigef_programa_list",
+                "description": "Retorna programas orçamentários filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Programa"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/rapnaoprocessado/": {
+            "get": {
+                "operationId": "sigef_rapnaoprocessado_list",
+                "description": "Retorna restos a pagar não processados filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/RapNaoProc"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/rapprocessado/": {
+            "get": {
+                "operationId": "sigef_rapprocessado_list",
+                "description": "Retorna restos a pagar processados filtrados por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/RapProc"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/razao/": {
+            "get": {
+                "operationId": "sigef_razao_list",
+                "description": "Retorna razão contábil filtrado por período e conta contábil. Utiliza consulta SQL dinâmica.",
+                "parameters": [
+                    {
+                        "name": "datainicio",
+                        "in": "query",
+                        "description": "Data inicial",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "datafim",
+                        "in": "query",
+                        "description": "Data final",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "cdcontacontabil",
+                        "in": "query",
+                        "description": "Número da conta contábil",
+                        "required": true,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Razao"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/receitaprevista/": {
+            "get": {
+                "operationId": "sigef_receitaprevista_list",
+                "description": "Retorna receitas previstas filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/ReceitaPrevista"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/receitarealizada/": {
+            "get": {
+                "operationId": "sigef_receitarealizada_list",
+                "description": "Retorna receitas realizadas filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/ReceitaRealizada"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/retencao/": {
+            "get": {
+                "operationId": "sigef_retencao_list",
+                "description": "Retorna retenções filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Retencao"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/subacao/": {
+            "get": {
+                "operationId": "sigef_subacao_list",
+                "description": "Retorna subações orçamentárias filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Subacao"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/sigef/subfuncao/": {
+            "get": {
+                "operationId": "sigef_subfuncao_list",
+                "description": "Retorna subfunções orçamentárias filtradas por ano e unidade gestora.",
+                "parameters": [
+                    {
+                        "name": "ano",
+                        "in": "query",
+                        "description": "Ano para filtrar a consulta",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/SubFuncao"
+                        }
+                    }
+                },
+                "tags": [
+                    "sigef"
+                ]
+            },
+            "parameters": []
+        },
+        "/token/": {
+            "post": {
+                "operationId": "token_create",
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CustomTokenObtainPair"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/CustomTokenObtainPair"
+                        }
+                    }
+                },
+                "tags": [
+                    "token"
+                ]
+            },
+            "parameters": []
+        },
+        "/token/refresh/": {
+            "post": {
+                "operationId": "token_refresh_create",
+                "description": "Takes a refresh type JSON web token and returns an access type JSON web\ntoken if the refresh token is valid.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/TokenRefresh"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/TokenRefresh"
+                        }
+                    }
+                },
+                "tags": [
+                    "token"
+                ]
+            },
+            "parameters": []
+        }
+    },
+    "definitions": {
+        "Acao": {
+            "type": "object",
+            "properties": {
+                "cdacao": {
+                    "title": "Cdacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmacao": {
+                    "title": "Nmacao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                }
+            }
+        },
+        "CertificacaoDespesa": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "despesacertificada": {
+                    "title": "Despesacertificada",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "cdtipodocumentodespesa": {
+                    "title": "Cdtipodocumentodespesa",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "tipodocumentodespesa": {
+                    "title": "Tipodocumentodespesa",
+                    "type": "string",
+                    "maxLength": 30,
+                    "x-nullable": true
+                },
+                "nuserie": {
+                    "title": "Nuserie",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                },
+                "nusubserie": {
+                    "title": "Nusubserie",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                },
+                "nmmodelo": {
+                    "title": "Nmmodelo",
+                    "type": "string",
+                    "maxLength": 20,
+                    "x-nullable": true
+                },
+                "aidf": {
+                    "title": "Aidf",
+                    "type": "string",
+                    "maxLength": 15,
+                    "x-nullable": true
+                },
+                "documento": {
+                    "title": "Documento",
+                    "type": "string",
+                    "maxLength": 16,
+                    "x-nullable": true
+                },
+                "cdcredor": {
+                    "title": "Cdcredor",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "credor": {
+                    "title": "Credor",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "vlce": {
+                    "title": "Vlce",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "dtemissao": {
+                    "title": "Dtemissao",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "dtapresentacao": {
+                    "title": "Dtapresentacao",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "dtaceite": {
+                    "title": "Dtaceite",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "dtvencimento": {
+                    "title": "Dtvencimento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "observacao": {
+                    "title": "Observacao",
+                    "type": "string",
+                    "maxLength": 2000,
+                    "x-nullable": true
+                },
+                "cpfusuarioce": {
+                    "title": "Cpfusuarioce",
+                    "type": "string",
+                    "maxLength": 11,
+                    "x-nullable": true
+                },
+                "cdsituacaodespesa": {
+                    "title": "Cdsituacaodespesa",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "situacaodespesa": {
+                    "title": "Situacaodespesa",
+                    "type": "string",
+                    "maxLength": 30,
+                    "x-nullable": true
+                },
+                "cpfatestador": {
+                    "title": "Cpfatestador",
+                    "type": "string",
+                    "maxLength": 11,
+                    "x-nullable": true
+                },
+                "mescompetencia": {
+                    "title": "Mescompetencia",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "anocompetencia": {
+                    "title": "Anocompetencia",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "notalancamento": {
+                    "title": "Notalancamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "vlbrutonl": {
+                    "title": "Vlbrutonl",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlliquidonl": {
+                    "title": "Vlliquidonl",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "notaempenho": {
+                    "title": "Notaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                }
+            }
+        },
+        "ContaContabil": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdcontacontabil": {
+                    "title": "Cdcontacontabil",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmcontacontabil": {
+                    "title": "Nmcontacontabil",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "defuncao": {
+                    "title": "Defuncao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                }
+            }
+        },
+        "Contas": {
+            "type": "object",
+            "properties": {
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999
+                },
+                "cdcontacontabil": {
+                    "title": "Cdcontacontabil",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmcontacontabil": {
+                    "title": "Nmcontacontabil",
+                    "type": "string",
+                    "maxLength": 120,
+                    "x-nullable": true
+                },
+                "defuncao": {
+                    "title": "Defuncao",
+                    "type": "string",
+                    "maxLength": 2000,
+                    "x-nullable": true
+                },
+                "data": {
+                    "title": "Data",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "nucontacorrente": {
+                    "title": "Nucontacorrente",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                },
+                "cdsubelemento": {
+                    "title": "Cdsubelemento",
+                    "type": "string",
+                    "maxLength": 8,
+                    "x-nullable": true
+                },
+                "cdfuncao": {
+                    "title": "Cdfuncao",
+                    "type": "string",
+                    "maxLength": 2,
+                    "x-nullable": true
+                },
+                "cdsubfuncao": {
+                    "title": "Cdsubfuncao",
+                    "type": "string",
+                    "maxLength": 3,
+                    "x-nullable": true
+                },
+                "cdprograma": {
+                    "title": "Cdprograma",
+                    "type": "string",
+                    "maxLength": 4,
+                    "x-nullable": true
+                },
+                "cdacao": {
+                    "title": "Cdacao",
+                    "type": "string",
+                    "maxLength": 4,
+                    "x-nullable": true
+                },
+                "cdsubacaocc": {
+                    "title": "Cdsubacaocc",
+                    "type": "string",
+                    "maxLength": 6,
+                    "x-nullable": true
+                },
+                "nunotalancamento": {
+                    "title": "Nunotalancamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "vldebito": {
+                    "title": "Vldebito",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlcredito": {
+                    "title": "Vlcredito",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlsaldo": {
+                    "title": "Vlsaldo",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "CotaAutorizada": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "gpf": {
+                    "title": "Gpf",
+                    "type": "string",
+                    "maxLength": 3,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "numes": {
+                    "title": "Numes",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "valor_cota_autorizada": {
+                    "title": "Valor cota autorizada",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                }
+            }
+        },
+        "Credor": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdcredor": {
+                    "title": "Cdcredor",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cpf_cnpj": {
+                    "title": "Cpf cnpj",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "nmcredor": {
+                    "title": "Nmcredor",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "detipocredor": {
+                    "title": "Detipocredor",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                }
+            }
+        },
+        "Eventos": {
+            "type": "object",
+            "properties": {
+                "cdevento": {
+                    "title": "Cdevento",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmevento": {
+                    "title": "Nmevento",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "Execucao": {
+            "type": "object",
+            "properties": {
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmunidadegestora": {
+                    "title": "Nmunidadegestora",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "cdunidadeorcamentariacc": {
+                    "title": "Cdunidadeorcamentariacc",
+                    "type": "string",
+                    "maxLength": 5,
+                    "x-nullable": true
+                },
+                "cdfuncao": {
+                    "title": "Cdfuncao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdsubfuncao": {
+                    "title": "Cdsubfuncao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdprograma": {
+                    "title": "Cdprograma",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdacao": {
+                    "title": "Cdacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdsubacaocc": {
+                    "title": "Cdsubacaocc",
+                    "type": "string",
+                    "maxLength": 6,
+                    "x-nullable": true
+                },
+                "cdfonterecursocc": {
+                    "title": "Cdfonterecursocc",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "cdnaturezaempenho": {
+                    "title": "Cdnaturezaempenho",
+                    "type": "string",
+                    "maxLength": 6,
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "vlinicialloa": {
+                    "title": "Vlinicialloa",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlatualizado": {
+                    "title": "Vlatualizado",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "indisponibilidades": {
+                    "title": "Indisponibilidades",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlpreempenhado": {
+                    "title": "Vlpreempenhado",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlempenhado": {
+                    "title": "Vlempenhado",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlliquidado": {
+                    "title": "Vlliquidado",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlpago": {
+                    "title": "Vlpago",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "ExecucaoFinanceiraNl": {
+            "type": "object",
+            "properties": {
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nudespesacertificada": {
+                    "title": "Nudespesacertificada",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nunotalancamento": {
+                    "title": "Nunotalancamento",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "valor_nl": {
+                    "title": "Valor nl",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                },
+                "valor_pago": {
+                    "title": "Valor pago",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                }
+            }
+        },
+        "Fonte": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "nmfonte": {
+                    "title": "Nmfonte",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                }
+            }
+        },
+        "Funcao": {
+            "type": "object",
+            "properties": {
+                "cdfuncao": {
+                    "title": "Cdfuncao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmfuncao": {
+                    "title": "Nmfuncao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "defuncao": {
+                    "title": "Defuncao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                }
+            }
+        },
+        "GuiaRecebimento": {
+            "type": "object",
+            "properties": {
+                "nuguiarecebimento": {
+                    "title": "Nuguiarecebimento",
+                    "type": "string",
+                    "maxLength": 12
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdevento": {
+                    "title": "Cdevento",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdcredor": {
+                    "title": "Cdcredor",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "nuordembancaria": {
+                    "title": "Nuordembancaria",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "conta": {
+                    "title": "Conta",
+                    "type": "string",
+                    "maxLength": 9,
+                    "x-nullable": true
+                },
+                "vlguiarecebimento": {
+                    "title": "Vlguiarecebimento",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "nucpf": {
+                    "title": "Nucpf",
+                    "type": "string",
+                    "maxLength": 11,
+                    "x-nullable": true
+                },
+                "nmusuario": {
+                    "title": "Nmusuario",
+                    "type": "string",
+                    "maxLength": 40,
+                    "x-nullable": true
+                },
+                "deobservacao": {
+                    "title": "Deobservacao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                }
+            }
+        },
+        "TabInstitucional": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "nmunidadegestora": {
+                    "title": "Nmunidadegestora",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "cnpjug": {
+                    "title": "Cnpjug",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "cdorgao": {
+                    "title": "Cdorgao",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "nmorgao": {
+                    "title": "Nmorgao",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "cdunidadeorcamentaria": {
+                    "title": "Cdunidadeorcamentaria",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "nmunidadeorcamentaria": {
+                    "title": "Nmunidadeorcamentaria",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "nmabreviado": {
+                    "title": "Nmabreviado",
+                    "type": "string",
+                    "maxLength": 30,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                }
+            }
+        },
+        "NaturezaDespesa": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdsubelemento": {
+                    "title": "Cdsubelemento",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmnaturezadespesa": {
+                    "title": "Nmnaturezadespesa",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                }
+            }
+        },
+        "NotaEmpenho": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "string",
+                    "maxLength": 6,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "string",
+                    "maxLength": 5,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nuneoriginal": {
+                    "title": "Nuneoriginal",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "cdcredor": {
+                    "title": "Cdcredor",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "tipo": {
+                    "title": "Tipo",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "cdsubacao": {
+                    "title": "Cdsubacao",
+                    "type": "string",
+                    "maxLength": 6,
+                    "x-nullable": true
+                },
+                "cdunidadeorcamentaria": {
+                    "title": "Cdunidadeorcamentaria",
+                    "type": "string",
+                    "maxLength": 5,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "string",
+                    "maxLength": 9,
+                    "x-nullable": true
+                },
+                "cdprograma": {
+                    "title": "Cdprograma",
+                    "type": "string",
+                    "maxLength": 25,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "cdevento": {
+                    "title": "Cdevento",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdmodalidadelicitacao": {
+                    "title": "Cdmodalidadelicitacao",
+                    "type": "string",
+                    "maxLength": 2,
+                    "x-nullable": true
+                },
+                "cdmodalidadeempenho": {
+                    "title": "Cdmodalidadeempenho",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "demodalidadeempenho": {
+                    "title": "Demodalidadeempenho",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "nuprocesso": {
+                    "title": "Nuprocesso",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "vlnotaempenho": {
+                    "title": "Vlnotaempenho",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "nuquantidade": {
+                    "title": "Nuquantidade",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "dehistorico": {
+                    "title": "Dehistorico",
+                    "type": "string",
+                    "maxLength": 2000,
+                    "x-nullable": true
+                }
+            }
+        },
+        "NotaEmpenhoCelula": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "numes": {
+                    "title": "Numes",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nupreempenhooriginal": {
+                    "title": "Nupreempenhooriginal",
+                    "type": "string",
+                    "maxLength": 20,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 20,
+                    "x-nullable": true
+                },
+                "cpf_cnpj": {
+                    "title": "Cpf cnpj",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "dtmovimento": {
+                    "title": "Dtmovimento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "cdgrupoprogfinanceira": {
+                    "title": "Cdgrupoprogfinanceira",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdsubacao": {
+                    "title": "Cdsubacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmsubacao": {
+                    "title": "Nmsubacao",
+                    "type": "string",
+                    "maxLength": 100,
+                    "x-nullable": true
+                },
+                "cdsubfuncao": {
+                    "title": "Cdsubfuncao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdacao": {
+                    "title": "Cdacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadeorcamentaria": {
+                    "title": "Cdunidadeorcamentaria",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "vlempenho": {
+                    "title": "Vlempenho",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlliquidado": {
+                    "title": "Vlliquidado",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlliquidar": {
+                    "title": "Vlliquidar",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlretido": {
+                    "title": "Vlretido",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlpago": {
+                    "title": "Vlpago",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlpagar": {
+                    "title": "Vlpagar",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "NotaEmpenhoItem": {
+            "required": [
+                "nunotaempenho"
+            ],
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "minLength": 1
+                },
+                "deespecificacao": {
+                    "title": "Deespecificacao",
+                    "type": "string",
+                    "maxLength": 400,
+                    "x-nullable": true
+                },
+                "qtditem": {
+                    "title": "Qtditem",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "nmunidademedida": {
+                    "title": "Nmunidademedida",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "vlnotaempenho": {
+                    "title": "Vlnotaempenho",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlunitario": {
+                    "title": "Vlunitario",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vltotal": {
+                    "title": "Vltotal",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "NotaLancamento": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nunotalancamento": {
+                    "title": "Nunotalancamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nunotaempenhooriginal": {
+                    "title": "Nunotaempenhooriginal",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "string",
+                    "maxLength": 9,
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "cdcredor": {
+                    "title": "Cdcredor",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "tipo": {
+                    "title": "Tipo",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "vlbruto": {
+                    "title": "Vlbruto",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "deobservacao": {
+                    "title": "Deobservacao",
+                    "type": "string",
+                    "maxLength": 4000,
+                    "x-nullable": true
+                }
+            }
+        },
+        "NotaOrcamentaria": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadeorcamentaria": {
+                    "title": "Cdunidadeorcamentaria",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmunidadeorcamentaria": {
+                    "title": "Nmunidadeorcamentaria",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "nunotaorcamentaria": {
+                    "title": "Nunotaorcamentaria",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "dtreferencia": {
+                    "title": "Dtreferencia",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "nuprocesso": {
+                    "title": "Nuprocesso",
+                    "type": "string",
+                    "maxLength": 13,
+                    "x-nullable": true
+                },
+                "dejustificativa": {
+                    "title": "Dejustificativa",
+                    "type": "string",
+                    "maxLength": 4000,
+                    "x-nullable": true
+                },
+                "dejustificativacanc": {
+                    "title": "Dejustificativacanc",
+                    "type": "string",
+                    "maxLength": 400,
+                    "x-nullable": true
+                },
+                "cdsituacaono": {
+                    "title": "Cdsituacaono",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "desituacaono": {
+                    "title": "Desituacaono",
+                    "type": "string",
+                    "maxLength": 20,
+                    "x-nullable": true
+                },
+                "cdtipoatolegal": {
+                    "title": "Cdtipoatolegal",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmtipoatolegal": {
+                    "title": "Nmtipoatolegal",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "cdtipolancamentono": {
+                    "title": "Cdtipolancamentono",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "detipoalteracao": {
+                    "title": "Detipoalteracao",
+                    "type": "string",
+                    "maxLength": 30,
+                    "x-nullable": true
+                },
+                "cdsubacao": {
+                    "title": "Cdsubacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdidentificadoruso": {
+                    "title": "Cdidentificadoruso",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "vllancamento": {
+                    "title": "Vllancamento",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                },
+                "dtliberacao": {
+                    "title": "Dtliberacao",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                }
+            }
+        },
+        "NotaSistema": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nunotasistema": {
+                    "title": "Nunotasistema",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "tipo": {
+                    "title": "Tipo",
+                    "type": "string",
+                    "maxLength": 20,
+                    "x-nullable": true
+                },
+                "nuinscricao": {
+                    "title": "Nuinscricao",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                },
+                "cdevento": {
+                    "title": "Cdevento",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "vllancamento": {
+                    "title": "Vllancamento",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                },
+                "nucpf": {
+                    "title": "Nucpf",
+                    "type": "string",
+                    "maxLength": 11,
+                    "x-nullable": true
+                },
+                "nmusuario": {
+                    "title": "Nmusuario",
+                    "type": "string",
+                    "maxLength": 100,
+                    "x-nullable": true
+                },
+                "deobservacao": {
+                    "title": "Deobservacao",
+                    "type": "string",
+                    "maxLength": 400,
+                    "x-nullable": true
+                }
+            }
+        },
+        "OrdemBancaria": {
+            "required": [
+                "nuordembancaria"
+            ],
+            "type": "object",
+            "properties": {
+                "nuordembancaria": {
+                    "title": "Nuordembancaria",
+                    "type": "string",
+                    "maxLength": 12,
+                    "minLength": 1
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdevento": {
+                    "title": "Cdevento",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nudocumento": {
+                    "title": "Nudocumento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "cdcredor": {
+                    "title": "Cdcredor",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "cdtipocredor": {
+                    "title": "Cdtipocredor",
+                    "type": "string",
+                    "maxLength": 2,
+                    "x-nullable": true
+                },
+                "cdugfavorecida": {
+                    "title": "Cdugfavorecida",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdorgao": {
+                    "title": "Cdorgao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdsubacao": {
+                    "title": "Cdsubacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdfuncao": {
+                    "title": "Cdfuncao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdsubfuncao": {
+                    "title": "Cdsubfuncao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdprograma": {
+                    "title": "Cdprograma",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdacao": {
+                    "title": "Cdacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "localizagasto": {
+                    "title": "Localizagasto",
+                    "type": "string",
+                    "maxLength": 4,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "string",
+                    "maxLength": 9,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "string",
+                    "maxLength": 80,
+                    "x-nullable": true
+                },
+                "cdmodalidade": {
+                    "title": "Cdmodalidade",
+                    "type": "string",
+                    "maxLength": 2,
+                    "x-nullable": true
+                },
+                "vltotal": {
+                    "title": "Vltotal",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "definalidade": {
+                    "title": "Definalidade",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "nuguiarecebimento": {
+                    "title": "Nuguiarecebimento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "vlguiarecebimento": {
+                    "title": "Vlguiarecebimento",
+                    "type": "string",
+                    "maxLength": 17,
+                    "x-nullable": true
+                },
+                "nunotalancamento": {
+                    "title": "Nunotalancamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "numns": {
+                    "title": "Numns",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "deobservacao": {
+                    "title": "Deobservacao",
+                    "type": "string",
+                    "maxLength": 400,
+                    "x-nullable": true
+                },
+                "domicilio_origem": {
+                    "title": "Domicilio origem",
+                    "type": "string",
+                    "maxLength": 21,
+                    "x-nullable": true
+                },
+                "domicilio_destino": {
+                    "title": "Domicilio destino",
+                    "type": "string",
+                    "maxLength": 21,
+                    "x-nullable": true
+                },
+                "cdsituacaoordembancaria": {
+                    "title": "Cdsituacaoordembancaria",
+                    "type": "string",
+                    "maxLength": 2,
+                    "x-nullable": true
+                },
+                "situacaopreparacaopagamento": {
+                    "title": "Situacaopreparacaopagamento",
+                    "type": "string",
+                    "maxLength": 60,
+                    "x-nullable": true
+                },
+                "tipoordembancaria": {
+                    "title": "Tipoordembancaria",
+                    "type": "string",
+                    "maxLength": 30,
+                    "x-nullable": true
+                },
+                "tipopreparacaopagamento": {
+                    "title": "Tipopreparacaopagamento",
+                    "type": "string",
+                    "maxLength": 30,
+                    "x-nullable": true
+                },
+                "dtpagamento": {
+                    "title": "Dtpagamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "usuario_responsavel": {
+                    "title": "Usuario responsavel",
+                    "type": "string",
+                    "maxLength": 100,
+                    "x-nullable": true
+                }
+            }
+        },
+        "OrdemCronologica": {
+            "type": "object",
+            "properties": {
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nudespesacertificada": {
+                    "title": "Nudespesacertificada",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nunotalancamento": {
+                    "title": "Nunotalancamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nupreparacaopagamento": {
+                    "title": "Nupreparacaopagamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "dtaceite": {
+                    "title": "Dtaceite",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "dtliquidacao": {
+                    "title": "Dtliquidacao",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "cpf_cnpj": {
+                    "title": "Cpf cnpj",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "favorecido": {
+                    "title": "Favorecido",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "vlpreparacaopagamento": {
+                    "title": "Vlpreparacaopagamento",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                },
+                "status_ordem_cronologica": {
+                    "title": "Status ordem cronologica",
+                    "type": "string",
+                    "maxLength": 40,
+                    "x-nullable": true
+                },
+                "demotivoquebraordemcron": {
+                    "title": "Demotivoquebraordemcron",
+                    "type": "string",
+                    "maxLength": 400,
+                    "x-nullable": true
+                },
+                "dejustificativa": {
+                    "title": "Dejustificativa",
+                    "type": "string",
+                    "maxLength": 400,
+                    "x-nullable": true
+                },
+                "dtquebra": {
+                    "title": "Dtquebra",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                }
+            }
+        },
+        "PreEmpenho": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadeorcamentaria": {
+                    "title": "Cdunidadeorcamentaria",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nupreempenho": {
+                    "title": "Nupreempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nuprocesso": {
+                    "title": "Nuprocesso",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "cdsubacao": {
+                    "title": "Cdsubacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdidentificadoruso": {
+                    "title": "Cdidentificadoruso",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdnaturezadespesa": {
+                    "title": "Cdnaturezadespesa",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "dtreferencia": {
+                    "title": "Dtreferencia",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "saldo_pre_empenho": {
+                    "title": "Saldo pre empenho",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "deobservacao": {
+                    "title": "Deobservacao",
+                    "type": "string",
+                    "maxLength": 400,
+                    "x-nullable": true
+                }
+            }
+        },
+        "PrestacaoContas": {
+            "type": "object",
+            "properties": {
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nuprestacaocontas": {
+                    "title": "Nuprestacaocontas",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nunotalancamento": {
+                    "title": "Nunotalancamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nuordembancaria": {
+                    "title": "Nuordembancaria",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "credor": {
+                    "title": "Credor",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "dtpagamento": {
+                    "title": "Dtpagamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "valor": {
+                    "title": "Valor",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                },
+                "situacaoprestacaocontas": {
+                    "title": "Situacaoprestacaocontas",
+                    "type": "string",
+                    "maxLength": 2,
+                    "x-nullable": true
+                },
+                "desituacaoprestacaocontas": {
+                    "title": "Desituacaoprestacaocontas",
+                    "type": "string",
+                    "maxLength": 35,
+                    "x-nullable": true
+                }
+            }
+        },
+        "Programa": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdprograma": {
+                    "title": "Cdprograma",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmprograma": {
+                    "title": "Nmprograma",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                }
+            }
+        },
+        "RapNaoProc": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nunerestospagar": {
+                    "title": "Nunerestospagar",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "dtreferencia": {
+                    "title": "Dtreferencia",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "vlinscnaoprocessado": {
+                    "title": "Vlinscnaoprocessado",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlrpnaoprocessadopago": {
+                    "title": "Vlrpnaoprocessadopago",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlrpnaoprocessadosreinscrito": {
+                    "title": "Vlrpnaoprocessadosreinscrito",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlrpnaoprocessadocancelado": {
+                    "title": "Vlrpnaoprocessadocancelado",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "RapProc": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nunerestospagar": {
+                    "title": "Nunerestospagar",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "dtreferencia": {
+                    "title": "Dtreferencia",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "vlinscprocessado": {
+                    "title": "Vlinscprocessado",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlrpprocessadopago": {
+                    "title": "Vlrpprocessadopago",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlrpprocessadosreinscrito": {
+                    "title": "Vlrpprocessadosreinscrito",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlrpprocessadocancelado": {
+                    "title": "Vlrpprocessadocancelado",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "Razao": {
+            "type": "object",
+            "properties": {
+                "cdunidadegestoraorigem": {
+                    "title": "Cdunidadegestoraorigem",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999
+                },
+                "cdgestaoorigem": {
+                    "title": "Cdgestaoorigem",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "dtlancamento": {
+                    "title": "Dtlancamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "cdevento": {
+                    "title": "Cdevento",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nudocumento": {
+                    "title": "Nudocumento",
+                    "type": "string",
+                    "maxLength": 20,
+                    "x-nullable": true
+                },
+                "vllancamento": {
+                    "title": "Vllancamento",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "insinal": {
+                    "title": "Insinal",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "cdcontacontabil": {
+                    "title": "Cdcontacontabil",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nucontacorrente": {
+                    "title": "Nucontacorrente",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                }
+            }
+        },
+        "ReceitaPrevista": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdnatureza": {
+                    "title": "Cdnatureza",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "cdfonte": {
+                    "title": "Cdfonte",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "numes": {
+                    "title": "Numes",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "sinal": {
+                    "title": "Sinal",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "vlprevisaoreceita": {
+                    "title": "Vlprevisaoreceita",
+                    "type": "number",
+                    "x-nullable": true
+                }
+            }
+        },
+        "ReceitaRealizada": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 9999999999999999999,
+                    "minimum": -9999999999999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdnaturezareceitacc": {
+                    "title": "Cdnaturezareceitacc",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "cdfonterecursocc": {
+                    "title": "Cdfonterecursocc",
+                    "type": "string",
+                    "maxLength": 10,
+                    "x-nullable": true
+                },
+                "numes": {
+                    "title": "Numes",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "vlreceitarealizada": {
+                    "title": "Vlreceitarealizada",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "sinal": {
+                    "title": "Sinal",
+                    "type": "string",
+                    "maxLength": 1,
+                    "x-nullable": true
+                },
+                "descricao": {
+                    "title": "Descricao",
+                    "type": "string",
+                    "maxLength": 200,
+                    "x-nullable": true
+                }
+            }
+        },
+        "Retencao": {
+            "type": "object",
+            "properties": {
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "cdgestao": {
+                    "title": "Cdgestao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nunotaempenho": {
+                    "title": "Nunotaempenho",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nunotalancamento": {
+                    "title": "Nunotalancamento",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nuretencao": {
+                    "title": "Nuretencao",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "cdretencao": {
+                    "title": "Cdretencao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmretencao": {
+                    "title": "Nmretencao",
+                    "type": "string",
+                    "maxLength": 65,
+                    "x-nullable": true
+                },
+                "cdmescompetenciainss": {
+                    "title": "Cdmescompetenciainss",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nuanocompetenciainss": {
+                    "title": "Nuanocompetenciainss",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "dtpagamento": {
+                    "title": "Dtpagamento",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "dtretencao": {
+                    "title": "Dtretencao",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "dttransacao": {
+                    "title": "Dttransacao",
+                    "type": "string",
+                    "format": "date",
+                    "x-nullable": true
+                },
+                "vlbasecalculo": {
+                    "title": "Vlbasecalculo",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlpercretencao": {
+                    "title": "Vlpercretencao",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "vlretido": {
+                    "title": "Vlretido",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "nuordembancaria": {
+                    "title": "Nuordembancaria",
+                    "type": "string",
+                    "maxLength": 12,
+                    "x-nullable": true
+                },
+                "nucnpj": {
+                    "title": "Nucnpj",
+                    "type": "string",
+                    "maxLength": 14,
+                    "x-nullable": true
+                },
+                "nmcredor": {
+                    "title": "Nmcredor",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "nucpf": {
+                    "title": "Nucpf",
+                    "type": "string",
+                    "maxLength": 11,
+                    "x-nullable": true
+                }
+            }
+        },
+        "Subacao": {
+            "type": "object",
+            "properties": {
+                "cdsubacao": {
+                    "title": "Cdsubacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmsubacao": {
+                    "title": "Nmsubacao",
+                    "type": "string",
+                    "maxLength": 170,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                },
+                "cdacao": {
+                    "title": "Cdacao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmacao": {
+                    "title": "Nmacao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "nmorgao": {
+                    "title": "Nmorgao",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "nmunidadegestora": {
+                    "title": "Nmunidadegestora",
+                    "type": "string",
+                    "maxLength": 90,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                }
+            }
+        },
+        "SubFuncao": {
+            "type": "object",
+            "properties": {
+                "cdsubfuncao": {
+                    "title": "Cdsubfuncao",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "nmsubfuncao": {
+                    "title": "Nmsubfuncao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "desubfuncao": {
+                    "title": "Desubfuncao",
+                    "type": "string",
+                    "maxLength": 150,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "maxLength": 7,
+                    "x-nullable": true
+                },
+                "cdunidadegestora": {
+                    "title": "Cdunidadegestora",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                },
+                "ano": {
+                    "title": "Ano",
+                    "type": "integer",
+                    "maximum": 99999999999,
+                    "minimum": -99999999999,
+                    "x-nullable": true
+                }
+            }
+        },
+        "CustomTokenObtainPair": {
+            "required": [
+                "username",
+                "password"
+            ],
+            "type": "object",
+            "properties": {
+                "username": {
+                    "title": "Username",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "password": {
+                    "title": "Password",
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "TokenRefresh": {
+            "required": [
+                "refresh"
+            ],
+            "type": "object",
+            "properties": {
+                "refresh": {
+                    "title": "Refresh",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "access": {
+                    "title": "Access",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1
+                }
+            }
+        }
+    }
+}

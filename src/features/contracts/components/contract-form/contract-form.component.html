@@ -176,8 +176,8 @@
                 [class.border-red-500]="f['department'].invalid && f['department'].touched"
               >
                 <option value="" disabled>Selecione...</option>
-                @for (dept of departments; track dept) {
-                  <option [value]="dept">{{ dept }}</option>
+                @for (dept of departments(); track dept.id) {
+                  <option [value]="dept.id">{{ dept.name }}</option>
                 }
               </select>
               @if (f['department'].invalid && f['department'].touched) {

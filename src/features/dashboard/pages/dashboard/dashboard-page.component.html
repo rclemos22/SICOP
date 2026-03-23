@@ -91,87 +91,87 @@
       <h3 class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ overduePayments() }}</h3>
     </div>
 
-  </div>
-
-  <!-- Charts & Lists Section -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-    
-    <!-- Budget Distribution (Left Column - 1/3) -->
-    <div 
-        (click)="goToBudget()"
-        class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-sco-blue/30 transition-all flex flex-col"
-    >
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Orçamento Anual</h3>
-      </div>
-
-      <!-- D3 Chart Container (Added relative for tooltip positioning) -->
-      <div #chart class="flex-1 flex justify-center items-center min-h-[220px] relative"></div>
-
-      <div class="space-y-4 mt-2">
-        <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div class="flex items-center gap-2">
-                <div class="w-3 h-3 rounded-full bg-sco-blue"></div>
-                <span class="text-sm text-gray-600 dark:text-gray-300">Empenhado</span>
-            </div>
-            <span class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.0-0' }}</span>
-        </div>
-        <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div class="flex items-center gap-2">
-                <div class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
-                <span class="text-sm text-gray-600 dark:text-gray-300">Disponível</span>
-            </div>
-            <span class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().available | currency:'BRL':'symbol':'1.0-0' }}</span>
-        </div>
-      </div>
     </div>
 
-    <!-- Recent Payments (Right Column - 2/3) -->
-    <div class="lg:col-span-2 bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
-      <div class="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-         <h3 class="text-lg font-bold text-gray-900 dark:text-white">Últimos Pagamentos</h3>
-         <button (click)="goToFinancial()" class="text-sm text-sco-blue hover:underline font-medium">Ver todos</button>
-      </div>
+    <!-- Charts & Lists Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
       
-      <div class="flex-1 overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
-            <thead class="bg-gray-50 dark:bg-gray-800/50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Data</th>
-                    <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Descrição</th>
-                    <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Contrato</th>
-                    <th class="px-6 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Valor</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                @for (payment of recentPayments(); track payment.id) {
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">
-                            {{ payment.date | date:'dd/MM/yyyy' }}
-                        </td>
-                        <td class="px-6 py-4">
-                            <div class="text-sm text-gray-900 dark:text-white font-medium">{{ payment.description }}</div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                             <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono text-gray-600 dark:text-gray-300">
-                                {{ payment.contractId }}
-                             </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900 dark:text-white">
-                            {{ payment.amount | currency:'BRL':'symbol':'1.2-2' }}
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        @if (recentPayments().length === 0) {
-            <div class="p-8 text-center text-gray-400">
-                Nenhum pagamento recente.
-            </div>
-        }
+      <!-- Budget Distribution (Left Column - 1/3) -->
+      <div 
+          (click)="goToBudget()"
+          class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-sco-blue/30 transition-all flex flex-col"
+      >
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">Orçamento Anual</h3>
+        </div>
+
+        <!-- D3 Chart Container (Added relative for tooltip positioning) -->
+        <div #chart class="flex-1 flex justify-center items-center min-h-[220px] relative"></div>
+
+        <div class="space-y-4 mt-2">
+          <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-sco-blue"></div>
+                  <span class="text-sm text-gray-600 dark:text-gray-300">Empenhado</span>
+              </div>
+              <span class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.0-0' }}</span>
+          </div>
+          <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                  <span class="text-sm text-gray-600 dark:text-gray-300">Disponível</span>
+              </div>
+              <span class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().available | currency:'BRL':'symbol':'1.0-0' }}</span>
+          </div>
+        </div>
       </div>
+
+      <!-- Recent Payments (Right Column - 2/3) -->
+      <div class="lg:col-span-2 bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
+        <div class="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+           <h3 class="text-lg font-bold text-gray-900 dark:text-white">Últimos Pagamentos</h3>
+           <button (click)="goToFinancial()" class="text-sm text-sco-blue hover:underline font-medium">Ver todos</button>
+        </div>
+        
+        <div class="flex-1 overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
+              <thead class="bg-gray-50 dark:bg-gray-800/50">
+                  <tr>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Data</th>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Descrição</th>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Contrato</th>
+                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Valor</th>
+                  </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                  @for (payment of recentPayments(); track payment.id) {
+                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">
+                              {{ payment.date | date:'dd/MM/yyyy' }}
+                          </td>
+                          <td class="px-6 py-4">
+                              <div class="text-sm text-gray-900 dark:text-white font-medium">{{ payment.description }}</div>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap">
+                               <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono text-gray-600 dark:text-gray-300">
+                                  {{ payment.contractId }}
+                               </span>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900 dark:text-white">
+                              {{ payment.amount | currency:'BRL':'symbol':'1.2-2' }}
+                          </td>
+                      </tr>
+                  }
+              </tbody>
+          </table>
+          @if (recentPayments().length === 0) {
+              <div class="p-8 text-center text-gray-400">
+                  Nenhum pagamento recente.
+              </div>
+          }
+        </div>
+      </div>
+
     </div>
-
-  </div>
-
+    }
 </div>
