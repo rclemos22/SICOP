@@ -7,9 +7,9 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 - **Dashboard**: Métricas gerais e alertas de contratos próximos ao vencimento
 - **Gestão de Contratos**: Cadastro, edição, aditivos e acompanhamento
 - **Controle Financeiro**: Visualização de Notas de Empenho via API SIGEF
-- **Orçamento**: Controle de dotações orçamentárias
+- **Orçamento**: Controle de dotações orçamentárias com vinculação de NE
 - **Fornecedores**: Cadastro e gestão de fornecedores
-- **Nota de Empenho**: Consulta de notas por ano fiscal
+- **Nota de Empenho**: Consulta de notas por ano fiscal e unidade gestora
 
 ## Tech Stack
 
@@ -35,23 +35,15 @@ npm install
 
 ### Configuração
 
-Crie um arquivo `.env` com as variáveis:
-
-```
-SIGEF_API_URL=sua_url_api
-SIGEF_USERNAME=seu_usuario
-SIGEF_PASSWORD=sua_senha
-SUPABASE_URL=sua_url_supabase
-SUPABASE_KEY=sua_chave
-```
+As variáveis de ambiente estão configuradas em `src/environments/environment.ts`.
 
 ### Executar Desenvolvimento
 
 ```bash
-npm run dev
+npm start
 ```
 
-Acesse: `http://localhost:3000`
+Acesse: `http://localhost:4200`
 
 ### Build Produção
 
@@ -59,15 +51,35 @@ Acesse: `http://localhost:3000`
 npm run build
 ```
 
+## Integração SIGEF
+
+### Unidades Gestoras
+- **080101** - DPEMA (Defensoria Pública do Estado do Maranhão)
+- **080901** - FADEP (Fundo de Aparência da Defensoria Pública)
+
+### Proxy
+O Angular proxy redireciona `/sigef-api/*` para `https://api.seplan.ma.gov.br/api/v1/*`
+
 ## Estrutura do Projeto
 
 ```
 src/
 ├── core/services/       # Serviços (SIGEF, Supabase, Context)
 ├── features/            # Páginas e componentes por módulo
+│   ├── budget/          # Gestão de dotações
+│   ├── contracts/       # Gestão de contratos
+│   ├── financial/      # Dados financeiros
+│   ├── nota-empenho/   # Consulta NE via SIGEF
+│   └── suppliers/       # Gestão de fornecedores
 ├── shared/              # Modelos, utils, componentes reutilizáveis
 └── environments/        # Configurações por ambiente
 ```
+
+## Banco de Dados
+
+- **Supabase**: https://xhowiwekqliqfckndupo.supabase.co
+- **Tabelas**: contratos, aditivos, dotacoes, fornecedores
+- **Views**: vw_saldo_dotacoes
 
 ## License
 

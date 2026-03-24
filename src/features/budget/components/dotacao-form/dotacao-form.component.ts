@@ -236,14 +236,24 @@ export class DotacaoFormComponent implements OnInit {
       };
       
       try {
+        let result;
         if (this.isEditing) {
-          await this.budgetService.updateDotacao(this.editingDotacao()!.id, dotacaoToSave);
+          result = await this.budgetService.updateDotacao(this.editingDotacao()!.id, dotacaoToSave);
         } else {
-          await this.budgetService.addDotacao(dotacaoToSave);
+          result = await this.budgetService.addDotacao(dotacaoToSave);
         }
-        this.save.emit(dotacaoToSave);
+        
+        if (result.error) {
+          console.error('[DotacaoForm] Erro ao salvar:', result.error);
+          alert('Erro ao salvar dotação: ' + result.error);
+          return;
+        }
+        
+        console.log('[DotacaoForm] Salvo com sucesso');
+        this.save.emit(null);
       } catch (err) {
         console.error('Erro ao salvar dotação:', err);
+        alert('Erro ao salvar dotação');
       }
     } else {
       this.dotacaoForm.markAllAsTouched();
@@ -257,10 +267,16 @@ export class DotacaoFormComponent implements OnInit {
   async deleteDotacao() {
     if (this.isEditing && this.editingDotacao() && confirm('Confirmar exclusão desta dotação?')) {
       try {
-        await this.budgetService.deleteDotacao(this.editingDotacao()!.id);
+        const result = await this.budgetService.deleteDotacao(this.editingDotacao()!.id);
+        if (result.error) {
+          console.error('[DotacaoForm] Erro ao excluir:', result.error);
+          alert('Erro ao excluir dotação: ' + result.error);
+          return;
+        }
         this.save.emit(null);
       } catch (err) {
         console.error('Erro ao excluir dotação:', err);
+        alert('Erro ao excluir dotação');
       }
     }
   }

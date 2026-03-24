@@ -93,7 +93,7 @@ Requisições para `/sigef-api/*` são redirecionadas para `https://api.seplan.m
 ### Tabelas do Supabase
 - `contratos` - Cadastro de contratos
 - `aditivos` - Aditivos de contratos
-- `dotacoes` - Dotações orçamentárias (agora com campo `nunotaempenho`)
+- `dotacoes` - Dotações orçamentárias (com campo `nunotaempenho` para vinculação de NE)
 - `fornecedores` - Cadastro de fornecedores
 - `vw_saldo_dotacoes` - View com saldos das dotações
 

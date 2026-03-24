@@ -24,7 +24,7 @@ src/
 │   ├── dashboard/            # Página inicial com métricas
 │   ├── contracts/            # Gestão de contratos
 │   ├── financial/            # Dados financeiros
-│   ├── budget/               # Orçamento
+│   ├── budget/               # Orçamento (dotações)
 │   ├── suppliers/           # Fornecedores
 │   └── nota-empenho/        # Consulta NE via SIGEF
 ├── shared/
@@ -87,6 +87,11 @@ valorAtualizado = valorAnualOriginal + sum(Aditivos.valor_aditivo)
 - Total Pago = Soma(Pagamentos)
 - Saldo = Total Empenhado - Total Pago
 
+### Gestão de Dotações
+- CRUD completo de dotações vinculadas a contratos
+- Campo `nunotaempenho` opcional para vincular NE
+- View `vw_saldo_dotacoes` para consulta com saldos
+
 ## Proxy de Desenvolvimento
 
 O Angular utiliza proxy para redirecionar requisições para a API SIGEF:
@@ -106,14 +111,37 @@ O Angular utiliza proxy para redirecionar requisições para a API SIGEF:
 
 **Nota**: O servidor deve rodar na porta 4200 para o proxy funcionar corretamente (`npm start`).
 
-## Variáveis de Ambiente (.env)
+## Configuração do Banco (Supabase)
 
+### Tabela dotacoes
+```sql
+CREATE TABLE public.dotacoes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    contract_id UUID REFERENCES public.contratos(id) ON DELETE CASCADE,
+    numero_contrato TEXT NOT NULL,
+    dotacao TEXT NOT NULL,
+    credito TEXT NOT NULL,
+    data_disponibilidade DATE NOT NULL,
+    unid_gestora TEXT NOT NULL,
+    valor_dotacao NUMERIC(15,2) NOT NULL DEFAULT 0,
+    nunotaempenho TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
-SIGEF_API_URL=/sigef-api
-SIGEF_USERNAME=defensoria
-SIGEF_PASSWORD=Consumo2025
-SUPABASE_URL=URL do projeto Supabase
-SUPABASE_KEY=chave anon do Supabase
+
+### View vw_saldo_dotacoes
+```sql
+CREATE VIEW public.vw_saldo_dotacoes AS
+SELECT 
+    d.id, d.contract_id, d.numero_contrato, c.contratada,
+    d.dotacao, d.credito, d.data_disponibilidade, d.unid_gestora,
+    d.valor_dotacao, d.nunotaempenho,
+    0 AS total_empenhado, 0 AS total_cancelado, 0 AS total_pago,
+    d.valor_dotacao AS saldo_disponivel,
+    d.created_at, d.updated_at
+FROM public.dotacoes d
+LEFT JOIN public.contratos c ON d.contract_id = c.id;
 ```
 
 ## Fluxo de Funcionalidades

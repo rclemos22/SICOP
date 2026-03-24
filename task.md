@@ -22,3 +22,7 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 8. **Gestão de Dotações**: Cadastro, edição e exclusão de dotações vinculadas a contratos
 9. **Vinculação de NE**: Associar Notas de Empenho às dotações via API SIGEF
 10. **Controle por Unidade Gestora**: Suporte a UG 080101 (DPEMA) e 080901 (FADEP)
+
+## Status: Concluído
+
+Todas as funcionalidades listadas acima foram implementadas e estão em produção.
