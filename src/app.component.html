@@ -82,32 +82,40 @@
   <!-- Main Content Wrapper -->
   <main class="flex-1 flex flex-col h-screen overflow-hidden bg-background-light dark:bg-background-dark">
     
-    <!-- API Status Banner -->
-    @if (sigefService.apiStatus() !== 'connected') {
-      <div class="flex items-center justify-between px-4 py-2 text-sm"
-        [class]="sigefService.apiStatus() === 'disconnected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 
-                sigefService.apiStatus() === 'refreshing' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
-                'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'">
-        <div class="flex items-center gap-2">
-          @if (sigefService.apiStatus() === 'refreshing') {
-            <span class="animate-spin material-symbols-outlined text-[16px]">sync</span>
-            <span class="font-medium">Conectando à API SIGEF...</span>
-          } @else if (sigefService.apiStatus() === 'disconnected') {
-            <span class="material-symbols-outlined text-[16px]">wifi_off</span>
-            <span class="font-medium">API SIGEF desconectada</span>
-          } @else {
-            <span class="material-symbols-outlined text-[16px]">error</span>
-            <span class="font-medium">Erro na API SIGEF: {{ sigefService.error() }}</span>
+    <!-- API Status Banner - Sempre visivel -->
+    <div class="flex items-center justify-between px-4 py-2 text-sm border-b transition-all duration-300"
+      [class]="sigefService.apiStatus() === 'connected' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 
+               sigefService.apiStatus() === 'refreshing' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800' :
+               'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'">
+      <div class="flex items-center gap-2">
+        @if (sigefService.apiStatus() === 'connected') {
+          <span class="material-symbols-outlined text-[16px]">check_circle</span>
+          <span class="font-medium">API SIGEF conectada</span>
+          @if (sigefService.tokenExpiresAt()) {
+            <span class="text-xs opacity-75">(expira às {{ sigefService.tokenExpiresAt() }})</span>
           }
-        </div>
-        <button 
-          (click)="sigefService.reconnect()"
-          class="px-3 py-1 rounded font-medium hover:opacity-80 transition-opacity"
-        >
-          Reconectar
-        </button>
+        } @else if (sigefService.apiStatus() === 'refreshing') {
+          <span class="animate-spin material-symbols-outlined text-[16px]">sync</span>
+          <span class="font-medium">Conectando à API SIGEF...</span>
+        } @else if (sigefService.apiStatus() === 'disconnected') {
+          <span class="material-symbols-outlined text-[16px]">wifi_off</span>
+          <span class="font-medium">API SIGEF desconectada</span>
+        } @else {
+          <span class="material-symbols-outlined text-[16px]">error</span>
+          <span class="font-medium">Erro na API: {{ sigefService.error() }}</span>
+        }
       </div>
-    }
+      <button 
+        (click)="sigefService.reconnect()"
+        class="flex items-center gap-1 px-3 py-1 rounded font-medium hover:opacity-80 transition-opacity"
+        [class]="sigefService.apiStatus() === 'connected' ? 'bg-green-200/50 dark:bg-green-800/30 hover:bg-green-200' : 
+                 sigefService.apiStatus() === 'refreshing' ? 'bg-yellow-200/50 dark:bg-yellow-800/30 hover:bg-yellow-200' :
+                 'bg-red-200/50 dark:bg-red-800/30 hover:bg-red-200'"
+      >
+        <span class="material-symbols-outlined text-[14px]">refresh</span>
+        {{ sigefService.apiStatus() === 'connected' ? 'Renovar' : 'Reconectar' }}
+      </button>
+    </div>
 
     <!-- Top Header -->
     <header class="h-16 shrink-0 flex items-center justify-between px-8 bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm z-10 sticky top-0 border-b border-gray-200/50 dark:border-gray-700">
