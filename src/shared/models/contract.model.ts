@@ -34,12 +34,17 @@ export interface Contract {
   id: string;
   contrato: string;
   contratada: string;
+  fornecedor_id?: string;
   data_inicio: Date;
   data_fim: Date;
   valor_anual: number;
   status: ContractStatus;
   setor_id: string;
+  unid_gestora: string;
   objeto: string;
+  gestor_contrato?: string;
+  fiscal_admin?: string;
+  fiscal_tecnico?: string;
   data_fim_efetiva?: Date;
   dias_restantes?: number;
   status_efetivo?: ContractStatus;

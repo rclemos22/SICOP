@@ -32,7 +32,7 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
 
   // Signals for Filter State
   searchQuery = signal<string>('');
-  viewMode = signal<'active' | 'history'>('active');
+  viewMode = signal<'vigentes' | 'finalizados' | 'rescindidos'>('vigentes');
 
   // Advanced Filter State
   isFilterPanelOpen = signal(false);
@@ -72,6 +72,9 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   /** Estado de loading do service */
   isLoading = computed(() => this.contractService.loading());
 
+  /** Indica se está em modo de busca (3+ caracteres) */
+  isSearching = computed(() => this.searchQuery().trim().length >= 3);
+
   /**
    * Lista filtrada de contratos.
    *
@@ -102,49 +105,61 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
     const hasStatusFilter = selectedStatuses.length > 0;
 
     return allContracts.filter(c => {
-      // ── 1. Sobreposição com o ano de exercício ──
-      // Um contrato tem intersecção com o ano se:
-      //   data_inicio <= fimAno  E  data_fim_efetiva >= inicioAno
+      // ── 1. Global Search: When searching, show ALL contracts regardless of tab ──
+      const effectiveStatus = c.status_efetivo;
+      const days = c.dias_restantes ?? 0;
+      const isExpired = days < 0;
+      const isRescinded = c.status === ContractStatus.RESCINDIDO;
+
+      const hasSearch = globalQuery.length >= 3;
+
+      if (hasSearch) {
+        // When searching, show all contracts that match the search query
+        const matchesGlobalSearch = 
+          c.contrato.toLowerCase().includes(globalQuery) ||
+          c.contratada.toLowerCase().includes(globalQuery) ||
+          (effectiveStatus && effectiveStatus.toLowerCase().includes(globalQuery));
+        
+        return matchesGlobalSearch;
+      }
+
+      // ── 2. No search: Apply tab filter ──
+      // Sobreposição com o ano de exercício para vigentes
       const contratoInicio = new Date(c.data_inicio);
       const contratoFim = new Date(c.data_fim_efetiva);
 
-      if (contratoInicio > fimAno || contratoFim < inicioAno) {
-        return false; // Sem sobreposição — exclui
+      if (mode === 'vigentes') {
+        if (contratoInicio > fimAno || contratoFim < inicioAno) {
+          return false;
+        }
       }
 
-      // ── 2. Status/View Logic ──
-      const effectiveStatus = c.status_efetivo;
-      const days = c.dias_restantes ?? 0;
+      // ── 3. Status/View Logic ──
       let matchesStatus = false;
 
       if (hasStatusFilter) {
         matchesStatus = selectedStatuses.includes(effectiveStatus);
       } else {
-        const isExpired = days < 0;
-        const isRescinded = c.status === ContractStatus.RESCINDIDO;
-
-        if (mode === 'active') {
+        if (mode === 'vigentes') {
           matchesStatus = !isRescinded && !isExpired;
+        } else if (mode === 'rescindidos') {
+          matchesStatus = isRescinded;
         } else {
-          matchesStatus = isRescinded || isExpired;
+          matchesStatus = isExpired && !isRescinded;
         }
       }
 
-      // ── 3. Specific Field Filters ──
+      // ── 4. Specific Field Filters ──
       const matchesSupplier = !supQuery || c.contratada.toLowerCase().includes(supQuery);
       const matchesNumber = !numQuery || c.contrato.toLowerCase().includes(numQuery);
 
-      // ── 4. Global Search ──
-      const matchesGlobalSearch = !globalQuery ||
-        c.contrato.toLowerCase().includes(globalQuery) ||
-        c.contratada.toLowerCase().includes(globalQuery) ||
-        (effectiveStatus && effectiveStatus.toLowerCase().includes(globalQuery));
-
-      return matchesStatus && matchesSupplier && matchesNumber && matchesGlobalSearch;
+      return matchesStatus && matchesSupplier && matchesNumber;
     });
   });
 
-  activeCount = computed(() => this.filteredContracts().length);
+  activeCount = computed(() => {
+    return this.filteredContracts().length;
+  });
 
   // Actions
   setLayoutMode(mode: 'grid' | 'list') {
@@ -159,7 +174,7 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
     this.searchSubject.next(input.value);
   }
 
-  setViewMode(mode: 'active' | 'history') {
+  setViewMode(mode: 'vigentes' | 'finalizados' | 'rescindidos') {
     this.viewMode.set(mode);
     this.filterStatus.set([]);
   }
@@ -194,9 +209,37 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
     this.isFormOpen.set(false);
   }
 
-  handleSave(data: any) {
+  async handleSave(data: any) {
     console.log('Main Page received saved data:', data);
-    this.closeForm();
+    
+    const contractData = {
+      contrato: data.number,
+      contratada: data.supplier,
+      fornecedor_id: data.fornecedor_id || null,
+      data_inicio: new Date(data.startDate),
+      data_fim: new Date(data.endDate),
+      valor_anual: Number(data.totalValue),
+      status: data.status as ContractStatus,
+      setor_id: data.department,
+      unid_gestora: data.unid_gestora,
+      objeto: data.object,
+      gestor_contrato: data.gestor_contrato || null,
+      fiscal_admin: data.fiscal_admin || null,
+      fiscal_tecnico: data.fiscal_tecnico || null
+    };
+
+    try {
+      const result = await this.contractService.addContract(contractData);
+      if (result.error) {
+        alert('Erro ao salvar contrato: ' + result.error);
+        return;
+      }
+      console.log('Contrato salvo com sucesso');
+      this.closeForm();
+    } catch (err) {
+      console.error('Erro ao salvar contrato:', err);
+      alert('Erro ao salvar contrato');
+    }
   }
 
   handleSelect(contractId: string) {

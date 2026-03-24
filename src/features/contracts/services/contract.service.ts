@@ -125,17 +125,84 @@ export class ContractService {
   /**
    * Adiciona um novo aditivo ao Supabase.
    */
-  async addAditivo(aditivo: Partial<Aditivo>): Promise<Result<null>> {
+  async addAditivo(aditivo: Partial<Aditivo>): Promise<Result<Aditivo>> {
+    console.log('ContractService.addAditivo - inserting:', aditivo);
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('aditivos')
+        .insert(aditivo)
+        .select()
+        .single();
+
+      console.log('ContractService.addAditivo - result:', { data, error });
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      const newAditivo = this.mapRawToAditivo(data);
+      console.log('ContractService.addAditivo - mapped:', newAditivo);
+      return ok(newAditivo);
+    } catch (err: any) {
+      console.error('ContractService.addAditivo - catch error:', err);
+      this.errorHandler.handle(err, 'ContractService.addAditivo');
+      return fail(err.message || 'Erro ao adicionar aditivo');
+    }
+  }
+
+  /**
+   * Atualiza um aditivo existente no Supabase.
+   */
+  async updateAditivo(id: string, aditivo: Partial<Aditivo>): Promise<Result<Aditivo>> {
+    console.log('ContractService.updateAditivo - updating:', id, aditivo);
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('aditivos')
+        .update(aditivo)
+        .eq('id', id)
+        .select()
+        .single();
+
+      console.log('ContractService.updateAditivo - result:', { data, error });
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      const updatedAditivo = this.mapRawToAditivo(data);
+      return ok(updatedAditivo);
+    } catch (err: any) {
+      console.error('ContractService.updateAditivo - catch error:', err);
+      this.errorHandler.handle(err, 'ContractService.updateAditivo');
+      return fail(err.message || 'Erro ao atualizar aditivo');
+    }
+  }
+
+  /**
+   * Exclui um aditivo do Supabase.
+   */
+  async deleteAditivo(id: string): Promise<Result<null>> {
+    console.log('ContractService.deleteAditivo - deleting:', id);
     try {
       const { error } = await this.supabaseService.client
         .from('aditivos')
-        .insert(aditivo);
+        .delete()
+        .eq('id', id);
 
-      if (error) throw error;
+      console.log('ContractService.deleteAditivo - result:', { error });
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
       return ok(null);
     } catch (err: any) {
-      this.errorHandler.handle(err, 'ContractService.addAditivo');
-      return fail(err.message || 'Erro ao adicionar aditivo');
+      console.error('ContractService.deleteAditivo - catch error:', err);
+      this.errorHandler.handle(err, 'ContractService.deleteAditivo');
+      return fail(err.message || 'Erro ao excluir aditivo');
     }
   }
 
@@ -149,12 +216,17 @@ export class ContractService {
       id: raw.id,
       contrato: raw.contrato ?? '',
       contratada: raw.contratada ?? '',
+      fornecedor_id: raw.fornecedor_id ?? undefined,
       data_inicio: this.parseDate(raw.data_inicio),
       data_fim: this.parseDate(raw.data_fim),
       valor_anual: this.parseNumeric(raw.valor_anual),
       status: (raw.status as ContractStatus) || ContractStatus.VIGENTE,
       setor_id: raw.setor_id ?? undefined,
+      unid_gestora: raw.unid_gestora ?? undefined,
       objeto: raw.objeto ?? undefined,
+      gestor_contrato: raw.gestor_contrato ?? undefined,
+      fiscal_admin: raw.fiscal_admin ?? undefined,
+      fiscal_tecnico: raw.fiscal_tecnico ?? undefined,
       data_fim_efetiva: raw.data_fim_efetiva ? this.parseDate(raw.data_fim_efetiva) : undefined,
       dias_restantes: raw.dias_restantes != null ? Number(raw.dias_restantes) : undefined,
       status_efetivo: (raw.status_efetivo as ContractStatus) || undefined
@@ -174,6 +246,41 @@ export class ContractService {
       nova_vigencia: raw.nova_vigencia ? this.parseDate(raw.nova_vigencia) : undefined,
       valor_aditivo: raw.valor_aditivo != null ? this.parseNumeric(raw.valor_aditivo) : undefined
     };
+  }
+
+  // ── CRUD Operations ─────────────────────────────────────────────────────
+
+  async addContract(contract: Partial<Contract>): Promise<Result<null>> {
+    try {
+      const { error } = await this.supabaseService.client
+        .from('contratos')
+        .insert(contract);
+
+      if (error) throw error;
+
+      await this.loadContracts();
+      return ok(null);
+    } catch (err: any) {
+      this.errorHandler.handle(err, 'ContractService.addContract');
+      return fail(err.message || 'Erro ao adicionar contrato');
+    }
+  }
+
+  async updateContract(id: string, contract: Partial<Contract>): Promise<Result<null>> {
+    try {
+      const { error } = await this.supabaseService.client
+        .from('contratos')
+        .update(contract)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await this.loadContracts();
+      return ok(null);
+    } catch (err: any) {
+      this.errorHandler.handle(err, 'ContractService.updateContract');
+      return fail(err.message || 'Erro ao atualizar contrato');
+    }
   }
 
   // ── Helpers de Parsing ──────────────────────────────────────────────────

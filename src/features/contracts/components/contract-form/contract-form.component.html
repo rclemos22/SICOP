@@ -39,12 +39,12 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Number -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Número do Contrato *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Número do Contrato *</label>
               <input 
                 type="text" 
                 formControlName="number"
                 placeholder="Ex: 124/2024"
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                 [class.border-red-500]="f['number'].invalid && f['number'].touched"
               >
               @if (f['number'].invalid && f['number'].touched) {
@@ -54,12 +54,12 @@
 
             <!-- Process Number -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nº Processo SEI *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Nº Processo SEI *</label>
               <input 
                 type="text" 
                 formControlName="processNumber"
                 placeholder="Ex: sei.ma.def.br/..."
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                 [class.border-red-500]="f['processNumber'].invalid && f['processNumber'].touched"
               >
               @if (f['processNumber'].invalid && f['processNumber'].touched) {
@@ -67,16 +67,48 @@
               }
             </div>
 
-            <!-- Supplier -->
-            <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Fornecedor *</label>
+            <!-- Supplier with Autocomplete -->
+            <div class="md:col-span-2 relative">
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Fornecedor *</label>
               <input 
                 type="text" 
-                formControlName="supplier"
-                placeholder="Razão Social ou Nome Fantasia"
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                [value]="supplierSearch()"
+                (input)="onSupplierInput($event)"
+                (focus)="onSupplierInput($event)"
+                placeholder="Digite para buscar fornecedor..."
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                 [class.border-red-500]="f['supplier'].invalid && f['supplier'].touched"
               >
+              <input type="hidden" formControlName="supplier">
+              <input type="hidden" formControlName="fornecedor_id">
+              
+              <!-- Supplier Dropdown -->
+              @if (showSupplierDropdown()) {
+                <div class="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  @for (supplier of supplierResults(); track supplier.id) {
+                    <div 
+                      (click)="selectSupplier(supplier)"
+                      class="px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-700 last:border-b-0"
+                    >
+                      <p class="text-sm font-medium text-slate-900 dark:text-white">{{ supplier.razao_social }}</p>
+                      <p class="text-xs text-slate-500 dark:text-slate-400">{{ supplier.cnpj }} • {{ supplier.nome_fantasia }}</p>
+                    </div>
+                  }
+                </div>
+              }
+              
+              <!-- New Supplier Button -->
+              @if (supplierSearch().length >= 2 && !showSupplierDropdown()) {
+                <button 
+                  type="button"
+                  (click)="openNewSupplierModal()"
+                  class="mt-2 w-full px-4 py-2 text-sm font-medium text-sco-blue hover:text-blue-700 dark:text-blue-400 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <span class="material-symbols-outlined text-[18px]">add</span>
+                  Cadastrar novo fornecedor
+                </button>
+              }
+              
               @if (f['supplier'].invalid && f['supplier'].touched) {
                 <span class="text-xs text-red-500 mt-1">Campo obrigatório.</span>
               }
@@ -84,12 +116,12 @@
 
             <!-- Object -->
             <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Objeto do Contrato *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Objeto do Contrato *</label>
               <textarea 
                 formControlName="object"
                 rows="3"
                 placeholder="Descrição resumida do objeto contratual..."
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all resize-none"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all resize-none text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                 [class.border-red-500]="f['object'].invalid && f['object'].touched"
               ></textarea>
               @if (f['object'].invalid && f['object'].touched) {
@@ -109,12 +141,12 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Start Date -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Data de Início *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Data de Início *</label>
               <input 
                 type="date" 
                 max="9999-12-31"
                 formControlName="startDate"
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white"
                 [class.border-red-500]="f['startDate'].invalid && f['startDate'].touched"
               >
               @if (f['startDate'].invalid && f['startDate'].touched) {
@@ -124,12 +156,12 @@
 
             <!-- End Date -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Data de Fim *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Data de Fim *</label>
               <input 
                 type="date" 
                 max="9999-12-31"
                 formControlName="endDate"
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white"
                 [class.border-red-500]="(f['endDate'].invalid && f['endDate'].touched) || (contractForm.errors?.['dateRangeInvalid'] && f['endDate'].touched)"
               >
               @if (f['endDate'].hasError('required') && f['endDate'].touched) {
@@ -152,14 +184,14 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Total Value -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Valor Global (R$) *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Valor Global (R$) *</label>
               <input 
                 type="number" 
                 formControlName="totalValue"
                 placeholder="0,00"
                 min="0"
                 step="0.01"
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
                 [class.border-red-500]="f['totalValue'].invalid && f['totalValue'].touched"
               >
               @if (f['totalValue'].invalid && f['totalValue'].touched) {
@@ -167,35 +199,98 @@
               }
             </div>
 
-            <!-- Department -->
+            <!-- Unidade Gestora -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Unidade Gestora *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Unidade Gestora *</label>
+              <select 
+                formControlName="unid_gestora"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white cursor-pointer"
+                [class.border-red-500]="f['unid_gestora'].invalid && f['unid_gestora'].touched"
+              >
+                <option value="" disabled>Selecione...</option>
+                @for (ug of unidadesGestoras; track ug.codigo) {
+                  <option [value]="ug.codigo">{{ ug.codigo }} - {{ ug.nome }}</option>
+                }
+              </select>
+              @if (f['unid_gestora'].invalid && f['unid_gestora'].touched) {
+                <span class="text-xs text-red-500 mt-1">Campo obrigatório.</span>
+              }
+            </div>
+
+            <!-- Setor -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Setor Responsável *</label>
               <select 
                 formControlName="department"
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white cursor-pointer"
                 [class.border-red-500]="f['department'].invalid && f['department'].touched"
               >
                 <option value="" disabled>Selecione...</option>
-                @for (dept of departments(); track dept.id) {
-                  <option [value]="dept.id">{{ dept.name }}</option>
+                @for (setor of setores(); track setor.id) {
+                  <option [value]="setor.id">{{ setor.name }}</option>
                 }
               </select>
               @if (f['department'].invalid && f['department'].touched) {
                 <span class="text-xs text-red-500 mt-1">Campo obrigatório.</span>
               }
             </div>
+          </div>
 
-            <!-- Status -->
+          <!-- Status Row -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Status Inicial *</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Status Inicial *</label>
               <select 
                 formControlName="status"
-                class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white cursor-pointer"
               >
                 @for (opt of statusOptions; track opt) {
                   <option [value]="opt">{{ opt }}</option>
                 }
               </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section D: Gestores -->
+        <section class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h3 class="text-lg font-semibold text-sco-blue dark:text-blue-400 mb-6 flex items-center gap-2">
+            <span class="material-symbols-outlined">person</span>
+            Gestores e Fiscais
+          </h3>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Gestor do Contrato -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Gestor do Contrato</label>
+              <input 
+                type="text" 
+                formControlName="gestor_contrato"
+                placeholder="Nome do gestor..."
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+              >
+            </div>
+
+            <!-- Fiscal Administrativo -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Fiscal Administrativo</label>
+              <input 
+                type="text" 
+                formControlName="fiscal_admin"
+                placeholder="Nome do fiscal administrativo..."
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+              >
+            </div>
+
+            <!-- Fiscal Técnico -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Fiscal Técnico</label>
+              <input 
+                type="text" 
+                formControlName="fiscal_tecnico"
+                placeholder="Nome do fiscal técnico..."
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+              >
             </div>
           </div>
         </section>
@@ -220,6 +315,71 @@
         Salvar
       </button>
     </div>
+
+    <!-- Supplier Modal -->
+    @if (showSupplierModal()) {
+      <div class="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" (click)="closeSupplierModal()"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl animate-in zoom-in-95 duration-200">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Novo Fornecedor</h3>
+            <button (click)="closeSupplierModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          
+          <form [formGroup]="tempSupplier" (ngSubmit)="saveNewSupplier()" class="p-6 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Razão Social *</label>
+              <input formControlName="razao_social" type="text"
+                class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome Fantasia *</label>
+              <input formControlName="nome_fantasia" type="text"
+                class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">CNPJ *</label>
+              <input formControlName="cnpj" type="text"
+                class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-mono">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                <input formControlName="email" type="email"
+                  class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Telefone</label>
+                <input formControlName="telefone" type="text"
+                  class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+              </div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Endereço</label>
+              <input formControlName="endereco" type="text"
+                class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+            </div>
+            
+            <div class="flex gap-3 pt-2">
+              <button type="button" (click)="closeSupplierModal()"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button type="submit"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-sco-blue hover:bg-blue-700 rounded-lg">
+                Cadastrar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
 
   </div>
 </div>

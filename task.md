@@ -13,7 +13,7 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 ## Requisitos Funcionais
 
 1. Cadastro e edição de contratos com informações: número, contratada, objeto, valor anual, vigência
-2. Registro de aditivos (alteração de prazo e valor)
+2. Registro de aditivos (alteração de prazo e valor) com edição e exclusão
 3. Integração com API SIGEF para Notas de Empenho
 4. Visualização de transações financeiras (empenho, pagamento, cancelamento)
 5. Alertas automáticos para contratos com menos de 90 dias restantes
@@ -23,6 +23,34 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 9. **Vinculação de NE**: Associar Notas de Empenho às dotações via API SIGEF
 10. **Controle por Unidade Gestora**: Suporte a UG 080101 (DPEMA) e 080901 (FADEP)
 
+## Novas Funcionalidades Implementadas
+
+### Formulário de Contratos
+- Campo **Fornecedor** com autocomplete (busca na tabela fornecedores)
+- Botão para cadastrar novo fornecedor via popup/modal
+- Campo **Unidade Gestora** (080101 - DPEMA, 080901 - FADEP)
+- Campo **Setor Responsável** (GABINETE, JURIDICO, ADMINISTRATIVO, FINANCEIRO, COMPRAS, TECNOLOGIA, RECURSOS_HUMANOS, LICITAÇÕES)
+- Campos para **Gestores e Fiscais**:
+  - Gestor do Contrato (gestor_contrato)
+  - Fiscal Administrativo (fiscal_admin)
+  - Fiscal Técnico (fiscal_tecnico)
+
+### Página de Contratos
+- Abas: **Vigentes**, **Finalizados**, **Rescindidos**
+- Busca com 3+ caracteres que pesquisa em todos os contratos independente da aba
+- Botão de filtros desabilitado temporariamente
+
+### Aditivos
+- **Criar** novos aditivos vinculados a contratos
+- **Editar** aditivos existentes
+- **Excluir** aditivos do banco de dados
+- Atualização automática do card de Vigência
+
+### Interface
+- Correção de cores no modo escuro para todos os formulários
+- Uso de paleta **slate** para consistência visual
+- Placeholders e textos visíveis no modo escuro
+
 ## Status: Concluído
 
-Todas as funcionalidades listadas acima foram implementadas e estão em produção.
+Todas as funcionalidades listadas acima foram implementadas.

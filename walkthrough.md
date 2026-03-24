@@ -11,7 +11,7 @@ npm install
 ### Executar Ambiente de Desenvolvimento
 
 ```bash
-npm start
+npm run dev
 ```
 
 A aplicação estará disponível em `http://localhost:4200`
@@ -45,10 +45,61 @@ No header, há um seletor de ano que filtra todos os dados da aplicação confor
 - Alertas visuais para contratos próximos do vencimento (≤90 dias)
 
 ### Contratos
-- Lista com filtros e busca
-- Status: VIGENTE, FINALIZANDO (≤90 dias), RESCINDIDO
-- Detalhes com abas: Visão Geral, Aditivos, **Dotações**, **Financeiro**
-- Formulário de criação/edição de contratos
+
+#### Lista de Contratos
+- Abas para filtrar por status:
+  - **Vigentes**: Contratos ativos (não rescindidos e não expirados)
+  - **Finalizados**: Contratos expirados
+  - **Rescindidos**: Contratos rescindidos
+- Busca com 3+ caracteres que pesquisa em TODOS os contratos independente da aba
+- Layout em grid ou lista
+
+#### Formulário de Contrato
+Para criar ou editar um contrato:
+
+1. Clique em "Novo Contrato"
+2. Preencha os campos:
+   - **Número do Contrato** (ex: 124/2024)
+   - **Nº Processo SEI**
+   - **Fornecedor**: Digite para buscar (autocomplete). Se não encontrar, clique em "Cadastrar novo fornecedor"
+   - **Objeto do Contrato**
+   - **Data de Início** e **Data de Fim**
+   - **Valor Global (R$)**
+   - **Unidade Gestora**: 080101 - DPEMA ou 080901 - FADEP
+   - **Setor Responsável**: GABINETE, JURIDICO, ADMINISTRATIVO, etc.
+   - **Status Inicial**
+   - **Gestor do Contrato** (opcional)
+   - **Fiscal Administrativo** (opcional)
+   - **Fiscal Técnico** (opcional)
+3. Clique em "Salvar"
+
+#### Detalhes do Contrato
+A página de detalhes possui abas:
+- **Visão Geral**: Dados do contrato, objeto, informações financeiras
+- **Aditivos**: Lista de aditivos (criar, editar, excluir)
+- **Dotações**: Dotações orçamentárias vinculadas
+- **Financeiro**: Transações e Notas de Empenho
+
+### Aditivos
+
+#### Criar Aditivo
+1. Na aba Aditivos do contrato, clique em "+ Aditivo"
+2. Preencha:
+   - **Número do Aditivo** (ex: 01/2026)
+   - **Tipo**: Alteração (Valor/Objeto) ou Prorrogação de Prazo
+   - **Data da Assinatura**
+   - **Nova Vigência** (obrigatório apenas para Prorrogação)
+   - **Valor do Aditivo**
+3. Clique em "Adicionar"
+
+#### Editar Aditivo
+1. Na lista de aditivos, clique no ícone de editar (lápis)
+2. Modifique os campos necessários
+3. Clique em "Salvar"
+
+#### Excluir Aditivo
+1. Na lista de aditivos, clique no ícone de excluir (lixeira)
+2. Confirme a exclusão
 
 ### Aba Dotações
 - Criar nova dotação com formulário
@@ -61,14 +112,14 @@ No header, há um seletor de ano que filtra todos os dados da aplicação confor
 - Tabela de lançamentos com coluna de Nota de Empenho
 - Exibe NE vinculada a cada lançamento
 
-### Integração SIGEF
+## Integração SIGEF
 
-#### Autenticação
+### Autenticação
 - Automática com credenciais do ambiente
 - Token armazenado em memória
 - Refresh automático quando expirado
 
-#### Consulta de Nota de Empenho
+### Consulta de Nota de Empenho
 1. Selecione a **Unidade Gestora**:
    - **080101** - DPEMA
    - **080901** - FADEP

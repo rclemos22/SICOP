@@ -61,6 +61,7 @@ export class ContractDetailsPageComponent {
   // ── Modals State ────────────────────────────────────────────────────────
   isAditivoModalOpen = signal(false);
   isDotacaoModalOpen = signal(false);
+  editingAditivo = signal<Aditivo | null>(null);
   editingDotacao = signal<Dotacao | null>(null);
 
   // ── Computed Contract ───────────────────────────────────────────────────
@@ -232,19 +233,56 @@ export class ContractDetailsPageComponent {
     return tipo === 'PRORROGACAO' ? 'Prorrogação' : 'Alteração';
   }
 
-  // ── Modal Actions ───────────────────────────────────────────────────────
+  // ── Modal Actions ─────────────────────────────────────────────────────
 
-  openAditivoModal() {
+  openAditivoModal(aditivo?: Aditivo) {
+    if (aditivo) {
+      this.editingAditivo.set(aditivo);
+    } else {
+      this.editingAditivo.set(null);
+    }
     this.isAditivoModalOpen.set(true);
   }
 
   closeAditivoModal() {
     this.isAditivoModalOpen.set(false);
+    this.editingAditivo.set(null);
   }
 
   onAditivoSaved(aditivo: Aditivo) {
-    this.aditivos.update(current => [aditivo, ...current]);
+    this.aditivos.update(current => {
+      const idx = current.findIndex(a => a.id === aditivo.id);
+      if (idx >= 0) {
+        const updated = [...current];
+        updated[idx] = aditivo;
+        return updated;
+      }
+      return [aditivo, ...current];
+    });
     this.closeAditivoModal();
+  }
+
+  onAditivoDeleted(aditivoId: string) {
+    this.aditivos.update(current => current.filter(a => a.id !== aditivoId));
+  }
+
+  async deleteAditivo(aditivoId: string) {
+    if (!confirm('Tem certeza que deseja excluir este aditivo?')) {
+      return;
+    }
+    
+    try {
+      const result = await this.contractService.deleteAditivo(aditivoId);
+      
+      if (result.error) {
+        alert('Erro ao excluir aditivo: ' + result.error);
+        return;
+      }
+      
+      this.aditivos.update(current => current.filter(a => a.id !== aditivoId));
+    } catch (err) {
+      alert('Erro ao excluir aditivo');
+    }
   }
 
   openDotacaoModal(dotacao?: Dotacao) {
