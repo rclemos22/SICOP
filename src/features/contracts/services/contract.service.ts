@@ -36,6 +36,9 @@ export class ContractService {
   private _loading = signal<boolean>(false);
   private _error = signal<string | null>(null);
 
+  // Cache de aditivos por contract_id para calcular data_fim_efetiva
+  private _aditivosCache = signal<Map<string, Aditivo[]>>(new Map());
+
   // ── Estado Público (somente leitura) ────────────────────────────────────
 
   /** Lista completa de contratos (sem filtro de ano — componentes filtram) */
@@ -57,11 +60,50 @@ export class ContractService {
   /**
    * Busca TODOS os contratos a partir da view vw_contratos_vigencia.
    * A view já calcula `data_fim_efetiva`, `dias_restantes` e `status_efetivo`.
+   * Se a view não calcular corretamente, recalcula no frontend usando aditivos.
    */
   private async fetchContracts() {
-    return this.supabaseService.client
-      .from('vw_contratos_vigencia')
-      .select('*');
+    try {
+      return await this.supabaseService.client
+        .from('vw_contratos_vigencia')
+        .select('*');
+    } catch (err) {
+      console.warn('Erro na query de contratos:', err);
+      return { data: [], error: null };
+    }
+  }
+
+  /**
+   * Busca todos os aditivos para calcular data_fim_efetiva dos contratos.
+   */
+  private async fetchAllAditivos() {
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('aditivos')
+        .select('*, tipo_aditivo(nome)')
+        .returns<any[]>();
+      
+      if (error) {
+        console.warn('Erro ao carregar aditivos:', error.message);
+        return new Map<string, Aditivo[]>();
+      }
+
+      console.log('[DEBUG] fetchAllAditivos - raw data:', data);
+
+      // Agrupar por contract_id
+      const map = new Map<string, Aditivo[]>();
+      (data || []).forEach((raw: any) => {
+        const aditivo = this.mapRawToAditivo(raw);
+        const existing = map.get(aditivo.contract_id) || [];
+        existing.push(aditivo);
+        map.set(aditivo.contract_id, existing);
+      });
+      
+      return map;
+    } catch (err) {
+      console.warn('Exceção ao carregar aditivos:', err);
+      return new Map<string, Aditivo[]>();
+    }
   }
 
   async loadContracts(): Promise<void> {
@@ -69,14 +111,34 @@ export class ContractService {
     this._error.set(null);
 
     try {
-      const { data: rawContracts, error: contractsError } = await this.fetchContracts();
+      let rawContracts: any[] = [];
+      let aditivosMap = new Map<string, Aditivo[]>();
 
-      if (contractsError) throw contractsError;
+      try {
+        const contractsResult = await this.fetchContracts();
+        const { data, error } = contractsResult;
+        if (error) throw error;
+        rawContracts = data || [];
+      } catch (err: any) {
+        console.warn('Erro ao carregar contratos da view:', err.message);
+      }
 
-      const contracts = (rawContracts || []).map((raw: any) =>
-        this.mapRawToContract(raw)
-      );
+      try {
+        aditivosMap = await this.fetchAllAditivos();
+      } catch (err: any) {
+        console.warn('Erro ao carregar aditivos:', err.message);
+      }
 
+      // Armazenar cache de aditivos
+      this._aditivosCache.set(aditivosMap);
+
+      // Mapear contratos considerando aditivos para data_fim_efetiva
+      const contracts = rawContracts.map((raw: any) => {
+        const aditivosDoContrato = aditivosMap.get(raw.id) || [];
+        return this.mapRawToContract(raw, aditivosDoContrato);
+      });
+
+      console.log('[DEBUG] loadContracts - total contracts:', contracts.length);
       this._contracts.set(contracts);
     } catch (err: any) {
       this.errorHandler.handle(err, 'ContractService.loadContracts');
@@ -210,38 +272,101 @@ export class ContractService {
 
   /**
    * Converte um registro bruto da view vw_contratos_vigencia em um objeto `Contract`.
+   * Se existir aditivo com nova_vigencia, recalcula data_fim_efetiva a partir do aditivo.
+   * Caso contrário, usa os valores da view.
    */
-  private mapRawToContract(raw: any): Contract {
+  private mapRawToContract(raw: any, aditivos: Aditivo[] = []): Contract {
+    const dataFimOriginal = this.parseDate(raw.data_fim);
+    
+    console.log('[DEBUG] mapRawToContract - contrato:', raw.contrato, 'aditivos:', aditivos);
+    
+    // Filtrar tipos de aditivo que alteram o prazo - usar includes para ser mais flexível
+    const aditivosComVigencia = aditivos
+      .filter(a => {
+        const tipoUpper = (a.tipo || '').toUpperCase();
+        const hasNovaVigencia = !!a.nova_vigencia;
+        const isTipoPrazo = tipoUpper.includes('PRAZO') || tipoUpper === 'PRORROGACAO';
+        console.log('[DEBUG] filter aditivo - tipo:', a.tipo, 'tipoUpper:', tipoUpper, 'hasNovaVigencia:', hasNovaVigencia, 'isTipoPrazo:', isTipoPrazo);
+        return hasNovaVigencia && isTipoPrazo;
+      })
+      .sort((a, b) => (b.nova_vigencia?.getTime() || 0) - (a.nova_vigencia?.getTime() || 0));
+    
+    console.log('[DEBUG] aditivosComVigencia:', aditivosComVigencia);
+    
+    let dataFimEfetiva: Date;
+    let diasRestantes: number;
+    let statusEfetivo: ContractStatus;
+    
+    // Se existe aditivo que altera o prazo, usa a nova vigência do aditivo mais recente
+    if (aditivosComVigencia.length > 0 && aditivosComVigencia[0].nova_vigencia) {
+      dataFimEfetiva = aditivosComVigencia[0].nova_vigencia;
+      const hoje = new Date();
+      const diffTime = dataFimEfetiva.getTime() - hoje.getTime();
+      diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      statusEfetivo = this.calculateEffectiveStatus(raw.status, diasRestantes);
+    } else {
+      // Usa os valores da view
+      dataFimEfetiva = raw.data_fim_efetiva ? this.parseDate(raw.data_fim_efetiva) : dataFimOriginal;
+      diasRestantes = raw.dias_restantes != null ? Number(raw.dias_restantes) : (() => {
+        const hoje = new Date();
+        const diffTime = dataFimEfetiva.getTime() - hoje.getTime();
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      })();
+      statusEfetivo = (raw.status_efetivo as ContractStatus) || this.calculateEffectiveStatus(raw.status, diasRestantes);
+    }
+
     return {
       id: raw.id,
       contrato: raw.contrato ?? '',
-      contratada: raw.contratada ?? '',
+      // Tenta várias possibilidades para o nome da contratada
+      contratada: raw.contratada ?? raw.razao_social ?? raw.nome_fornecedor ?? raw.nome_contratada ?? '',
       fornecedor_id: raw.fornecedor_id ?? undefined,
       data_inicio: this.parseDate(raw.data_inicio),
-      data_fim: this.parseDate(raw.data_fim),
+      data_fim: dataFimOriginal,
       valor_anual: this.parseNumeric(raw.valor_anual),
       status: (raw.status as ContractStatus) || ContractStatus.VIGENTE,
-      setor_id: raw.setor_id ?? undefined,
+      setor_id: raw.setor_id ?? raw.setor ?? undefined,
       unid_gestora: raw.unid_gestora ?? undefined,
-      objeto: raw.objeto ?? undefined,
-      gestor_contrato: raw.gestor_contrato ?? undefined,
-      fiscal_admin: raw.fiscal_admin ?? undefined,
+      objeto: raw.objeto ?? raw.descricao ?? undefined,
+      gestor_contrato: raw.gestor_contrato ?? raw.gestor ?? undefined,
+      fiscal_admin: raw.fiscal_admin ?? raw.fiscal_administrativo ?? undefined,
       fiscal_tecnico: raw.fiscal_tecnico ?? undefined,
-      data_fim_efetiva: raw.data_fim_efetiva ? this.parseDate(raw.data_fim_efetiva) : undefined,
-      dias_restantes: raw.dias_restantes != null ? Number(raw.dias_restantes) : undefined,
-      status_efetivo: (raw.status_efetivo as ContractStatus) || undefined
+      data_fim_efetiva: dataFimEfetiva,
+      dias_restantes: diasRestantes,
+      status_efetivo: statusEfetivo
     };
+  }
+
+  /**
+   * Calcula o status efetivo do contrato baseado nas regras de negócio.
+   */
+  private calculateEffectiveStatus(status: string, diasRestantes: number): ContractStatus {
+    if (status === ContractStatus.RESCINDIDO) {
+      return ContractStatus.RESCINDIDO;
+    }
+
+    if (diasRestantes <= 90) {
+      return ContractStatus.FINALIZANDO;
+    }
+
+    return ContractStatus.VIGENTE;
   }
 
   /**
    * Converte um registro bruto de aditivo em um objeto `Aditivo` tipado.
    */
   private mapRawToAditivo(raw: any): Aditivo {
+    // Se houver relação com tipo_aditivo, usar o nome, senão usar o campo tipo diretamente
+    const tipo = raw.tipo_aditivo?.nome || raw.tipo || 'ALTERACAO';
+    
+    console.log('[DEBUG] mapRawToAditivo - raw:', raw, '-> tipo:', tipo);
+    
     return {
       id: raw.id,
       contract_id: raw.contract_id ?? '',
+      numero_contrato: raw.numero_contrato ?? undefined,
       numero_aditivo: raw.numero_aditivo ?? '',
-      tipo: raw.tipo ?? 'ALTERACAO',
+      tipo: tipo,
       data_assinatura: raw.data_assinatura ? this.parseDate(raw.data_assinatura) : undefined,
       nova_vigencia: raw.nova_vigencia ? this.parseDate(raw.nova_vigencia) : undefined,
       valor_aditivo: raw.valor_aditivo != null ? this.parseNumeric(raw.valor_aditivo) : undefined

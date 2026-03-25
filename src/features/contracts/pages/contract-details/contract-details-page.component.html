@@ -658,6 +658,7 @@
       <div class="relative w-full max-w-lg z-10 animate-in zoom-in-95 duration-200">
          <app-aditivo-form
             [contractId]="contractId()"
+            [numeroContrato]="c?.contrato || ''"
             [aditivo]="editingAditivo()"
             (save)="onAditivoSaved($event)"
             (cancel)="closeAditivoModal()"

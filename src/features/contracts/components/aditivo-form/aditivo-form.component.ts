@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, input, output, OnInit } from '@angular/core';
+import { Component, inject, input, output, OnInit, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup } from '@angular/forms';
 import { ContractService } from '../../services/contract.service';
 import { Aditivo } from '../../../../shared/models/contract.model';
+import { SupabaseService } from '../../../../core/services/supabase.service';
 
 
 @Component({
@@ -14,9 +15,14 @@ import { Aditivo } from '../../../../shared/models/contract.model';
 export class AditivoFormComponent implements OnInit {
   private fb: FormBuilder = inject(FormBuilder);
   private contractService = inject(ContractService);
+  private supabaseService = inject(SupabaseService);
+
+  // Tipos de aditivo carregados do banco
+  tiposAditivo = signal<Array<{ id: string, nome: string }>>([]);
 
   // Inputs & Outputs
   contractId = input.required<string>();
+  numeroContrato = input<string>('');
   aditivo = input<Aditivo | null>(null);
   save = output<Aditivo>();
   cancel = output<void>();
@@ -36,6 +42,8 @@ export class AditivoFormComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.loadTiposAditivo();
+    
     const aditivoData = this.aditivo();
     if (aditivoData) {
       this.aditivoForm.patchValue({
@@ -46,12 +54,19 @@ export class AditivoFormComponent implements OnInit {
         nova_vigencia: aditivoData.nova_vigencia ? new Date(aditivoData.nova_vigencia).toISOString().split('T')[0] : '',
         valor_aditivo: aditivoData.valor_aditivo || 0
       });
+    } else {
+      // Preencher o campo numero_contrato automaticamente
+      const numeroContrato = this.numeroContrato();
+      if (numeroContrato) {
+        // Deixa o campo vazio para o usuário digitar o número do aditivo
+        // O campo numero_contrato será enviado automaticamente
+      }
     }
 
     // Watch for 'tipo' changes to toggle 'nova_vigencia' requirement
     this.aditivoForm.get('tipo')?.valueChanges.subscribe(tipo => {
       const novaVigenciaControl = this.aditivoForm.get('nova_vigencia');
-      if (tipo === 'PRORROGACAO') {
+      if (tipo?.includes('PRAZO')) {
         novaVigenciaControl?.setValidators([Validators.required]);
       } else {
         novaVigenciaControl?.clearValidators();
@@ -66,6 +81,37 @@ export class AditivoFormComponent implements OnInit {
     return !!this.aditivo();
   }
 
+  async loadTiposAditivo() {
+    const { data, error } = await this.supabaseService.client
+      .from('tipo_aditivo')
+      .select('*')
+      .order('nome');
+    
+    if (!error && data && data.length > 0) {
+      // Detectar quais colunas existem
+      const firstRow = data[0];
+      const nomeCol = firstRow.nome !== undefined ? 'nome' : 'descricao';
+      const ativoCol = firstRow.ativo !== undefined ? 'ativo' : (firstRow.status !== undefined ? 'status' : null);
+      
+      const tiposMap = data
+        .filter(t => !ativoCol || t[ativoCol] === true || t[ativoCol] === 'true' || t[ativoCol] === 1)
+        .map(t => ({
+          id: t[nomeCol],
+          nome: String(t[nomeCol]).replace('_', ' ')
+        }));
+      this.tiposAditivo.set(tiposMap);
+    } else {
+      // Fallback para valores padrão se a tabela não existir ou estiver vazia
+      this.tiposAditivo.set([
+        { id: 'ADITIVO_PRAZO', nome: 'ADITIVO PRAZO' },
+        { id: 'ADITIVO_PRAZO_VALOR', nome: 'ADITIVO PRAZO E VALOR' },
+        { id: 'DISTRATO', nome: 'DISTRATO' },
+        { id: 'ADITIVO_VALOR', nome: 'ADITIVO VALOR' },
+        { id: 'ADITIVO_OBJETO', nome: 'ADITIVO OBJETO' }
+      ]);
+    }
+  }
+
   async onSubmit() {
     if (this.aditivoForm.valid) {
       const formData = this.aditivoForm.value;
@@ -75,6 +121,7 @@ export class AditivoFormComponent implements OnInit {
       try {
         if (this.isEditing && formData.id) {
           const updateData = {
+            numero_contrato: this.numeroContrato(),
             numero_aditivo: formData.numero_aditivo,
             tipo: formData.tipo,
             data_assinatura: new Date(formData.data_assinatura),
@@ -97,6 +144,7 @@ export class AditivoFormComponent implements OnInit {
         } else {
           const aditivoToSave = {
             contract_id: this.contractId(),
+            numero_contrato: this.numeroContrato(),
             numero_aditivo: formData.numero_aditivo,
             tipo: formData.tipo,
             data_assinatura: new Date(formData.data_assinatura),
@@ -104,7 +152,8 @@ export class AditivoFormComponent implements OnInit {
             valor_aditivo: formData.valor_aditivo || null
           };
           
-          console.log('Creating aditivo:', aditivoToSave);
+          console.log('Creating aditivo with contract_id:', this.contractId());
+          console.log('Aditivo data:', aditivoToSave);
           const result = await this.contractService.addAditivo(aditivoToSave);
           
           console.log('Create result:', result);

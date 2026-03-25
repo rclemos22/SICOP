@@ -14,13 +14,14 @@ export enum ContractStatus {
   FINALIZANDO = 'FINALIZANDO'
 }
 
-export type TipoAditivo = 'ALTERACAO' | 'PRORROGACAO';
+export type TipoAditivo = 'ALTERACAO' | 'PRORROGACAO' | 'ADITIVO_PRAZO' | 'ADITIVO_PRAZO_VALOR' | 'ADITIVO_VALOR' | 'ADITIVO_OBJETO' | 'DISTRATO';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
 export interface Aditivo {
   id?: string;
   contract_id: string;
+  numero_contrato?: string;
   numero_aditivo: string;
   tipo: TipoAditivo;
   data_assinatura?: Date;

@@ -51,6 +51,10 @@ src/
 - `id`, `contract_id`, `numero_aditivo`, `tipo`
 - `data_assinatura`, `nova_vigencia`, `valor_aditivo`
 
+### TipoAditivo
+- `id`, `nome` (ADITIVO_PRAZO, ADITIVO_PRAZO_VALOR, DISTRATO, etc.)
+- `descricao`, `ativo`
+
 ### Dotacao
 - `id`, `contract_id`, `numero_contrato`, `dotacao`
 - `credito`, `data_disponibilidade`, `unid_gestora`
@@ -83,12 +87,47 @@ src/
 - RECURSOS_HUMANOS
 - LICITAÇÕES
 
+## Tipos de Aditivo
+
+| Tipo | Descrição | Altera Prazo | Altera Valor |
+|------|-----------|--------------|--------------|
+| ADITIVO_PRAZO | Aditivo de Prazo | ✅ | ❌ |
+| ADITIVO_PRAZO_VALOR | Aditivo de Prazo e Valor | ✅ | ✅ |
+| ADITIVO_VALOR | Aditivo de Valor | ❌ | ✅ |
+| ADITIVO_OBJETO | Aditivo de Objeto | ❌ | ❌ |
+| DISTRATO | Distrato | ❌ | ❌ |
+| PRORROGACAO | Prorrogação (legado) | ✅ | ❌ |
+| ALTERACAO | Alteração (legado) | ❌ | ❌ |
+
 ## Regras de Negócio
 
 ### Status de Contrato
 - **VIGENTE**: Contrato com mais de 90 dias restantes
 - **FINALIZANDO**: Contrato com ≤90 dias restantes
 - **RESCINDIDO**: Contrato rescindido
+
+### Cálculo de Vigência Efetiva
+
+O sistema recalcula automaticamente a vigência efetiva do contrato quando há aditivos:
+
+```typescript
+// 1. Identificar aditivos que alteram o prazo
+const aditivosComVigencia = aditivos.filter(a => {
+  const tipo = a.tipo.toUpperCase();
+  return a.nova_vigencia && (tipo.includes('PRAZO') || tipo === 'PRORROGACAO');
+});
+
+// 2. Usar a data de vigência mais recente
+const dataFimEfetiva = aditivosComVigencia[0]?.nova_vigencia || dataFimOriginal;
+
+// 3. Recalcular dias restantes
+const diasRestantes = Math.ceil((dataFimEfetiva - hoje) / dias);
+
+// 4. Atualizar status efetivo
+const statusEfetivo = diasRestantes <= 90 ? 'FINALIZANDO' : 'VIGENTE';
+```
+
+**Importante**: O tipo do aditivo é obtido via relação `tipo_aditivo(nome)` no Supabase.
 
 ### Abas de Contratos
 - **Vigentes**: Contratos não rescindidos e não expirados (com filtro por ano de exercício)
@@ -107,7 +146,7 @@ valorAtualizado = valorAnualOriginal + sum(Aditivos.valor_aditivo)
 ### Gestão de Aditivos
 - CRUD completo: Create, Read, Update, Delete
 - Ao salvar/excluir aditivo, atualiza automaticamente a lista de aditivos
-- Campos: número, tipo (ALTERACAO/PRORROGACAO), data assinatura, nova vigência, valor
+- Campos: número, tipo, data assinatura, nova vigência, valor
 
 ### Consulta de Notas de Empenho
 - A busca considera **Unidade Gestora + Número da NE**
@@ -145,33 +184,25 @@ O Angular utiliza proxy para redirecionar requisições para a API SIGEF:
 
 ## Configuração do Banco (Supabase)
 
-### Tabela contratos
+### Tabela tipo_aditivo
 ```sql
-CREATE TABLE public.contratos (
+CREATE TABLE public.tipo_aditivo (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    contrato TEXT NOT NULL,
-    contratada TEXT NOT NULL,
-    fornecedor_id UUID REFERENCES public.fornecedores(id),
-    data_inicio DATE NOT NULL,
-    data_fim DATE NOT NULL,
-    valor_anual NUMERIC(15,2) NOT NULL,
-    status TEXT NOT NULL DEFAULT 'VIGENTE',
-    setor_id TEXT,
-    unid_gestora TEXT,
-    objeto TEXT,
-    gestor_contrato TEXT,
-    fiscal_admin TEXT,
-    fiscal_tecnico TEXT,
+    nome TEXT NOT NULL UNIQUE,
+    descricao TEXT,
+    ativo BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 
-### Tabela aditivos
+### Tabela aditivos (com FK)
 ```sql
 CREATE TABLE public.aditivos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     contract_id UUID REFERENCES public.contratos(id) ON DELETE CASCADE,
+    tipo_id UUID REFERENCES public.tipo_aditivo(id),
+    numero_contrato TEXT,
     numero_aditivo TEXT NOT NULL,
     tipo TEXT NOT NULL DEFAULT 'ALTERACAO',
     data_assinatura DATE,
@@ -182,53 +213,16 @@ CREATE TABLE public.aditivos (
 );
 ```
 
-### Tabela dotacoes
+### View vw_contratos_vigencia
 ```sql
-CREATE TABLE public.dotacoes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    contract_id UUID REFERENCES public.contratos(id) ON DELETE CASCADE,
-    numero_contrato TEXT NOT NULL,
-    dotacao TEXT NOT NULL,
-    credito TEXT NOT NULL,
-    data_disponibilidade DATE NOT NULL,
-    unid_gestora TEXT NOT NULL,
-    valor_dotacao NUMERIC(15,2) NOT NULL DEFAULT 0,
-    nunotaempenho TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-```
-
-### Tabela fornecedores
-```sql
-CREATE TABLE public.fornecedores (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    razao_social TEXT NOT NULL,
-    nome_fantasia TEXT,
-    cnpj TEXT,
-    email TEXT,
-    telefone TEXT,
-    categoria TEXT,
-    endereco TEXT,
-    status TEXT DEFAULT 'ACTIVE',
-    desde DATE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-```
-
-### View vw_saldo_dotacoes
-```sql
-CREATE VIEW public.vw_saldo_dotacoes AS
+CREATE VIEW public.vw_contratos_vigencia AS
 SELECT 
-    d.id, d.contract_id, d.numero_contrato, c.contratada,
-    d.dotacao, d.credito, d.data_disponibilidade, d.unid_gestora,
-    d.valor_dotacao, d.nunotaempenho,
-    0 AS total_empenhado, 0 AS total_cancelado, 0 AS total_pago,
-    d.valor_dotacao AS saldo_disponivel,
-    d.created_at, d.updated_at
-FROM public.dotacoes d
-LEFT JOIN public.contratos c ON d.contract_id = c.id;
+    c.*,
+    c.data_fim AS data_fim_efetiva,
+    -- Calculation handled in frontend based on additives
+    NULL AS dias_restantes,
+    NULL AS status_efetivo
+FROM public.contratos c;
 ```
 
 ## Fluxo de Funcionalidades
@@ -247,14 +241,15 @@ LEFT JOIN public.contratos c ON d.contract_id = c.id;
 
 ### 3. Gestão de Aditivos
 1. Criar, editar, excluir aditivos
-2. Atualização automática na lista
-3. Cálculo de nova vigência
+2. Seleção de tipo: ADITIVO_PRAZO, ADITIVO_PRAZO_VALOR, etc.
+3. Campo nova_vigencia aparece para tipos com prazo
+4. Atualização automática do card com nova vigência efetiva
 
 ### 4. Gestão de Dotações
 1. Acessar contrato → aba Dotações
 2. Criar nova dotação ou editar existente
 3. Vincular Nota de Empenho (busca via SIGEF)
-4. Sistema exibe saldo, total empenhado
+4. Sistema exibe saldo, total emprenado
 
 ### 5. Lançamentos Financeiros
 1. Exibe NE vinculada na tabela de lançamentos
@@ -266,3 +261,17 @@ O projeto utiliza ferramentas nativas do Angular. Para validação:
 ```bash
 npm run build
 ```
+
+## Migrações do Banco
+
+### 001_create_dotacoes.sql
+- Criação da tabela dotacoes
+
+### 002_create_setores_e_tipos_aditivo.sql
+- Criação da tabela tipo_aditivo
+- População dos tipos: ADITIVO_PRAZO, ADITIVO_PRAZO_VALOR, DISTRATO, ADITIVO_VALOR, ADITIVO_OBJETO
+
+### 003_add_fk_aditivos_tipo_aditivo.sql
+- Adiciona coluna tipo_id na tabela aditivos
+- Cria Foreign Key entre aditivos e tipo_aditivo
+- Popula tipo_id baseado no campo tipo existente

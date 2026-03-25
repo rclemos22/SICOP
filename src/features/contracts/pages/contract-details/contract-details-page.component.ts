@@ -79,8 +79,8 @@ export class ContractDetailsPageComponent {
   // ── Lógica de Negócio: Prorrogação ─────────────────────────────────────
 
   /**
-   * Verifica se existe aditivo de prorrogação com nova_vigencia diferente
-   * da data_fim original. Se sim, calcula se a data do contrato foi alterada.
+   * Verifica se existe aditivo que altera a vigência (prorrogação de prazo)
+   * com nova_vigencia diferente da data_fim original.
    */
   prorrogacaoInfo = computed(() => {
     const c = this.contract();
@@ -90,9 +90,12 @@ export class ContractDetailsPageComponent {
       return null;
     }
 
+    // Tipos de aditivo que podem alterar a vigência
+    const tiposProrrogacao = ['PRORROGACAO', 'ADITIVO_PRAZO', 'ADITIVO_PRAZO_VALOR'];
+
     // Encontrar o aditivo de prorrogação mais recente com nova_vigencia
     const prorrogacao = aditivosList.find(
-      a => a.tipo === 'PRORROGACAO' && a.nova_vigencia
+      a => tiposProrrogacao.includes(a.tipo) && a.nova_vigencia
     );
 
     if (!prorrogacao || !prorrogacao.nova_vigencia) {
@@ -217,20 +220,29 @@ export class ContractDetailsPageComponent {
   }
 
   /**
-   * Retorna a classe CSS para o badge de tipo de aditivo.
-   */
-  getAditivoTipoBadge(tipo: string): string {
-    if (tipo === 'PRORROGACAO') {
-      return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800';
-    }
-    return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800';
-  }
-
-  /**
    * Retorna label legível para o tipo de aditivo.
    */
   getAditivoTipoLabel(tipo: string): string {
-    return tipo === 'PRORROGACAO' ? 'Prorrogação' : 'Alteração';
+    const labels: Record<string, string> = {
+      'PRORROGACAO': 'Prorrogação',
+      'ADITIVO_PRAZO': 'Aditivo de Prazo',
+      'ADITIVO_PRAZO_VALOR': 'Aditivo de Prazo e Valor',
+      'ADITIVO_VALOR': 'Aditivo de Valor',
+      'ADITIVO_OBJETO': 'Aditivo de Objeto',
+      'DISTRATO': 'Distrato',
+      'ALTERACAO': 'Alteração'
+    };
+    return labels[tipo] || tipo.replace('_', ' ');
+  }
+
+  /**
+   * Retorna a classe CSS para o badge de tipo de aditivo.
+   */
+  getAditivoTipoBadge(tipo: string): string {
+    if (tipo.includes('PRAZO')) {
+      return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800';
+    }
+    return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800';
   }
 
   // ── Modal Actions ─────────────────────────────────────────────────────

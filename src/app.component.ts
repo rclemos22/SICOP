@@ -40,7 +40,7 @@ export class AppComponent {
   public sigefService = inject(SigefService);
 
   // Navigation State
-  view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho'>('nota-empenho');
+  view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho'>('dashboard');
   selectedContractId = signal<string | null>(null);
   
   sidebarOpen = false;

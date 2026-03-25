@@ -82,13 +82,21 @@ A página de detalhes possui abas:
 
 ### Aditivos
 
+#### Tipos de Aditivo
+- **ADITIVO_PRAZO**: Altera apenas o prazo de vigência
+- **ADITIVO_PRAZO_VALOR**: Altera prazo e valor simultaneamente
+- **ADITIVO_VALOR**: Altera apenas o valor
+- **ADITIVO_OBJETO**: Altera o objeto do contrato
+- **DISTRATO**: Rescisão antecipada
+- **ALTERACAO**: Alteração geral
+
 #### Criar Aditivo
 1. Na aba Aditivos do contrato, clique em "+ Aditivo"
 2. Preencha:
    - **Número do Aditivo** (ex: 01/2026)
-   - **Tipo**: Alteração (Valor/Objeto) ou Prorrogação de Prazo
+   - **Tipo**: Selecione o tipo de aditivo
    - **Data da Assinatura**
-   - **Nova Vigência** (obrigatório apenas para Prorrogação)
+   - **Nova Vigência** (obrigatório para tipos de prazo)
    - **Valor do Aditivo**
 3. Clique em "Adicionar"
 
@@ -100,6 +108,12 @@ A página de detalhes possui abas:
 #### Excluir Aditivo
 1. Na lista de aditivos, clique no ícone de excluir (lixeira)
 2. Confirme a exclusão
+
+#### Impacto nos Cards de Contrato
+Ao cadastrar um aditivo do tipo **ADITIVO_PRAZO** ou **ADITIVO_PRAZO_VALOR** com `nova_vigencia`, o sistema:
+- Atualiza automaticamente `data_fim_efetiva` do contrato
+- Recalcula `dias_restantes` baseado na nova data de término
+- Atualiza o `status_efetivo` (VIGENTE ou FINALIZANDO) conforme os dias restantes
 
 ### Aba Dotações
 - Criar nova dotação com formulário
@@ -143,10 +157,12 @@ Requisições para `/sigef-api/*` são redirecionadas para `https://api.seplan.m
 
 ### Tabelas do Supabase
 - `contratos` - Cadastro de contratos
-- `aditivos` - Aditivos de contratos
+- `aditivos` - Aditivos de contratos (com FK para tipo_aditivo)
+- `tipo_aditivo` - Tipos de aditivo disponíveis
 - `dotacoes` - Dotações orçamentárias (com campo `nunotaempenho` para vinculação de NE)
 - `fornecedores` - Cadastro de fornecedores
 - `vw_saldo_dotacoes` - View com saldos das dotações
+- `vw_contratos_vigencia` - View com contratos e vigência efetiva
 
 ### Integração com SIGEF
 A API retorna Notas de Empenho com os campos:

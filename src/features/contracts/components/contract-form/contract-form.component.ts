@@ -3,6 +3,7 @@ import { Component, OnInit, inject, input, output, signal } from '@angular/core'
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup, AbstractControl, ValidationErrors } from '@angular/forms';
 import { SupplierService } from '../../../suppliers/services/supplier.service';
 import { Supplier } from '../../../../shared/models/supplier.model';
+import { SupabaseService } from '../../../../core/services/supabase.service';
 
 interface UnidadeGestora {
   codigo: string;
@@ -18,6 +19,7 @@ interface UnidadeGestora {
 export class ContractFormComponent implements OnInit {
   private fb: FormBuilder = inject(FormBuilder);
   private supplierService = inject(SupplierService);
+  private supabaseService = inject(SupabaseService);
   
   // Outputs
   close = output<void>();
@@ -31,16 +33,7 @@ export class ContractFormComponent implements OnInit {
   ];
 
   // Setores - carregados do banco
-  setores = signal<Array<{ id: string, name: string }>>([
-    { id: 'GABINETE', name: 'GABINETE' },
-    { id: 'JURIDICO', name: 'JURIDICO' },
-    { id: 'ADMINISTRATIVO', name: 'ADMINISTRATIVO' },
-    { id: 'FINANCEIRO', name: 'FINANCEIRO' },
-    { id: 'COMPRAS', name: 'COMPRAS' },
-    { id: 'TECNOLOGIA', name: 'TECNOLOGIA' },
-    { id: 'RECURSOS_HUMANOS', name: 'RECURSOS HUMANOS' },
-    { id: 'LICITACOES', name: 'LICITAÇÕES' }
-  ]);
+  setores = signal<Array<{ id: string, name: string }>>([]);
   
   statusOptions = ['VIGENTE', 'ASSINADO', 'EM ELABORAÇÃO'];
 
@@ -65,6 +58,41 @@ export class ContractFormComponent implements OnInit {
 
   ngOnInit() {
     this.supplierService.loadSuppliers();
+    this.loadSetores();
+  }
+
+  async loadSetores() {
+    const { data, error } = await this.supabaseService.client
+      .from('setores')
+      .select('*')
+      .order('nome');
+    
+    if (!error && data && data.length > 0) {
+      // Detectar quais colunas existem
+      const firstRow = data[0];
+      const nomeCol = firstRow.nome !== undefined ? 'nome' : firstRow.descricao !== undefined ? 'descricao' : 'nome';
+      const ativoCol = firstRow.ativo !== undefined ? 'ativo' : (firstRow.status !== undefined ? 'status' : null);
+      
+      const setoresMap = data
+        .filter(s => !ativoCol || s[ativoCol] === true || s[ativoCol] === 'true' || s[ativoCol] === 1)
+        .map(s => ({
+          id: s[nomeCol],
+          name: String(s[nomeCol]).replace('_', ' ')
+        }));
+      this.setores.set(setoresMap);
+    } else {
+      // Fallback para lista hardcoded se a tabela não existir ou estiver vazia
+      this.setores.set([
+        { id: 'GABINETE', name: 'GABINETE' },
+        { id: 'JURIDICO', name: 'JURIDICO' },
+        { id: 'ADMINISTRATIVO', name: 'ADMINISTRATIVO' },
+        { id: 'FINANCEIRO', name: 'FINANCEIRO' },
+        { id: 'COMPRAS', name: 'COMPRAS' },
+        { id: 'TECNOLOGIA', name: 'TECNOLOGIA' },
+        { id: 'RECURSOS_HUMANOS', name: 'RECURSOS HUMANOS' },
+        { id: 'LICITACOES', name: 'LICITAÇÕES' }
+      ]);
+    }
   }
 
   contractForm: FormGroup = this.fb.group({

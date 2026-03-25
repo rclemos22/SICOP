@@ -25,6 +25,25 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 
 ## Novas Funcionalidades Implementadas
 
+### Tipos de Aditivo
+- **ADITIVO_PRAZO**: Aditivo que altera apenas o prazo de vigência
+- **ADITIVO_PRAZO_VALOR**: Aditivo que altera prazo e valor simultaneamente
+- **ADITIVO_VALOR**: Aditivo que altera apenas o valor
+- **ADITIVO_OBJETO**: Aditivo que altera o objeto do contrato
+- **DISTRATO**: Rescisão antecipada do contrato
+- **PRORROGACAO**: Prorrogação de vigência (legado)
+- **ALTERACAO**: Alteração geral (legado)
+
+### Cálculo de Vigência Efetiva do Contrato
+- O sistema calcula `data_fim_efetiva`, `dias_restantes` e `status_efetivo` baseado nos aditivos
+- Para tipos ADITIVO_PRAZO e ADITIVO_PRAZO_VALOR, usa a `nova_vigencia` do aditivo mais recente
+- O status efetivo (VIGENTE/FINALIZANDO/RESCINDIDO) considera a nova data de término
+
+### Relacionamento com tipo_aditivo
+- Tabela `tipo_aditivo` armazena os tipos disponíveis de aditivos
+- Tabela `aditivos` possui foreign key `tipo_id` para `tipo_aditivo`
+- O tipo do aditivo é obtido via relação `tipo_aditivo(nome)` no Supabase
+
 ### Formulário de Contratos
 - Campo **Fornecedor** com autocomplete (busca na tabela fornecedores)
 - Botão para cadastrar novo fornecedor via popup/modal
@@ -44,7 +63,7 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 - **Criar** novos aditivos vinculados a contratos
 - **Editar** aditivos existentes
 - **Excluir** aditivos do banco de dados
-- Atualização automática do card de Vigência
+- Atualização automática do card de Vigência baseada na `nova_vigencia`
 
 ### Interface
 - Correção de cores no modo escuro para todos os formulários
