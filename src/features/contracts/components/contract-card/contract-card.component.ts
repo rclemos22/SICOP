@@ -13,7 +13,7 @@ import { Contract, ContractStatus } from '../../../../shared/models/contract.mod
 export class ContractCardComponent {
   contract = input.required<Contract>();
 
-  // Output event when card is clicked
+  // Output event when card is clicked - goes to details
   select = output<void>();
 
   /** Usa daysRemaining pré-calculado pelo mapper do service */

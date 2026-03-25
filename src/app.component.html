@@ -193,9 +193,15 @@
         class="flex-1 min-h-0"
         [contractId]="selectedContractId()!"
         (back)="showList()"
+        (editContract)="showForm($event)"
       ></app-contract-details-page>
     } @else {
-      <app-contract-form class="flex-1 min-h-0" (cancel)="showList()" (save)="showList()"></app-contract-form>
+      <app-contract-form 
+        class="flex-1 min-h-0" 
+        [contract]="contractToEdit()"
+        (cancel)="showList()" 
+        (save)="showList()"
+      ></app-contract-form>
     }
     
   </main>

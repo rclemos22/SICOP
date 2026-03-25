@@ -57,7 +57,7 @@ No header, há um seletor de ano que filtra todos os dados da aplicação confor
 #### Formulário de Contrato
 Para criar ou editar um contrato:
 
-1. Clique em "Novo Contrato"
+1. Clique em "Novo Contrato" ou vá até a página de detalhes do contrato e clique em "Editar"
 2. Preencha os campos:
    - **Número do Contrato** (ex: 124/2024)
    - **Nº Processo SEI**
@@ -72,6 +72,8 @@ Para criar ou editar um contrato:
    - **Fiscal Administrativo** (opcional)
    - **Fiscal Técnico** (opcional)
 3. Clique em "Salvar"
+
+**Nota**: O formulário detecta automaticamente se está em modo criação ou edição. Em modo edição, os campos são preenchidos com os dados existentes do contrato.
 
 #### Detalhes do Contrato
 A página de detalhes possui abas:

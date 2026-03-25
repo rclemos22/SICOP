@@ -68,7 +68,17 @@ import { Contract, ContractStatus } from '../../../../shared/models/contract.mod
 
                 <!-- Actions -->
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button class="text-gray-400 hover:text-sco-blue transition-colors">
+                  <button 
+                    (click)="edit.emit(contract); $event.stopPropagation()"
+                    class="text-gray-400 hover:text-sco-blue transition-colors mr-2"
+                    title="Editar"
+                  >
+                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                  </button>
+                  <button 
+                    (click)="select.emit(contract.id)"
+                    class="text-gray-400 hover:text-sco-blue transition-colors"
+                  >
                     <span class="material-symbols-outlined text-[20px]">chevron_right</span>
                   </button>
                 </td>
@@ -83,6 +93,7 @@ import { Contract, ContractStatus } from '../../../../shared/models/contract.mod
 export class ContractListViewComponent {
   contracts = input.required<Contract[]>();
   select = output<string>();
+  edit = output<Contract>();
 
   getDaysLabel(contract: Contract): string {
     const days = contract.dias_restantes ?? 0;

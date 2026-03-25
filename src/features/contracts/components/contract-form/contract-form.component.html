@@ -14,8 +14,8 @@
     <!-- Modal Header -->
     <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-card-dark rounded-t-xl z-10">
       <div>
-        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Novo Contrato</h2>
-        <p class="text-sm text-gray-500 mt-0.5">Preencha os dados do contrato</p>
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ isEditing() ? 'Editar Contrato' : 'Novo Contrato' }}</h2>
+        <p class="text-sm text-gray-500 mt-0.5">{{ isEditing() ? 'Atualize os dados do contrato' : 'Preencha os dados do contrato' }}</p>
       </div>
       <button 
         (click)="onCancel()"

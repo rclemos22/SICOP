@@ -202,6 +202,7 @@
         <app-contract-list-view 
           [contracts]="filteredContracts()"
           (select)="handleSelect($event)"
+          (edit)="openForm($event)"
         ></app-contract-list-view>
       </div>
     }
@@ -222,6 +223,7 @@
   <!-- Modal Container -->
   @if (isFormOpen()) {
     <app-contract-form 
+      [contract]="selectedContract()"
       (close)="closeForm()" 
       (save)="handleSave($event)"
     ></app-contract-form>

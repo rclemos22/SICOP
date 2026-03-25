@@ -34,6 +34,7 @@ export interface Aditivo {
 export interface Contract {
   id: string;
   contrato: string;
+  processo_sei?: string;
   contratada: string;
   fornecedor_id?: string;
   data_inicio: Date;

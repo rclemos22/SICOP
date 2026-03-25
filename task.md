@@ -68,6 +68,13 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
   - Gestor do Contrato (gestor_contrato)
   - Fiscal Administrativo (fiscal_admin)
   - Fiscal Técnico (fiscal_tecnico)
+  - Nº Processo SEI (processo_sei)
+
+### Edição de Contratos
+- O botão **Editar** está disponível na página de detalhes do contrato
+- Ao clicar, abre o formulário com os dados do contrato preenchidos
+- Permite atualizar todos os campos incluindo gestores, fiscais e processo SEI
+- O sistema detecta se é criação ou edição e chama a API correta (addContract/updateContract)
 
 ### Página de Contratos
 - Abas: **Vigentes**, **Finalizados**, **Rescindidos**

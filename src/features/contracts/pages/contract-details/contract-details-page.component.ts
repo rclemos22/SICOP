@@ -35,6 +35,7 @@ export class ContractDetailsPageComponent {
   // Inputs & Outputs
   contractId = input.required<string>();
   back = output<void>();
+  editContract = output<void>();
 
   // Active Tab State
   activeTab = signal<'OVERVIEW' | 'ADITIVOS' | 'BUDGETS' | 'FINANCIAL'>('OVERVIEW');
@@ -224,17 +225,23 @@ export class ContractDetailsPageComponent {
       const budget = enrichedBudgets[i];
       const dataDisp = new Date(budget.data_disponibilidade);
       
-      // Processar apenas dotações do ano atual
-      if (dataDisp.getFullYear() !== currentYear) {
-        continue;
-      }
+      // Processar todas as dotações (não filtrar por ano atual)
+      // O filtro de exibição nos KPIs é feito no budgetSummary computado
 
       // Se tem NE vinculada, buscar detalhes
       if (budget.nunotaempenho) {
         try {
+          // Extrair ano dos 4 primeiros dígitos da NE (ex: "2025NE000302" -> "2025")
+          const neValue = budget.nunotaempenho.trim();
+          const anoNE = neValue.substring(0, 4);
+          
+          console.log('[DEBUG] NE do banco:', neValue);
+          console.log('[DEBUG] Ano extraído (substring 0-4):', anoNE);
+          console.log('[DEBUG] UG:', budget.unid_gestora);
+          
           const neDetails = await this.sigefService.getNotaEmpenhoByNumber(
-            currentYear.toString(),
-            budget.nunotaempenho,
+            anoNE,
+            neValue,
             budget.unid_gestora
           );
 
@@ -402,5 +409,10 @@ export class ContractDetailsPageComponent {
       this.loadBudgets(this.contractId());
     }
     this.closeDotacaoModal();
+  }
+
+  openEditContract() {
+    console.log('[ContractDetails] Editar contrato clicado');
+    this.editContract.emit();
   }
 }

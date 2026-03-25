@@ -40,7 +40,7 @@ src/
 ## Modelos de Dados Principais
 
 ### Contract
-- `id`, `contrato`, `contratada`, `fornecedor_id`
+- `id`, `contrato`, `processo_sei`, `contratada`, `fornecedor_id`
 - `data_inicio`, `data_fim`
 - `valor_anual`, `status`, `setor_id`, `unid_gestora`
 - `objeto`

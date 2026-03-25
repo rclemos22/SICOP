@@ -280,10 +280,11 @@ export class SigefService implements OnDestroy {
   }
 
   async getNotaEmpenhoByNumber(ano: string, numeroNE: string, cdunidadegestora?: string): Promise<NotaEmpenho | null> {
-    console.log('[SIGEF] Buscando NE:', numeroNE, 'no ano:', ano, 'UG:', cdunidadegestora, 'Token existe:', !!this.bearerToken);
+    console.log('=== [SIGEF SERVICE] getNotaEmpenhoByNumber ===');
+    console.log('[SIGEF] Recebendo params - ano:', ano, 'numeroNE:', numeroNE, 'UG:', cdunidadegestora);
     let page = 1;
     while (true) {
-      console.log('[SIGEF] Verificando pagina:', page);
+      console.log('[SIGEF] Verificando pagina:', page, 'com ano:', ano);
       const result = await this.getNotaEmpenho(ano, undefined, page, undefined);
       console.log('[SIGEF] Resultados nesta pagina:', result.data.length, 'Total:', result.count);
       

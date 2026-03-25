@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, inject, input, output, signal, computed, effect } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup, AbstractControl, ValidationErrors } from '@angular/forms';
 import { SupplierService } from '../../../suppliers/services/supplier.service';
 import { Supplier } from '../../../../shared/models/supplier.model';
@@ -21,10 +21,16 @@ export class ContractFormComponent implements OnInit {
   private supplierService = inject(SupplierService);
   private supabaseService = inject(SupabaseService);
   
+  // Input para edição
+  contract = input<any | null>(null);
+  
   // Outputs
   close = output<void>();
   cancel = output<void>();
   save = output<any>();
+
+  // Helper to check if editing
+  isEditing = computed(() => !!this.contract());
 
   // Unidade Gestora - mesma da Nota de Empenho
   unidadesGestoras: UnidadeGestora[] = [
@@ -59,6 +65,36 @@ export class ContractFormComponent implements OnInit {
   ngOnInit() {
     this.supplierService.loadSuppliers();
     this.loadSetores();
+  }
+
+  // Effect para preencher o formulário quando em modo edição
+  constructor() {
+    effect(() => {
+      const c = this.contract();
+      if (c) {
+        console.log('[ContractForm] Mode edit, contract:', c);
+        this.populateFormWithContract(c);
+      }
+    });
+  }
+
+  private populateFormWithContract(c: any) {
+    this.contractForm.patchValue({
+      number: c.contrato || '',
+      processNumber: c.processo_sei || '',
+      supplier: c.contratada || '',
+      fornecedor_id: c.fornecedor_id || '',
+      object: c.objeto || '',
+      startDate: c.data_inicio ? new Date(c.data_inicio).toISOString().split('T')[0] : '',
+      endDate: c.data_fim ? new Date(c.data_fim).toISOString().split('T')[0] : '',
+      totalValue: c.valor_anual || '',
+      unid_gestora: c.unid_gestora || '',
+      department: c.setor_id || '',
+      status: c.status || 'VIGENTE',
+      gestor_contrato: c.gestor_contrato || '',
+      fiscal_admin: c.fiscal_admin || '',
+      fiscal_tecnico: c.fiscal_tecnico || ''
+    });
   }
 
   async loadSetores() {

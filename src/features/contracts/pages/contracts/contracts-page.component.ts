@@ -26,6 +26,7 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
 
   // Modal State
   isFormOpen = signal(false);
+  selectedContract = signal<any | null>(null);
 
   // Layout State
   layoutMode = signal<'grid' | 'list'>('grid');
@@ -201,12 +202,18 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   }
 
   // Modal Actions
-  openForm() {
+  openForm(contract?: any) {
+    if (contract) {
+      this.selectedContract.set(contract);
+    } else {
+      this.selectedContract.set(null);
+    }
     this.isFormOpen.set(true);
   }
 
   closeForm() {
     this.isFormOpen.set(false);
+    this.selectedContract.set(null);
   }
 
   async handleSave(data: any) {
@@ -214,6 +221,7 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
     
     const contractData = {
       contrato: data.number,
+      processo_sei: data.processNumber || null,
       contratada: data.supplier,
       fornecedor_id: data.fornecedor_id || null,
       data_inicio: new Date(data.startDate),
@@ -229,12 +237,26 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
     };
 
     try {
-      const result = await this.contractService.addContract(contractData);
-      if (result.error) {
-        alert('Erro ao salvar contrato: ' + result.error);
-        return;
+      const isEditing = this.selectedContract();
+      
+      if (isEditing && isEditing.id) {
+        // Update existing contract
+        const result = await this.contractService.updateContract(isEditing.id, contractData);
+        if (result.error) {
+          alert('Erro ao atualizar contrato: ' + result.error);
+          return;
+        }
+        console.log('Contrato atualizado com sucesso');
+      } else {
+        // Create new contract
+        const result = await this.contractService.addContract(contractData);
+        if (result.error) {
+          alert('Erro ao salvar contrato: ' + result.error);
+          return;
+        }
+        console.log('Contrato salvo com sucesso');
       }
-      console.log('Contrato salvo com sucesso');
+      
       this.closeForm();
     } catch (err) {
       console.error('Erro ao salvar contrato:', err);

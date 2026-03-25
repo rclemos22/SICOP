@@ -42,6 +42,7 @@ export class AppComponent {
   // Navigation State
   view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho'>('dashboard');
   selectedContractId = signal<string | null>(null);
+  contractToEdit = signal<any | null>(null);
   
   sidebarOpen = false;
 
@@ -54,13 +55,19 @@ export class AppComponent {
     this.selectedContractId.set(null);
   }
 
-  showForm() {
+  showForm(contract?: any) {
     this.view.set('form');
+    if (contract) {
+      this.contractToEdit.set(contract);
+    } else {
+      this.contractToEdit.set(null);
+    }
   }
 
   showList() {
     this.view.set('list');
     this.selectedContractId.set(null);
+    this.contractToEdit.set(null);
   }
 
   showFinancial() {
