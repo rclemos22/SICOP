@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, signal, computed, output, inject, OnInit, OnDestroy } from '@angular/core';
+import { Component, signal, computed, output, inject, OnInit, OnDestroy, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
@@ -19,6 +19,9 @@ import { ContractService } from '../../services/contract.service';
 export class ContractsPageComponent implements OnInit, OnDestroy {
   public contractService = inject(ContractService);
   private appContext = inject(AppContextService);
+
+  // Input from parent (for editing)
+  initialContract = input<any | null>(null);
 
   // Navigation Event
   createContract = output<void>();
@@ -55,6 +58,13 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
         distinctUntilChanged()
       )
       .subscribe(query => this.searchQuery.set(query));
+
+    // Check if there's an initial contract to edit (passed from parent)
+    const initial = this.initialContract();
+    if (initial) {
+      console.log('[ContractsPage] received initialContract for edit:', initial);
+      this.openForm(initial);
+    }
   }
 
   ngOnDestroy() {
@@ -217,12 +227,15 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   }
 
   async handleSave(data: any) {
-    console.log('Main Page received saved data:', data);
+    console.log('=== [handleSave] dados recebidos:', data);
+    console.log('=== [handleSave] selectedContract (isEditing):', this.selectedContract());
     
     const contractData = {
       contrato: data.number,
       processo_sei: data.processNumber || null,
+      link_sei: data.linkSei || null,
       contratada: data.supplier,
+      cnpj_contratada: data.cnpjContratada || null,
       fornecedor_id: data.fornecedor_id || null,
       data_inicio: new Date(data.startDate),
       data_fim: new Date(data.endDate),
@@ -238,10 +251,14 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
 
     try {
       const isEditing = this.selectedContract();
+      console.log('=== [handleSave] isEditing check:', !!isEditing, 'id:', isEditing?.id);
       
       if (isEditing && isEditing.id) {
         // Update existing contract
+        console.log('=== [handleSave] Calling updateContract with id:', isEditing.id);
+        console.log('=== [handleSave] contractData:', contractData);
         const result = await this.contractService.updateContract(isEditing.id, contractData);
+        console.log('=== [handleSave] updateContract result:', result);
         if (result.error) {
           alert('Erro ao atualizar contrato: ' + result.error);
           return;

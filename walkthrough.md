@@ -61,7 +61,8 @@ Para criar ou editar um contrato:
 2. Preencha os campos:
    - **Número do Contrato** (ex: 124/2024)
    - **Nº Processo SEI**
-   - **Fornecedor**: Digite para buscar (autocomplete). Se não encontrar, clique em "Cadastrar novo fornecedor"
+   - **Link Processo SEI** (opcional)
+   - **Fornecedor**: Digite para buscar (autocomplete). O CNPJ é preenchido automaticamente. Se não encontrar, clique em "Cadastrar novo fornecedor"
    - **Objeto do Contrato**
    - **Data de Início** e **Data de Fim**
    - **Valor Global (R$)**

@@ -35,7 +35,7 @@ export class ContractDetailsPageComponent {
   // Inputs & Outputs
   contractId = input.required<string>();
   back = output<void>();
-  editContract = output<void>();
+  editContract = output<any>();
 
   // Active Tab State
   activeTab = signal<'OVERVIEW' | 'ADITIVOS' | 'BUDGETS' | 'FINANCIAL'>('OVERVIEW');
@@ -413,6 +413,7 @@ export class ContractDetailsPageComponent {
 
   openEditContract() {
     console.log('[ContractDetails] Editar contrato clicado');
-    this.editContract.emit();
+    // Emit the contract object so the form can be populated
+    this.editContract.emit(this.contract());
   }
 }

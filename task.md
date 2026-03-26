@@ -59,21 +59,32 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 - **Total Pago**: Soma dos valores pagos (implementado com 0)
 - **Saldo Dotação**: Soma dos saldos (Dotação - Empenhado) das dotações do ano atual
 
-### Formulário de Contratos
-- Campo **Fornecedor** com autocomplete (busca na tabela fornecedores)
-- Botão para cadastrar novo fornecedor via popup/modal
-- Campo **Unidade Gestora** (080101 - DPEMA, 080901 - FADEP)
-- Campo **Setor Responsável** (GABINETE, JURIDICO, ADMINISTRATIVO, FINANCEIRO, COMPRAS, TECNOLOGIA, RECURSOS_HUMANOS, LICITAÇÕES)
-- Campos para **Gestores e Fiscais**:
-  - Gestor do Contrato (gestor_contrato)
-  - Fiscal Administrativo (fiscal_admin)
-  - Fiscal Técnico (fiscal_tecnico)
-  - Nº Processo SEI (processo_sei)
+### Formulário de Contratos - Mapeamento de Campos
+| Campo Formulário | Coluna Banco |
+|-----------------|--------------|
+| Número do Contrato | `contrato` |
+| Nº Processo SEI | `processo_sei` |
+| Link Processo SEI | `link_sei` (opcional) |
+| Fornecedor | `contratada` (via nome_fantasia) |
+| CNPJ | `cnpj_contratada` (via cnpj) |
+| Objeto do Contrato | `objeto` |
+| Data Início | `data_inicio` |
+| Data Fim | `data_fim` |
+| Valor Global | `valor_anual` |
+| Unidade Gestora | `unid_gestora` |
+| Setor Responsável | `setor_id` |
+| Status | `status` |
+| Gestor do Contrato | `gestor_contrato` |
+| Fiscal Administrativo | `fiscal_admin` |
+| Fiscal Técnico | `fiscal_tecnico` |
+| Fornecedor ID | `fornecedor_id` (FK) |
+
+O formulário também possui autocomplete de fornecedores que preenche automaticamente o nome (nome_fantasia) e CNPJ.
 
 ### Edição de Contratos
 - O botão **Editar** está disponível na página de detalhes do contrato
 - Ao clicar, abre o formulário com os dados do contrato preenchidos
-- Permite atualizar todos os campos incluindo gestores, fiscais e processo SEI
+- Permite atualizar todos os campos incluindo gestores, fiscais, processo SEI, link SEI
 - O sistema detecta se é criação ou edição e chama a API correta (addContract/updateContract)
 
 ### Página de Contratos

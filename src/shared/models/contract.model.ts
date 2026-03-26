@@ -35,7 +35,9 @@ export interface Contract {
   id: string;
   contrato: string;
   processo_sei?: string;
+  link_sei?: string;
   contratada: string;
+  cnpj_contratada?: string;
   fornecedor_id?: string;
   data_inicio: Date;
   data_fim: Date;

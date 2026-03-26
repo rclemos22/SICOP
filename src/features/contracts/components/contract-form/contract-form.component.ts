@@ -82,8 +82,10 @@ export class ContractFormComponent implements OnInit {
     this.contractForm.patchValue({
       number: c.contrato || '',
       processNumber: c.processo_sei || '',
+      linkSei: c.link_sei || '',
       supplier: c.contratada || '',
       fornecedor_id: c.fornecedor_id || '',
+      cnpjContratada: c.cnpj_contratada || '',
       object: c.objeto || '',
       startDate: c.data_inicio ? new Date(c.data_inicio).toISOString().split('T')[0] : '',
       endDate: c.data_fim ? new Date(c.data_fim).toISOString().split('T')[0] : '',
@@ -135,8 +137,10 @@ export class ContractFormComponent implements OnInit {
     // Identification
     number: ['', Validators.required],
     processNumber: ['', Validators.required],
+    linkSei: [''],
     fornecedor_id: [''],
     supplier: ['', Validators.required],
+    cnpjContratada: [''],
     object: ['', Validators.required],
     
     // Validity
@@ -191,10 +195,11 @@ export class ContractFormComponent implements OnInit {
   selectSupplier(supplier: Supplier) {
     this.selectedSupplier.set(supplier);
     this.contractForm.patchValue({
-      supplier: supplier.razao_social,
-      fornecedor_id: supplier.id
+      supplier: supplier.nome_fantasia || supplier.razao_social,
+      fornecedor_id: supplier.id,
+      cnpjContratada: supplier.cnpj || ''
     });
-    this.supplierSearch.set(supplier.razao_social);
+    this.supplierSearch.set(supplier.nome_fantasia || supplier.razao_social);
     this.showSupplierDropdown.set(false);
   }
 
@@ -247,10 +252,10 @@ export class ContractFormComponent implements OnInit {
       const formData = this.contractForm.value;
       
       console.log('Dados do Contrato para Envio:', JSON.stringify(formData, null, 2));
-      alert('Contrato salvo com sucesso! (Veja o console para detalhes)');
       
+      // Emit save first, then close
       this.save.emit(formData);
-      this.close.emit();
+      // Don't close here - let parent handle it
     } else {
       this.contractForm.markAllAsTouched();
       alert('Por favor, corrija os erros no formulário antes de salvar.');

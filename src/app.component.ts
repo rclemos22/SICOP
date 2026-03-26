@@ -67,7 +67,7 @@ export class AppComponent {
   showList() {
     this.view.set('list');
     this.selectedContractId.set(null);
-    this.contractToEdit.set(null);
+    this.contractToEdit.set(null); // Limpar contrato para edição
   }
 
   showFinancial() {

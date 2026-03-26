@@ -318,8 +318,11 @@ export class ContractService {
     return {
       id: raw.id,
       contrato: raw.contrato ?? '',
+      processo_sei: raw.processo_sei ?? undefined,
+      link_sei: raw.link_sei ?? undefined,
       // Tenta várias possibilidades para o nome da contratada
       contratada: raw.contratada ?? raw.razao_social ?? raw.nome_fornecedor ?? raw.nome_contratada ?? '',
+      cnpj_contratada: raw.cnpj_contratada ?? raw.cnpj ?? undefined,
       fornecedor_id: raw.fornecedor_id ?? undefined,
       data_inicio: this.parseDate(raw.data_inicio),
       data_fim: dataFimOriginal,
@@ -392,17 +395,23 @@ export class ContractService {
   }
 
   async updateContract(id: string, contract: Partial<Contract>): Promise<Result<null>> {
+    console.log('[ContractService] updateContract called with id:', id);
+    console.log('[ContractService] updateContract data:', contract);
     try {
-      const { error } = await this.supabaseService.client
+      const { error, data } = await this.supabaseService.client
         .from('contratos')
         .update(contract)
-        .eq('id', id);
+        .eq('id', id)
+        .select();
+
+      console.log('[ContractService] updateContract result - error:', error, 'data:', data);
 
       if (error) throw error;
 
       await this.loadContracts();
       return ok(null);
     } catch (err: any) {
+      console.error('[ContractService] updateContract ERROR:', err);
       this.errorHandler.handle(err, 'ContractService.updateContract');
       return fail(err.message || 'Erro ao atualizar contrato');
     }

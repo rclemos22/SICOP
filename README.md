@@ -9,11 +9,25 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
   - Abas: Vigentes, Finalizados, Rescindidos
   - Busca em todos os contratos
   - Formulário com autocomplete de fornecedores
-  - Campos: Unidade Gestora, Setor, Gestor do Contrato, Fiscais
+  - Campos: Unidade Gestora, Setor, Gestor do Contrato, Fiscais, Processo SEI, Link SEI
 - **Controle Financeiro**: Visualização de Notas de Empenho via API SIGEF
 - **Orçamento**: Controle de dotações orçamentárias com vinculação de NE
 - **Fornecedores**: Cadastro e gestão de fornecedores
 - **Nota de Empenho**: Consulta de notas por ano fiscal e unidade gestora
+
+## Campos do Contrato
+
+| Campo | Coluna Banco |
+|-------|--------------|
+| Número do Contrato | `contrato` |
+| Nº Processo SEI | `processo_sei` |
+| Link Processo SEI | `link_sei` |
+| Fornecedor | `contratada` |
+| CNPJ | `cnpj_contratada` |
+| Objeto | `objeto` |
+| Valor Global | `valor_anual` |
+| Unidade Gestora | `unid_gestora` |
+| Setor | `setor_id` |
 
 ## Tech Stack
 

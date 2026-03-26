@@ -177,6 +177,7 @@
     } @else if (view() === 'list') {
       <app-contracts-page 
         class="flex-1 min-h-0" 
+        [initialContract]="contractToEdit()"
         (createContract)="showForm()"
         (openContractDetails)="openContractDetails($event)"
       ></app-contracts-page>
