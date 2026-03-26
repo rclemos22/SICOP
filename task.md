@@ -103,6 +103,24 @@ O formulário também possui autocomplete de fornecedores que preenche automatic
 - Uso de paleta **slate** para consistência visual
 - Placeholders e textos visíveis no modo escuro
 
+### Correções e Melhorias Recentes
+
+#### Banco de Dados
+- Criação de migrações para adicionar colunas faltantes (`fornecedor_id`, `unid_gestora`, `setor_id`, `gestor_contrato`, `fiscal_admin`, `fiscal_tecnico`)
+- Políticas RLS configuradas para permitir operações de CRUD
+- View `vw_contratos_vigencia` recriada para cálculo correto de vigência
+
+#### Formulário de Contratos
+- Correção do preenchimento do formulário em modo edição
+- Carregamento correto do fornecedor (nome, CNPJ, fornecedor_id)
+- Carregamento do objeto do contrato
+- Carregamento da unidade orçamentária (unid_gestora)
+- Carregamento do setor responsável (setor_id)
+- Formatação de datas no formato YYYY-MM-DD para o banco
+
+#### Debug e Logs
+- Adicionados logs detalhados para debugging de operações de create/update
+
 ## Status: Concluído
 
 Todas as funcionalidades listadas acima foram implementadas.

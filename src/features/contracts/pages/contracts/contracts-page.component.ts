@@ -214,6 +214,8 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   // Modal Actions
   openForm(contract?: any) {
     if (contract) {
+      console.log('=== [openForm] Editing contract:', contract);
+      console.log('=== [openForm] contract.id:', contract.id);
       this.selectedContract.set(contract);
     } else {
       this.selectedContract.set(null);
@@ -237,8 +239,8 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
       contratada: data.supplier,
       cnpj_contratada: data.cnpjContratada || null,
       fornecedor_id: data.fornecedor_id || null,
-      data_inicio: new Date(data.startDate),
-      data_fim: new Date(data.endDate),
+      data_inicio: data.startDate ? new Date(data.startDate).toISOString().split('T')[0] : null,
+      data_fim: data.endDate ? new Date(data.endDate).toISOString().split('T')[0] : null,
       valor_anual: Number(data.totalValue),
       status: data.status as ContractStatus,
       setor_id: data.department,
@@ -248,17 +250,23 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
       fiscal_admin: data.fiscal_admin || null,
       fiscal_tecnico: data.fiscal_tecnico || null
     };
+    
+    console.log('=== [handleSave] contractData formatted:', JSON.stringify(contractData, null, 2));
 
     try {
       const isEditing = this.selectedContract();
-      console.log('=== [handleSave] isEditing check:', !!isEditing, 'id:', isEditing?.id);
+      console.log('=== [handleSave] isEditing check:', !!isEditing);
+      console.log('=== [handleSave] contract id:', isEditing?.id);
+      console.log('=== [handleSave] contrato number:', isEditing?.contrato);
       
       if (isEditing && isEditing.id) {
         // Update existing contract
         console.log('=== [handleSave] Calling updateContract with id:', isEditing.id);
-        console.log('=== [handleSave] contractData:', contractData);
-        const result = await this.contractService.updateContract(isEditing.id, contractData);
-        console.log('=== [handleSave] updateContract result:', result);
+        console.log('=== [handleSave] id typeof:', typeof isEditing.id);
+        console.log('=== [handleSave] contractData:', JSON.stringify(contractData, null, 2));
+        const result = await this.contractService.updateContract(isEditing.id, contractData as any);
+        console.log('=== [handleSave] updateContract result:', JSON.stringify(result));
+        console.log('=== [handleSave] updateContract hasError:', result.error ? 'YES' : 'NO');
         if (result.error) {
           alert('Erro ao atualizar contrato: ' + result.error);
           return;
@@ -266,7 +274,7 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
         console.log('Contrato atualizado com sucesso');
       } else {
         // Create new contract
-        const result = await this.contractService.addContract(contractData);
+        const result = await this.contractService.addContract(contractData as any);
         if (result.error) {
           alert('Erro ao salvar contrato: ' + result.error);
           return;

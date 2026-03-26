@@ -79,11 +79,28 @@ export class ContractFormComponent implements OnInit {
   }
 
   private populateFormWithContract(c: any) {
+    console.log('[ContractForm] populateFormWithContract - c:', c);
+    
+    // Setar o supplierSearch para exibir o nome da contratada
+    this.supplierSearch.set(c.contratada || c.supplier || '');
+    this.selectedSupplier.set({
+      id: c.fornecedor_id || '',
+      razao_social: c.contratada || '',
+      nome_fantasia: c.contratada || '',
+      cnpj: c.cnpj_contratada || '',
+      email: '',
+      telefone: '',
+      categoria: '',
+      endereco: '',
+      status: 'ACTIVE' as any,
+      desde: new Date()
+    });
+    
     this.contractForm.patchValue({
       number: c.contrato || '',
       processNumber: c.processo_sei || '',
       linkSei: c.link_sei || '',
-      supplier: c.contratada || '',
+      supplier: c.contratada || c.supplier || '',
       fornecedor_id: c.fornecedor_id || '',
       cnpjContratada: c.cnpj_contratada || '',
       object: c.objeto || '',
@@ -91,7 +108,7 @@ export class ContractFormComponent implements OnInit {
       endDate: c.data_fim ? new Date(c.data_fim).toISOString().split('T')[0] : '',
       totalValue: c.valor_anual || '',
       unid_gestora: c.unid_gestora || '',
-      department: c.setor_id || '',
+      department: c.setor_id || c.setor || '',
       status: c.status || 'VIGENTE',
       gestor_contrato: c.gestor_contrato || '',
       fiscal_admin: c.fiscal_admin || '',

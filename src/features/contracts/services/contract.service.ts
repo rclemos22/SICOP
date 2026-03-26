@@ -379,16 +379,24 @@ export class ContractService {
   // ── CRUD Operations ─────────────────────────────────────────────────────
 
   async addContract(contract: Partial<Contract>): Promise<Result<null>> {
+    console.log('[ContractService.addContract] Enviando para Supabase:', JSON.stringify(contract, null, 2));
     try {
-      const { error } = await this.supabaseService.client
+      const { data, error } = await this.supabaseService.client
         .from('contratos')
-        .insert(contract);
+        .insert(contract as any)
+        .select();
 
-      if (error) throw error;
+      console.log('[ContractService.addContract] Response - data:', data, 'error:', error);
+
+      if (error) {
+        console.error('[ContractService.addContract] Supabase error:', error.message, error.details);
+        throw error;
+      }
 
       await this.loadContracts();
       return ok(null);
     } catch (err: any) {
+      console.error('[ContractService.addContract] Erro capturado:', err);
       this.errorHandler.handle(err, 'ContractService.addContract');
       return fail(err.message || 'Erro ao adicionar contrato');
     }
@@ -396,17 +404,40 @@ export class ContractService {
 
   async updateContract(id: string, contract: Partial<Contract>): Promise<Result<null>> {
     console.log('[ContractService] updateContract called with id:', id);
-    console.log('[ContractService] updateContract data:', contract);
+    console.log('[ContractService] id type:', typeof id);
+    console.log('[ContractService] id length:', id?.length);
+    console.log('[ContractService] updateContract data:', JSON.stringify(contract, null, 2));
+    
+    // Verificar se o ID é UUID válido
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      console.error('[ContractService] ID não é UUID válido:', id);
+      return fail('ID inválido');
+    }
+    
     try {
-      const { error, data } = await this.supabaseService.client
+      console.log('[ContractService] Attempting update...');
+      const { error, data, count } = await this.supabaseService.client
         .from('contratos')
-        .update(contract)
+        .update(contract as any)
         .eq('id', id)
         .select();
 
-      console.log('[ContractService] updateContract result - error:', error, 'data:', data);
+      console.log('[ContractService] updateContract result - error:', error ? error.message : 'null');
+      console.log('[ContractService] updateContract result - data:', data);
+      console.log('[ContractService] updateContract result - count:', count);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ContractService] updateContract Supabase error:', error.message, error.details);
+        throw error;
+      }
+
+      // Verificar se realmente atualizou
+      if (!data || data.length === 0) {
+        console.warn('[ContractService] updateContract - nenhum registro atualizado');
+      } else {
+        console.log('[ContractService] updateContract - registros atualizados:', data.length);
+      }
 
       await this.loadContracts();
       return ok(null);
