@@ -74,10 +74,15 @@
       <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Valor do Aditivo (R$)</label>
       <input 
         formControlName="valor_aditivo" 
-        type="number" step="0.01" min="0"
+        type="text"
+        (input)="onCurrencyInput($event)"
         class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow"
-        placeholder="0.00"
+        [class.border-red-500]="f['valor_aditivo'].touched && f['valor_aditivo'].invalid"
+        placeholder="0,00"
       >
+      @if (f['valor_aditivo'].touched && f['valor_aditivo'].invalid) {
+        <p class="text-xs text-red-500 mt-1 font-medium italic">Valor inválido.</p>
+      }
       <p class="text-xs text-gray-500 mt-1">Deixe 0 se houver apenas alteração de prazo ou cláusulas sem custo.</p>
     </div>
 

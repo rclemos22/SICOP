@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, input, output, OnInit, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup } from '@angular/forms';
+import { CurrencyUtils } from '../../../../app/shared/utils/currency-utils';
 import { ContractService } from '../../services/contract.service';
 import { Aditivo } from '../../../../shared/models/contract.model';
 import { SupabaseService } from '../../../../core/services/supabase.service';
@@ -37,7 +38,7 @@ export class AditivoFormComponent implements OnInit {
       tipo: ['ALTERACAO', Validators.required],
       data_assinatura: [new Date().toISOString().split('T')[0], Validators.required],
       nova_vigencia: [''],
-      valor_aditivo: [0]
+      valor_aditivo: ['', [CurrencyUtils.currencyValidator(0)]]
     });
   }
 
@@ -52,7 +53,7 @@ export class AditivoFormComponent implements OnInit {
         tipo: aditivoData.tipo,
         data_assinatura: aditivoData.data_assinatura ? new Date(aditivoData.data_assinatura).toISOString().split('T')[0] : '',
         nova_vigencia: aditivoData.nova_vigencia ? new Date(aditivoData.nova_vigencia).toISOString().split('T')[0] : '',
-        valor_aditivo: aditivoData.valor_aditivo || 0
+        valor_aditivo: CurrencyUtils.formatBRL(aditivoData.valor_aditivo)
       });
     } else {
       // Preencher o campo numero_contrato automaticamente
@@ -73,6 +74,13 @@ export class AditivoFormComponent implements OnInit {
       }
       novaVigenciaControl?.updateValueAndValidity();
     });
+  }
+
+  onCurrencyInput(event: any) {
+    const input = event.target as HTMLInputElement;
+    const masked = CurrencyUtils.applyMask(input.value);
+    input.value = masked;
+    this.aditivoForm.get('valor_aditivo')?.setValue(masked, { emitEvent: false });
   }
 
   get f() { return this.aditivoForm.controls; }
@@ -126,7 +134,7 @@ export class AditivoFormComponent implements OnInit {
             tipo: formData.tipo,
             data_assinatura: new Date(formData.data_assinatura),
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
-            valor_aditivo: formData.valor_aditivo || null
+            valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null
           };
           
           console.log('Updating aditivo:', formData.id, updateData);
@@ -149,7 +157,7 @@ export class AditivoFormComponent implements OnInit {
             tipo: formData.tipo,
             data_assinatura: new Date(formData.data_assinatura),
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
-            valor_aditivo: formData.valor_aditivo || null
+            valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null
           };
           
           console.log('Creating aditivo with contract_id:', this.contractId());

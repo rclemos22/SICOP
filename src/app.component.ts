@@ -13,6 +13,8 @@ import { DashboardPageComponent } from './features/dashboard/pages/dashboard/das
 import { FinancialPageComponent } from './features/financial/pages/financial/financial-page.component';
 import { SuppliersPageComponent } from './features/suppliers/pages/suppliers/suppliers-page.component';
 import { NotaEmpenhoPageComponent } from './features/nota-empenho/pages/nota-empenho/nota-empenho-page.component';
+import { ContractService } from './features/contracts/services/contract.service';
+import { ContractStatus } from './shared/models/contract.model';
 
 registerLocaleData(localePt);
 
@@ -38,6 +40,7 @@ export class AppComponent {
   // Global App Context (Year Selection)
   public contextService = inject(AppContextService);
   public sigefService = inject(SigefService);
+  private contractService = inject(ContractService);
 
   // Navigation State
   view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho'>('dashboard');
@@ -95,5 +98,53 @@ export class AppComponent {
     if (target === 'contracts') this.showList();
     if (target === 'financial') this.showFinancial();
     if (target === 'budget') this.showBudget();
+  }
+
+  async handleSave(data: any) {
+    console.log('=== [AppComponent.handleSave] dados recebidos:', data);
+    
+    const contractData = {
+      contrato: data.number,
+      processo_sei: data.processNumber || null,
+      link_sei: data.linkSei || null,
+      contratada: data.supplier,
+      cnpj_contratada: data.cnpjContratada || null,
+      fornecedor_id: data.fornecedor_id || null,
+      data_inicio: data.startDate ? new Date(data.startDate).toISOString().split('T')[0] : null,
+      data_fim: data.endDate ? new Date(data.endDate).toISOString().split('T')[0] : null,
+      valor_anual: Number(data.totalValue),
+      status: data.status as ContractStatus,
+      setor_id: data.department,
+      unid_gestora: data.unid_gestora,
+      objeto: data.object,
+      gestor_contrato: data.gestor_contrato || null,
+      fiscal_admin: data.fiscal_admin || null,
+      fiscal_tecnico: data.fiscal_tecnico || null
+    };
+
+    try {
+      const isEditing = this.contractToEdit();
+      
+      if (isEditing && isEditing.id) {
+        // Update existing contract
+        const result = await this.contractService.updateContract(isEditing.id, contractData as any);
+        if (result.error) {
+          alert('Erro ao atualizar contrato: ' + result.error);
+          return;
+        }
+      } else {
+        // Create new contract
+        const result = await this.contractService.addContract(contractData as any);
+        if (result.error) {
+          alert('Erro ao salvar contrato: ' + result.error);
+          return;
+        }
+      }
+      
+      this.showList();
+    } catch (err) {
+      console.error('Erro ao salvar contrato:', err);
+      alert('Erro ao salvar contrato');
+    }
   }
 }

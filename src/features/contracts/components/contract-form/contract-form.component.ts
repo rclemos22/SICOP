@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, input, output, signal, computed, effect } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup, AbstractControl, ValidationErrors } from '@angular/forms';
+import { CurrencyUtils } from '../../../../app/shared/utils/currency-utils';
 import { SupplierService } from '../../../suppliers/services/supplier.service';
 import { Supplier } from '../../../../shared/models/supplier.model';
 import { SupabaseService } from '../../../../core/services/supabase.service';
@@ -106,7 +107,7 @@ export class ContractFormComponent implements OnInit {
       object: c.objeto || '',
       startDate: c.data_inicio ? new Date(c.data_inicio).toISOString().split('T')[0] : '',
       endDate: c.data_fim ? new Date(c.data_fim).toISOString().split('T')[0] : '',
-      totalValue: c.valor_anual || '',
+      totalValue: CurrencyUtils.formatBRL(c.valor_anual),
       unid_gestora: c.unid_gestora || '',
       department: c.setor_id || c.setor || '',
       status: c.status || 'VIGENTE',
@@ -165,7 +166,7 @@ export class ContractFormComponent implements OnInit {
     endDate: ['', Validators.required],
     
     // Financial & Classification
-    totalValue: ['', [Validators.required, Validators.min(0)]],
+    totalValue: ['', [Validators.required, CurrencyUtils.currencyValidator(0.01)]],
     unid_gestora: ['', Validators.required],
     department: ['', Validators.required],
     status: ['VIGENTE', Validators.required],
@@ -185,6 +186,13 @@ export class ContractFormComponent implements OnInit {
       return { dateRangeInvalid: true };
     }
     return null;
+  }
+
+  onCurrencyInput(event: any) {
+    const input = event.target as HTMLInputElement;
+    const masked = CurrencyUtils.applyMask(input.value);
+    input.value = masked;
+    this.contractForm.get('totalValue')?.setValue(masked, { emitEvent: false });
   }
 
   // Helper for template access
@@ -266,9 +274,12 @@ export class ContractFormComponent implements OnInit {
 
   onSubmit() {
     if (this.contractForm.valid) {
-      const formData = this.contractForm.value;
+      const formData = { ...this.contractForm.value };
       
-      console.log('Dados do Contrato para Envio:', JSON.stringify(formData, null, 2));
+      // Converte o valor formatado para número antes de enviar
+      formData.totalValue = CurrencyUtils.parseBRL(formData.totalValue);
+      
+      console.log('Dados do Contrato para Envio (processados):', JSON.stringify(formData, null, 2));
       
       // Emit save first, then close
       this.save.emit(formData);

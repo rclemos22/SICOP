@@ -110,16 +110,25 @@ O formulário também possui autocomplete de fornecedores que preenche automatic
 - Políticas RLS configuradas para permitir operações de CRUD
 - View `vw_contratos_vigencia` recriada para cálculo correto de vigência
 
-#### Formulário de Contratos
+### Formulário de Contratos
 - Correção do preenchimento do formulário em modo edição
 - Carregamento correto do fornecedor (nome, CNPJ, fornecedor_id)
 - Carregamento do objeto do contrato
 - Carregamento da unidade orçamentária (unid_gestora)
 - Carregamento do setor responsável (setor_id)
 - Formatação de datas no formato YYYY-MM-DD para o banco
+- **Campo Valor Global**: Alterado de `type="number"` para `type="text"` com máscara de moeda BRL (R$ 1.234,56)
+- Novo método `onCurrencyInput()` para aplicar máscara durante digitação
+- Conversão do valor formatado para número antes de enviar ao banco
 
 #### Debug e Logs
 - Adicionados logs detalhados para debugging de operações de create/update
+
+#### CurrencyUtils
+- Novo utilitário para formatação de moeda BRL
+- Métodos: `formatBRL()`, `parseBRL()`, `applyMask()`, `currencyValidator()`
+- Aplicado no formulário de contratos para formatação do campo valor
+- Aplicado no formulário de dotações para formatação do campo valor_dotação
 
 ## Status: Concluído
 

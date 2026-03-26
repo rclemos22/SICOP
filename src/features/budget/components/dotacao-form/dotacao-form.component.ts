@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, input, output, OnInit, signal, effect } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup } from '@angular/forms';
+import { CurrencyUtils } from '../../../../app/shared/utils/currency-utils';
 import { BudgetService } from '../../services/budget.service';
 import { SigefService, NotaEmpenho } from '../../../../core/services/sigef.service';
 import { Dotacao } from '../../../../shared/models/budget.model';
@@ -69,10 +70,13 @@ import { Dotacao } from '../../../../shared/models/budget.model';
         <!-- Valor Dotação -->
         <div>
           <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Valor da Dotação (R$)</label>
-          <input formControlName="valor_dotacao" type="number" step="0.01"
-            class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none dark:bg-slate-700 dark:text-white text-slate-900">
+          <input formControlName="valor_dotacao" type="text"
+            (input)="onCurrencyInput($event)"
+            placeholder="0,00"
+            class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none dark:bg-slate-700 dark:text-white text-slate-900"
+            [class.border-red-500]="f['valor_dotacao'].touched && f['valor_dotacao'].invalid">
           @if (f['valor_dotacao'].invalid && f['valor_dotacao'].touched) {
-            <p class="text-xs text-red-500 mt-1">Valor deve ser maior que zero.</p>
+            <p class="text-xs text-red-500 mt-1">Valor obrigatório e deve ser maior que zero.</p>
           }
         </div>
 
@@ -157,7 +161,7 @@ export class DotacaoFormComponent implements OnInit {
       credito: ['', Validators.required],
       data_disponibilidade: ['', Validators.required],
       unid_gestora: ['', Validators.required],
-      valor_dotacao: [0, [Validators.required, Validators.min(0.01)]],
+      valor_dotacao: ['', [Validators.required, CurrencyUtils.currencyValidator(0.01)]],
       nunotaempenho: ['']
     });
 
@@ -170,7 +174,7 @@ export class DotacaoFormComponent implements OnInit {
           credito: dot.credito,
           data_disponibilidade: dot.data_disponibilidade ? new Date(dot.data_disponibilidade).toISOString().split('T')[0] : '',
           unid_gestora: dot.unid_gestora,
-          valor_dotacao: dot.valor_dotacao,
+          valor_dotacao: CurrencyUtils.formatBRL(dot.valor_dotacao),
           nunotaempenho: dot.nunotaempenho || ''
         });
         if (dot.nunotaempenho) {
@@ -183,6 +187,13 @@ export class DotacaoFormComponent implements OnInit {
         this.neError.set(null);
       }
     });
+  }
+
+  onCurrencyInput(event: any) {
+    const input = event.target as HTMLInputElement;
+    const masked = CurrencyUtils.applyMask(input.value);
+    input.value = masked;
+    this.dotacaoForm.get('valor_dotacao')?.setValue(masked, { emitEvent: false });
   }
 
   ngOnInit() {
@@ -231,7 +242,10 @@ export class DotacaoFormComponent implements OnInit {
     console.log('[DotacaoForm] onSubmit, form valid:', this.dotacaoForm.valid);
     
     if (this.dotacaoForm.valid) {
-      const formData = this.dotacaoForm.value;
+      const formData = { ...this.dotacaoForm.value };
+      // Parse currency before saving
+      formData.valor_dotacao = CurrencyUtils.parseBRL(formData.valor_dotacao);
+      
       const dotacaoToSave = {
         contract_id: this.contractId(),
         numero_contrato: this.numeroContrato(),
