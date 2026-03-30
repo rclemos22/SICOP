@@ -171,6 +171,30 @@ interface UnidadeGestora {
                 <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.cdevento }}</p>
               </div>
 
+              <!-- Tipo OB -->
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Tipo OB</label>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.tipoordembancaria || '---' }}</p>
+              </div>
+
+              <!-- Situação -->
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Situação</label>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.situacaopreparacaopagamento || '---' }}</p>
+              </div>
+
+              <!-- Tipo Preparação -->
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Tipo Preparação</label>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.tipopreparacaopagamento || '---' }}</p>
+              </div>
+
+              <!-- Usuário Responsável -->
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Responsável</label>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.usuario_responsavel || '---' }}</p>
+              </div>
+
             </div>
 
             <!-- Values Section -->
@@ -272,7 +296,7 @@ export class OrdemBancariaPageComponent implements OnInit {
     try {
       // Buscar com paginação para encontrar a OB
       let page = 1;
-      const maxPages = 50;
+      const maxPages = 100;
       let found: OrdemBancaria | null = null;
       
       while (page <= maxPages && !found) {
@@ -284,26 +308,40 @@ export class OrdemBancariaPageComponent implements OnInit {
           undefined
         );
         
-        console.log(`[DEBUG OB] Página ${page}: ${ob.data.length} resultados`);
+        console.log(`[DEBUG OB] Página ${page}: ${ob.data.length} resultados, next: ${ob.next}`);
         
         if (ob.data.length === 0) {
+          console.log('[DEBUG OB] Sem resultados nesta página, parando');
           break;
         }
         
-        // Filtrar pelo número da OB e UG (a API já filtra por nuordembancaria)
+        // Log dos primeiros resultados para debug
+        if (page === 1) {
+          console.log('[DEBUG OB] Primeiros resultados:', ob.data.slice(0, 3).map((item: any) => ({
+            nuordembancaria: item.nuordembancaria,
+            cdunidadegestora: item.cdunidadegestora,
+            nunotaempenho: item.nunotaempenho,
+            vltotal: item.vltotal
+          })));
+        }
+        
+        // Filtrar pelo número da OB e UG
         found = ob.data.find(item => 
+          item.nuordembancaria?.toUpperCase() === cleanOB && 
           item.cdunidadegestora?.toString() === ug
         ) || null;
         
+        console.log(`[DEBUG OB] após filtro: found=${found ? found.nuordembancaria : null}`);
+        
         if (!found && ob.next) {
           page++;
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise(r => setTimeout(r, 100));
         } else {
           break;
         }
       }
       
-      console.log('[DEBUG OB] Resultado:', found ? `Encontrado: ${found.nuordembancaria}` : 'Não encontrado');
+      console.log('[DEBUG OB] Resultado:', found ? `Encontrado: ${found.nuordembancaria} UG:${found.cdunidadegestora}` : 'Não encontrado');
       
       if (found) {
         this.ordemBancaria.set(found);

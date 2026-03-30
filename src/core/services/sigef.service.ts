@@ -38,12 +38,34 @@ export interface OrdemBancaria {
   nudocumento: string | null;
   nunotaempenho: string | null;
   cdcredor: string | null;
+  cdtipocredor: string | null;
+  cdugfavorecida: number | null;
+  cdorgao: number | null;
+  cdsubacao: number | null;
+  cdfuncao: number | null;
+  cdsubfuncao: number | null;
+  cdprograma: number | null;
+  cdacao: number | null;
+  localizagasto: string | null;
+  cdnaturezadespesa: string | null;
+  cdfonte: string | null;
+  cdmodalidade: number | null;
   vltotal: number | null;
   dtlancamento: string | null;
   dtpagamento: string | null;
-  cdsituacaoordembancaria: string | null;
-  deobservacao: string | null;
   definalidade: string | null;
+  nuguiarecebimento: string | null;
+  vlguiarecebimento: string | null;
+  nunotalancamento: string | null;
+  numns: number | null;
+  deobservacao: string | null;
+  domicilio_origem: string | null;
+  domicilio_destino: string | null;
+  cdsituacaoordembancaria: string | null;
+  situacaopreparacaopagamento: string | null;
+  tipoordembancaria: string | null;
+  tipopreparacaopagamento: string | null;
+  usuario_responsavel: string | null;
 }
 
 export interface SigefResponse<T> {
@@ -384,12 +406,15 @@ export class SigefService implements OnDestroy {
         params.append('nunotaempenho', nunotaempenho); // Tenta um filtro exato se a API suportar
       }
 
-      console.log('[SIGEF OB] URL:', url, '?', params.toString());
+      const fullUrl = `${url}?${params}`;
+      console.log('[SIGEF OB] URL:', fullUrl);
 
-      const response = await fetch(`${url}?${params}`, {
+      const response = await fetch(fullUrl, {
         method: 'GET',
         headers: this.getHeaders(),
       });
+
+      console.log('[SIGEF OB] Response status:', response.status);
 
       // Retornar array vazio em vez de lançar erro para erros 5xx
       if (!response.ok) {
@@ -402,6 +427,8 @@ export class SigefService implements OnDestroy {
       }
 
       const data = await response.json();
+      console.log('[SIGEF OB] Response data:', JSON.stringify(data).substring(0, 500));
+      
       return {
         data: (data.results || []) as OrdemBancaria[],
         count: data.count || 0,
