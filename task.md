@@ -130,6 +130,35 @@ O formulário também possui autocomplete de fornecedores que preenche automatic
 - Aplicado no formulário de contratos para formatação do campo valor
 - Aplicado no formulário de dotações para formatação do campo valor_dotação
 
+### Dashboard
+- Carregamento automático de dados ao abrir a página
+- Métricas de contratos por status (Vigentes, Finalizando, Rescindidos)
+- Valor total dos contratos vigentes
+- Lista de contratos expirando em breve (≤90 dias)
+- Gráfico de rosca de execução orçamentária (D3.js)
+- Gráfico de rosca de distribuição de contratos por status (D3.js)
+- KPIs: Total Contratos, Dotações, Empenhado
+- Tabela de últimos pagamentos
+
+### Consulta de Ordem Bancária
+- Nova página dedicada para consulta de OBs via API SIGEF
+- Seleção de Unidade Gestora (080101 - DPEMA, 080901 - FADEP)
+- Ano extraído automaticamente dos 4 primeiros dígitos do número da OB
+- Busca por número da OB com paginação
+- Exibição de detalhes: UG, Gestão, NE vinculada, Data Lançamento, Data Pagamento, Credor, Valor, Situação
+- Status colorido conforme situação (verde=confirmada, amarelo=pendente, vermelho=cancelada)
+
+### Correções na Integração SIGEF
+- Remoção de filtro restritivo de situação da OB (aceita qualquer status)
+- Busca de OBs de anos posteriores ao ano da NE (pagamentos podem ser efetuados em anos seguintes)
+- Correção na consulta de OBs usando parâmetro `nuordembancaria` correto
+- Adição de logs de debug para facilitar troubleshooting
+
+### Correções de Bugs
+- Correção de IDs duplicados em transações financeiras (uso de Map com IDs únicos)
+- Tratamento de erros 5xx da API SIGEF (retorna vazio em vez de quebrar)
+- Limitação de paginação para evitar loops infinitos
+
 ## Status: Concluído
 
 Todas as funcionalidades listadas acima foram implementadas.

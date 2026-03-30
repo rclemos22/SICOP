@@ -29,7 +29,8 @@ src/
 │   ├── financial/           # Dados financeiros
 │   ├── budget/              # Orçamento (dotações)
 │   ├── suppliers/           # Fornecedores
-│   └── nota-empenho/        # Consulta NE via SIGEF
+│   ├── nota-empenho/        # Consulta NE via SIGEF
+│   └── ordem-bancaria/      # Consulta OB via SIGEF
 ├── shared/
 │   ├── components/          # Componentes reutilizáveis
 │   ├── models/              # TypeScript interfaces
@@ -66,10 +67,21 @@ src/
 - `email`, `telefone`, `categoria`, `endereco`
 - `status` (ACTIVE, INACTIVE, BLOCKED), `desde`
 
+### Transaction
+- `id`, `contract_id`, `description`, `commitment_id`
+- `date`, `type`, `amount`, `department`
+- `budget_description`, `nunotaempenho`, `dotacao_id`
+
 ### NotaEmpenho (SIGEF - API)
 - `nunotaempenho`, `cdunidadegestora`, `cdgestao`, `cdcredor`
 - `dtlancamento`, `tipo`, `cdnaturezadespesa`, `vlnotaempenho`
 - `demodalidadeempenho`, `nuprocesso`, `dehistorico`, etc.
+
+### OrdemBancaria (SIGEF - API)
+- `nuordembancaria`, `cdunidadegestora`, `cdgestao`, `cdevento`
+- `nunotaempenho`, `cdcredor`, `vltotal`
+- `dtlancamento`, `dtpagamento`, `cdsituacaoordembancaria`
+- `deobservacao`, `definalidade`
 
 ## Unidades Gestoras Suportadas
 
@@ -154,8 +166,13 @@ if (budget.nunotaempenho) {
 - Não há re-atualização automática para evitar sobrecarga da API SIGEF
 - O saldo pode ser negativo (vermelho) indicando necessidade de reforço
 - Filtro por ano: apenas dotações do ano atual são somadas nos KPIs
+- Pagamentos de anos anteriores podem ser buscado em anos posteriores (ex: NE de 2025 pode ter OB em 2026)
 
-**Importante**: O tipo do aditivo é obtido via relação `tipo_aditivo(nome)` no Supabase.
+### Tipos de Transação Financeira
+- **COMMITMENT** - Empenho Inicial
+- **REINFORCEMENT** - Reforço de Empenho
+- **CANCELLATION** - Anulação de Empenho
+- **LIQUIDATION** - Pagamento (Ordem Bancária)
 
 ### Abas de Contratos
 - **Vigentes**: Contratos não rescindidos e não expirados (com filtro por ano de exercício)
@@ -181,9 +198,14 @@ valorAtualizado = valorAnualOriginal + sum(Aditivos.valor_aditivo)
 - O sistema itera pelas páginas da API para encontrar o registro correto
 - Garante que NEs com mesmo número em UGs diferentes sejam diferenciadas
 
+### Consulta de Ordens Bancárias
+- A busca considera **Unidade Gestora + Número da OB**
+- O ano é extraído automaticamente dos 4 primeiros dígitos do número da OB
+- O sistema itera pelas páginas da API para encontrar o registro correto
+
 ### Dados Financeiros SIGEF
 - Total Empenhado = Soma(Empenhos) - Soma(Cancelamentos)
-- Total Pago = Soma(Pagamentos)
+- Total Pago = Soma(Pagamentos via OB)
 - Saldo = Total Empenhado - Total Pago
 
 ### Gestão de Dotações
@@ -261,27 +283,35 @@ FROM public.contratos c;
 3. Sistema consulta API SIGEF considerando UG + NE
 4. Exibe dados da NE (valor, data, credor, histórico)
 
-### 2. Gestão de Contratos
+### 2. Consulta de Ordem Bancária
+1. Selecionar Unidade Gestora (080101 ou 080901)
+2. Informar número da OB (ex: 2026OB000656)
+3. Sistema extrai ano automaticamente (2026) dos 4 primeiros dígitos
+4. Sistema consulta API SIGEF considerando UG + OB
+5. Exibe dados da OB (valor, data pagamento, credor, NE vinculada, situação)
+
+### 3. Gestão de Contratos
 1. Lista com abas: Vigentes, Finalizados, Rescindidos
 2. Busca com 3+ caracteres em todos os contratos
 3. Formulário com autocomplete de fornecedores
 4. Campos: UG, Setor, Gestor, Fiscais
 
-### 3. Gestão de Aditivos
+### 4. Gestão de Aditivos
 1. Criar, editar, excluir aditivos
-2. Seleção de tipo: ADITIVO_PRAZO, ADITIVO_PRAZO_VALOR, etc.
+2. Seleção de tipo: ADITIVO_PRAZO, ADITIVO_PRAZO_VALOR, DISTRATO, etc.
 3. Campo nova_vigencia aparece para tipos com prazo
 4. Atualização automática do card com nova vigência efetiva
 
-### 4. Gestão de Dotações
+### 5. Gestão de Dotações
 1. Acessar contrato → aba Dotações
 2. Criar nova dotação ou editar existente
 3. Vincular Nota de Empenho (busca via SIGEF)
-4. Sistema exibe saldo, total emprenado
+4. Sistema exibe saldo, total engajado
 
-### 5. Lançamentos Financeiros
+### 6. Lançamentos Financeiros
 1. Exibe NE vinculada na tabela de lançamentos
-2. Totais: Empenhado, Pago, Saldo a Pagar
+2. Tipos: Empenho Inicial, Reforço, Anulação, Liquidação
+3. Totais: Empenhado, Pago, Saldo a Pagar
 
 ## Executando Tests
 

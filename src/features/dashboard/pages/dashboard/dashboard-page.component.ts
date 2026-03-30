@@ -1,5 +1,5 @@
 import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
-import { Component, inject, computed, output, viewChild, ElementRef, effect, signal } from '@angular/core';
+import { Component, inject, computed, output, viewChild, ElementRef, effect, signal, OnInit } from '@angular/core';
 import * as d3 from 'd3';
 import { ContractStatus } from '../../../../shared/models/contract.model';
 
@@ -7,6 +7,7 @@ import { TransactionType } from '../../../../shared/models/transaction.model';
 import { BudgetService } from '../../../budget/services/budget.service';
 import { ContractService } from '../../../contracts/services/contract.service';
 import { FinancialService } from '../../../financial/services/financial.service';
+import { AppContextService } from '../../../../core/services/app-context.service';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -14,10 +15,14 @@ import { FinancialService } from '../../../financial/services/financial.service'
   imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe],
   templateUrl: './dashboard-page.component.html',
 })
-export class DashboardPageComponent {
+export class DashboardPageComponent implements OnInit {
   public contractService = inject(ContractService);
   public financialService = inject(FinancialService);
   public budgetService = inject(BudgetService);
+  public appContext = inject(AppContextService);
+
+  // D3 Container for Status Chart
+  statusChartContainer = viewChild<ElementRef>('statusChart');
 
   // States
   isLoading = computed(() => 
@@ -33,9 +38,7 @@ export class DashboardPageComponent {
   );
 
   retry() {
-    this.contractService.loadContracts();
-    this.financialService.loadAllTransactions();
-    this.budgetService.loadDotacoes();
+    this.loadAllData();
   }
 
   // Output for Navigation
@@ -44,12 +47,49 @@ export class DashboardPageComponent {
   // D3 Container
   chartContainer = viewChild<ElementRef>('chart');
 
+  ngOnInit() {
+    this.loadAllData();
+  }
+
+  async loadAllData() {
+    await Promise.all([
+      this.contractService.loadContracts(),
+      this.financialService.loadAllTransactions(),
+      this.budgetService.loadDotacoes()
+    ]);
+  }
+
   // --- Metrics Calculation ---
 
   // 1. Contracts Logic
   activeContractsCount = computed(() => {
     return this.contractService.contracts()
       .filter(c => c.status === ContractStatus.VIGENTE).length;
+  });
+
+  // Contracts by status metrics
+  contractsByStatus = computed(() => {
+    const contracts = this.contractService.contracts();
+    return {
+      vigentes: contracts.filter(c => c.status === ContractStatus.VIGENTE).length,
+      finalizando: contracts.filter(c => c.status === ContractStatus.FINALIZANDO).length,
+      rescindidos: contracts.filter(c => c.status === ContractStatus.RESCINDIDO).length,
+      total: contracts.length
+    };
+  });
+
+  // Total value of active contracts
+  totalContractValue = computed(() => {
+    return this.contractService.contracts()
+      .filter(c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO)
+      .reduce((acc, c) => acc + c.valor_anual, 0);
+  });
+
+  // Contracts expiring soon (≤ 90 days)
+  expiringContracts = computed(() => {
+    return this.contractService.contracts()
+      .filter(c => c.status_efetivo === ContractStatus.FINALIZANDO)
+      .sort((a, b) => (a.dias_restantes || 0) - (b.dias_restantes || 0));
   });
 
   // 2. Financial Logic
@@ -100,14 +140,21 @@ export class DashboardPageComponent {
   });
 
   constructor() {
-    this.budgetService.loadDotacoes();
-
-    // Reactively render chart when metrics change
+    // Reactively render budget chart when metrics change
     effect(() => {
       const metrics = this.budgetMetrics();
       const container = this.chartContainer()?.nativeElement;
       if (container) {
         this.renderDonutChart(container, metrics);
+      }
+    });
+
+    // Reactively render status chart when contracts change
+    effect(() => {
+      const statusData = this.contractsByStatus();
+      const container = this.statusChartContainer()?.nativeElement;
+      if (container) {
+        this.renderStatusChart(container, statusData);
       }
     });
   }
@@ -226,6 +273,71 @@ export class DashboardPageComponent {
       .style("font-size", "12px")
       .style("fill", "#6B7280") // Gray 500
       .text(`Executado`);
+  }
+
+  private renderStatusChart(container: HTMLElement, data: { vigentes: number; finalizando: number; rescindidos: number; total: number }) {
+    d3.select(container).selectAll('*').remove();
+
+    if (data.total === 0) {
+      d3.select(container)
+        .append('div')
+        .attr('class', 'flex items-center justify-center h-full text-gray-400 text-sm')
+        .text('Sem dados de contratos');
+      return;
+    }
+
+    const chartData = [
+      { label: 'Vigentes', value: data.vigentes, color: '#22C55E' },
+      { label: 'Finalizando', value: data.finalizando, color: '#F59E0B' },
+      { label: 'Rescindidos', value: data.rescindidos, color: '#EF4444' }
+    ].filter(d => d.value > 0);
+
+    const width = 180;
+    const height = 180;
+    const margin = 10;
+    const radius = Math.min(width, height) / 2 - margin;
+
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height)
+      .append('g')
+      .attr('transform', `translate(${width / 2},${height / 2})`);
+
+    const pie = d3.pie<any>()
+      .value((d: any) => d.value)
+      .sort(null);
+
+    const arc = d3.arc()
+      .innerRadius(radius * 0.5)
+      .outerRadius(radius);
+
+    const arcHover = d3.arc()
+      .innerRadius(radius * 0.5)
+      .outerRadius(radius * 1.05);
+
+    svg.selectAll('path')
+      .data(pie(chartData))
+      .join('path')
+      .attr('d', arc as any)
+      .attr('fill', (d: any) => d.data.color)
+      .attr('stroke', 'white')
+      .style('stroke-width', '2px')
+      .style('cursor', 'pointer')
+      .on('mouseover', function (event, d: any) {
+        d3.select(this).transition().duration(200).attr('d', arcHover as any);
+      })
+      .on('mouseout', function (event, d) {
+        d3.select(this).transition().duration(200).attr('d', arc as any);
+      });
+
+    svg.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .style('font-size', '24px')
+      .style('font-weight', 'bold')
+      .style('fill', '#374151')
+      .text(data.total);
   }
 
   // --- Actions ---

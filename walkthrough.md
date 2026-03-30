@@ -34,6 +34,7 @@ A aplicação possui uma sidebar com os seguintes itens:
 4. **Orçamento**: Gestão de dotações orçamentárias
 5. **Fornecedores**: Cadastro e gestão de fornecedores
 6. **Nota de Empenho**: Consulta de notas de engajho via API SIGEF
+7. **Ordem Bancária**: Consulta de ordens bancárias via API SIGEF
 
 ## Funcionalidades Principais
 
@@ -42,7 +43,10 @@ No header, há um seletor de ano que filtra todos os dados da aplicação confor
 
 ### Dashboard
 - Cards com métricas: Total de contratos, valor total, contratos ativos
-- Alertas visuais para contratos próximos do vencimento (≤90 dias)
+- Gráfico de rosca de execução orçamentária (Empenhado vs Disponível)
+- Gráfico de distribuição de contratos por status (Vigentes, Finalizando, Rescindidos)
+- Lista de contratos próximos ao vencimento (≤90 dias)
+- Tabela de últimos pagamentos
 
 ### Contratos
 
@@ -132,13 +136,11 @@ Cada card de dotação exibe:
 - Barra de progresso showing % utilizado
 - Ao entrar na página, o sistema busca automaticamente o valor engajado para cada dotação com NE vinculada
 
-#### Visualização em Tabela
-A tabela de dotações também exibe colunas: Dotação | Empenhado | Saldo com cores para indicar se há necessidade de reforço
-
 ### Aba Financeiro
 - KPIs: Total Empenhado, Total Pago, Saldo a Pagar
 - Tabela de lançamentos com coluna de Nota de Empenho
 - Exibe NE vinculada a cada lançamento
+- Tipos de lançamento: Empenho Inicial, Reforço, Anulação, Liquidação
 
 ## Integração SIGEF
 
@@ -155,6 +157,16 @@ A tabela de dotações também exibe colunas: Dotação | Empenhado | Saldo com 
 3. Clique em "Buscar"
 4. Sistema consulta API considerando UG + NE
 5. Exibe dados: valor, data, credor, processo, natureza da despesa, histórico
+
+### Consulta de Ordem Bancária
+1. Selecione a **Unidade Gestora**:
+   - **080101** - DPEMA
+   - **080901** - FADEP
+2. Digite o número da OB (ex: 2026OB000656)
+3. O ano é extraído automaticamente dos 4 primeiros dígitos
+4. Clique em "Buscar"
+5. Sistema consulta API considerando UG + OB
+6. Exibe dados: valor, data pagamento, credor, NE vinculada, situação
 
 #### Vincular NE à Dotação
 1. Acesse contrato → aba Dotações
@@ -175,6 +187,7 @@ Requisições para `/sigef-api/*` são redirecionadas para `https://api.seplan.m
 - `tipo_aditivo` - Tipos de aditivo disponíveis
 - `dotacoes` - Dotações orçamentárias (com campo `nunotaempenho` para vinculação de NE)
 - `fornecedores` - Cadastro de fornecedores
+- `transacoes` - Transações financeiras
 - `vw_saldo_dotacoes` - View com saldos das dotações
 - `vw_contratos_vigencia` - View com contratos e vigência efetiva
 
@@ -187,3 +200,13 @@ A API retorna Notas de Empenho com os campos:
 - `cdnaturezadespesa` - Natureza da despesa
 - `demodalidadeempenho` - Modalidade
 - `dehistorico` - Histórico da NE
+
+A API retorna Ordens Bancárias com os campos:
+- `nuordembancaria` - Número da OB
+- `cdunidadegestora` - Código da UG
+- `nunotaempenho` - NE vinculada
+- `vltotal` - Valor
+- `dtlancamento` - Data de lançamento
+- `dtpagamento` - Data de pagamento
+- `cdsituacaoordembancaria` - Situação
+- `cdcredor` - Credor

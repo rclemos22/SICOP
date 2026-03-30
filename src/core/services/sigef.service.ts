@@ -30,6 +30,29 @@ export interface NotaEmpenho {
   dehistorico: string | null;
 }
 
+export interface OrdemBancaria {
+  nuordembancaria: string;
+  cdunidadegestora: number | null;
+  cdgestao: number | null;
+  cdevento: number | null;
+  nudocumento: string | null;
+  nunotaempenho: string | null;
+  cdcredor: string | null;
+  vltotal: number | null;
+  dtlancamento: string | null;
+  dtpagamento: string | null;
+  cdsituacaoordembancaria: string | null;
+  deobservacao: string | null;
+  definalidade: string | null;
+}
+
+export interface SigefResponse<T> {
+  data: T[];
+  count: number;
+  next: string | null;
+  previous: string | null;
+}
+
 export interface NotaEmpenhoItem {
   cdunidadegestora: number;
   cdgestao: number;
@@ -305,6 +328,171 @@ export class SigefService implements OnDestroy {
       page++;
     }
   }
+
+  /**
+   * Busca todas as movimentações (inicial, reforços e anulações) relacionadas a um empenho.
+   */
+  async getNotaEmpenhoMovements(ano: string, numeroNE: string, cdunidadegestora: string): Promise<NotaEmpenho[]> {
+    console.log('=== [SIGEF SERVICE] getNotaEmpenhoMovements ===');
+    console.log('[SIGEF] Buscando movimentações - ano:', ano, 'numeroNE:', numeroNE, 'UG:', cdunidadegestora);
+    
+    const movements: NotaEmpenho[] = [];
+    let page = 1;
+    
+    while (true) {
+      // Usamos o numeroNE no search para a API filtrar registros relevantes
+      const result = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora);
+      
+      const filtered = result.data.filter(ne => 
+        (ne.nunotaempenho === numeroNE || ne.nuneoriginal === numeroNE) && 
+        ne.cdunidadegestora === cdunidadegestora
+      );
+      
+      movements.push(...filtered);
+      
+      if (!result.next) break;
+      page++;
+    }
+    
+    console.log(`[SIGEF] Total de movimentações encontradas: ${movements.length}`);
+    return movements;
+  }
+
+  /**
+   * Consulta ordens bancárias filtradas por período.
+   */
+  async getOrdemBancaria(datainicio: string, datafim: string, page: number = 1, nuordembancaria?: string, nunotaempenho?: string): Promise<SigefResponse<OrdemBancaria>> {
+    this._loading.set(true);
+    this._error.set(null);
+
+    try {
+      await this.ensureAuthenticated();
+      const url = `${this.apiUrl}/sigef/ordembancaria/`;
+      const params = new URLSearchParams({
+        datainicio,
+        datafim,
+        page: page.toString(),
+      });
+      
+      if (nuordembancaria) {
+        params.append('nuordembancaria', nuordembancaria);
+      }
+      
+      // Tentar passar nunotaempenho e search para o Django Rest Framework filtrar
+      if (nunotaempenho) {
+        params.append('search', nunotaempenho);
+        params.append('nunotaempenho', nunotaempenho); // Tenta um filtro exato se a API suportar
+      }
+
+      console.log('[SIGEF OB] URL:', url, '?', params.toString());
+
+      const response = await fetch(`${url}?${params}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      // Retornar array vazio em vez de lançar erro para erros 5xx
+      if (!response.ok) {
+        const errorText = await response.text();
+        if (response.status >= 500) {
+          console.warn('[SIGEF OB] Erro 5xx da API, retornando vazio:', response.status);
+          return { data: [], count: 0, next: null, previous: null };
+        }
+        throw new Error(`Erro na API: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        data: (data.results || []) as OrdemBancaria[],
+        count: data.count || 0,
+        next: data.next,
+        previous: data.previous
+      };
+    } catch (err: any) {
+      // Em caso de erro de rede ou outro, retornar vazio em vez de quebrar
+      if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+        console.warn('[SIGEF OB] Erro de rede, retornando vazio');
+        return { data: [], count: 0, next: null, previous: null };
+      }
+      this._error.set(err.message || 'Erro ao buscar ordem bancária');
+      throw err;
+    } finally {
+      this._loading.set(false);
+    }
+  }
+
+  /**
+   * Busca todas as ordens bancárias confirmadas vinculadas a uma lista de notas de empenho (original + reforços).
+   * Busca a partir do ano da NE até o ano atual, pois pagamentos podem ser efetuados em anos posteriores.
+   */
+  async getOrdemBancariaMovements(ano: string, numeroNEs: string[], cdunidadegestora: string): Promise<OrdemBancaria[]> {
+    console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements ===', { ano, numeroNEs, ug: cdunidadegestora });
+    const movements: OrdemBancaria[] = [];
+    const MAX_PAGES = 50;
+    const anoNE = parseInt(ano, 10);
+    const anoAtual = new Date().getFullYear();
+    
+    // Buscar OBs do ano da NE até o ano atual (pagamentos podem ser efetuados em anos posteriores)
+    const anosAPesquisar = [];
+    for (let a = anoNE; a <= anoAtual; a++) {
+      anosAPesquisar.push(a.toString());
+    }
+    console.log('[SIGEF OB] Anos a pesquisar para OBs:', anosAPesquisar);
+
+    // Se quiséssemos otimizar na API, usaríamos o originalNE, mas como a API só suporta search simples, passamos o primeiro.
+    const searchParams = numeroNEs.length > 0 ? numeroNEs[0] : undefined;
+
+    for (const anoPesquisa of anosAPesquisar) {
+      let page = 1;
+      const datainicio = `${anoPesquisa}-01-01`;
+      const datafim = `${anoPesquisa}-12-31`;
+      
+      console.log(`[SIGEF OB] Buscando OBs no ano ${anoPesquisa}...`);
+
+      while (page <= MAX_PAGES) {
+        try {
+          const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, searchParams);
+          
+          console.log(`[SIGEF OB] Ano ${anoPesquisa} página ${page}: ${result.data.length} resultados`);
+          
+          // Log dos campos das primeiras OBs para debug
+          if (result.data.length > 0 && page === 1) {
+            console.log('[SIGEF OB] Sample OB fields:', JSON.stringify(result.data[0], null, 2));
+          }
+          
+          const filtered = result.data.filter(ob => {
+            const matchNE = ob.nunotaempenho && numeroNEs.includes(ob.nunotaempenho);
+            const matchUG = ob.cdunidadegestora?.toString() === cdunidadegestora;
+            // Verificar situação - aceitar "confirmada banco" ou "creditado" ou vazio/nulo
+            const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
+            const isConfirmed = situacao === 'confirmada banco' || situacao === 'creditado' || situacao === '';
+            
+            // Debug log para cada OB
+            if (ob.nunotaempenho && numeroNEs.includes(ob.nunotaempenho)) {
+              console.log(`[SIGEF OB] Match! NE: ${ob.nunotaempenho}, UG: ${ob.cdunidadegestora}, Situação: '${ob.cdsituacaoordembancaria}' (matchUG: ${matchUG}, isConfirmed: ${isConfirmed})`);
+            }
+            
+            return matchNE && matchUG; // Remover filtro de situação para capturar OBs em qualquer status
+          });
+          
+          console.log(`[SIGEF OB] Ano ${anoPesquisa}: ${filtered.length} OBs filtradas`);
+          movements.push(...filtered);
+          
+          if (!result.next) break;
+          page++;
+          
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (err) {
+          console.warn(`[SIGEF OB] Erro na paginação do ano ${anoPesquisa}, continuando para próximo ano:`, err);
+          break;
+        }
+      }
+    }
+    
+    console.log(`[SIGEF] Total de OBs confirmadas encontradas: ${movements.length}`);
+    return movements;
+  }
+
 
   async getNotaEmpenhoItens(ano: string, page: number = 1): Promise<{ data: NotaEmpenhoItem[], count: number, next: string | null, previous: string | null }> {
     this._loading.set(true);

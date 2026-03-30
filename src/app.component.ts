@@ -13,6 +13,7 @@ import { DashboardPageComponent } from './features/dashboard/pages/dashboard/das
 import { FinancialPageComponent } from './features/financial/pages/financial/financial-page.component';
 import { SuppliersPageComponent } from './features/suppliers/pages/suppliers/suppliers-page.component';
 import { NotaEmpenhoPageComponent } from './features/nota-empenho/pages/nota-empenho/nota-empenho-page.component';
+import { OrdemBancariaPageComponent } from './features/ordem-bancaria/pages/ordem-bancaria/ordem-bancaria-page.component';
 import { ContractService } from './features/contracts/services/contract.service';
 import { ContractStatus } from './shared/models/contract.model';
 
@@ -31,7 +32,8 @@ registerLocaleData(localePt);
     ContractDetailsPageComponent,
     DashboardPageComponent,
     SuppliersPageComponent,
-    NotaEmpenhoPageComponent
+    NotaEmpenhoPageComponent,
+    OrdemBancariaPageComponent
   ],
   providers: [{ provide: LOCALE_ID, useValue: 'pt-BR' }],
   templateUrl: './app.component.html',
@@ -43,7 +45,7 @@ export class AppComponent {
   private contractService = inject(ContractService);
 
   // Navigation State
-  view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho'>('dashboard');
+  view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho' | 'ordem-bancaria'>('dashboard');
   selectedContractId = signal<string | null>(null);
   contractToEdit = signal<any | null>(null);
   
@@ -87,6 +89,10 @@ export class AppComponent {
 
   showNotaEmpenho() {
     this.view.set('nota-empenho');
+  }
+
+  showOrdemBancaria() {
+    this.view.set('ordem-bancaria');
   }
 
   openContractDetails(id: string) {

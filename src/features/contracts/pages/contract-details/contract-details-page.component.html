@@ -480,13 +480,25 @@
                                 <span class="text-blue-600 dark:text-blue-400 font-medium">Empenhado</span>
                                 <span class="font-bold text-blue-600 dark:text-blue-400">{{ budget.total_empenhado | currency:'BRL':'symbol':'1.2-2' }}</span>
                              </div>
-                             <!-- Saldo = Dotação - Empenhado -->
-                             <div class="flex justify-between text-sm mb-3">
-                                <span class="font-medium">Saldo (D - E)</span>
-                                <span class="font-bold" 
-                                  [class]="budget.saldo_disponivel >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                  {{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}
+                             
+                             <!-- Total Pago (do SIGEF) -->
+                             <div class="flex justify-between text-sm mb-1">
+                                <span class="text-green-600 dark:text-green-400 font-medium">Total Pago</span>
+                                <span class="font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
+                             </div>
+
+                             <!-- Saldo do Empenho = Empenhado - Pago -->
+                             <div class="flex justify-between text-sm mb-2 pt-1 border-t border-gray-100 dark:border-gray-700/50">
+                                <span class="text-gray-500 text-xs uppercase font-bold">Saldo Empenho (E-P)</span>
+                                <span class="font-bold text-gray-900 dark:text-white">
+                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
                                 </span>
+                             </div>
+
+                             <!-- Saldo Dotação = Dotação - Empenhado -->
+                             <div class="flex justify-between text-xs mb-3 text-gray-400">
+                                <span>Saldo Dotação (D-E)</span>
+                                <span>{{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}</span>
                              </div>
 
                              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
@@ -512,7 +524,8 @@
                             <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Disp.</th>
                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dotação</th>
                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Empenhado</th>
-                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saldo</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pago</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saldo Emp.</th>
                           </tr>
                         </thead>
                         <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
@@ -539,9 +552,11 @@
                                 <span class="text-sm font-bold text-blue-600 dark:text-blue-400">{{ budget.total_empenhado | currency:'BRL':'symbol':'1.2-2' }}</span>
                               </td>
                               <td class="px-5 py-4 text-right whitespace-nowrap">
-                                <span class="text-sm font-bold" 
-                                  [class]="budget.saldo_disponivel >= 0 ? 'text-green-600' : 'text-red-600'">
-                                  {{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}
+                                <span class="text-sm font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </td>
+                              <td class="px-5 py-4 text-right whitespace-nowrap">
+                                <span class="text-sm font-bold text-gray-900 dark:text-white">
+                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
                                 </span>
                               </td>
                             </tr>
@@ -550,13 +565,13 @@
                       </table>
                     </div>
                   }
-                } @else {
-                  <div class="text-center py-10 text-gray-400">
-                     <span class="material-symbols-outlined text-4xl mb-2">money_off</span>
-                     <p>Nenhuma dotação vinculada a este contrato.</p>
-                  </div>
-                }
-             </div>
+                 } @else {
+                   <div class="text-center py-10 text-gray-400">
+                      <span class="material-symbols-outlined text-4xl mb-2">money_off</span>
+                      <p>Nenhuma dotação vinculada a este contrato.</p>
+                   </div>
+                 }
+              </div>
           }
 
           <!-- FINANCIAL TAB -->
@@ -643,7 +658,7 @@
                                   <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border" [class]="getTypeClass(t.type)">
                                      {{ getTypeLabel(t.type) }}
                                   </span>
-                               </td>
+                                </td>
                                <td class="px-4 py-3 text-right text-sm font-bold text-gray-900 dark:text-white">
                                   {{ t.amount | currency:'BRL':'symbol':'1.2-2' }}
                                </td>

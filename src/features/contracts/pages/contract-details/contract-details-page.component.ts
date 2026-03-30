@@ -11,7 +11,7 @@ import {
 import {
   getTransactionTypeLabel, getTransactionTypeColorClass,
   getTransactionIcon, getTransactionIconBgClass,
-  Transaction
+  Transaction, TransactionType
 } from '../../../../shared/models/transaction.model';
 import { DotacaoFormComponent } from '../../../budget/components/dotacao-form/dotacao-form.component';
 import { BudgetService } from '../../../budget/services/budget.service';
@@ -130,7 +130,14 @@ export class ContractDetailsPageComponent {
   budgetsLoading = signal<boolean>(false);
   budgetsError = signal<string | null>(null);
 
-  transactions = signal<Transaction[]>([]);
+  dbTransactions = signal<Transaction[]>([]);
+  sigefTransactions = signal<Transaction[]>([]);
+  
+  transactions = computed(() => {
+    const combined = [...this.dbTransactions(), ...this.sigefTransactions()];
+    return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  });
+
   transactionsLoading = signal<boolean>(false);
   transactionsError = signal<string | null>(null);
 
@@ -164,8 +171,15 @@ export class ContractDetailsPageComponent {
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalCommitted = trans
-      .filter(t => t.type === 'COMMITMENT')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => {
+        if (t.type === 'COMMITMENT' || t.type === 'REINFORCEMENT') {
+          return sum + t.amount;
+        }
+        if (t.type === 'CANCELLATION') {
+          return sum - t.amount;
+        }
+        return sum;
+      }, 0);
 
     return { totalPaid, totalCommitted };
   });
@@ -201,10 +215,17 @@ export class ContractDetailsPageComponent {
          this.budgetsError.set(result.error);
          this.budgets.set([]);
       } else {
-         // Carregar dotações e enriquecer com SIGEF apenas uma vez ao entrar na página
          this.budgetsLoading.set(true);
-         const enriched = await this.enrichBudgetsWithSigef(result.data!);
-         this.budgets.set(enriched);
+         const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(result.data!);
+         this.budgets.set(enrichedBudgets);
+         
+         // Atualiza o signal separado do SIGEF
+         if (sigefTransactions.length > 0) {
+           this.sigefTransactions.set(sigefTransactions);
+         } else {
+           this.sigefTransactions.set([]);
+         }
+         
          this.budgetsLoading.set(false);
       }
     } catch (err: any) {
@@ -217,48 +238,109 @@ export class ContractDetailsPageComponent {
   /**
    * Enriquece as dotações com valores do SIGEF (apenas quando entra na página)
    */
-  private async enrichBudgetsWithSigef(budgets: Dotacao[]): Promise<Dotacao[]> {
-    const currentYear = this.appContext.anoExercicio();
+  private async enrichBudgetsWithSigef(budgets: Dotacao[]): Promise<{ enrichedBudgets: Dotacao[], sigefTransactions: Transaction[] }> {
     const enrichedBudgets = [...budgets];
+    const transactionsMap = new Map<string, Transaction>();
 
     for (let i = 0; i < enrichedBudgets.length; i++) {
       const budget = enrichedBudgets[i];
-      const dataDisp = new Date(budget.data_disponibilidade);
       
-      // Processar todas as dotações (não filtrar por ano atual)
-      // O filtro de exibição nos KPIs é feito no budgetSummary computado
-
-      // Se tem NE vinculada, buscar detalhes
       if (budget.nunotaempenho) {
         try {
-          // Extrair ano dos 4 primeiros dígitos da NE (ex: "2025NE000302" -> "2025")
           const neValue = budget.nunotaempenho.trim();
           const anoNE = neValue.substring(0, 4);
           
-          console.log('[DEBUG] NE do banco:', neValue);
-          console.log('[DEBUG] Ano extraído (substring 0-4):', anoNE);
-          console.log('[DEBUG] UG:', budget.unid_gestora);
-          
-          const neDetails = await this.sigefService.getNotaEmpenhoByNumber(
+          const movements = await this.sigefService.getNotaEmpenhoMovements(
             anoNE,
             neValue,
             budget.unid_gestora
           );
 
-          if (neDetails) {
-            // Extrair diretamente do vlnotaempenho da API
-            const vlEmpenhado = neDetails.vlnotaempenho || 0;
+          if (movements.length > 0) {
+            let vlEmpenhado = 0;
             
-            // Saldo = Dotação - Empenhado (pode ser negativo se exceder)
-            const saldo = budget.valor_dotacao - vlEmpenhado;
+            movements.forEach((m, idx) => {
+              const valor = m.vlnotaempenho || 0;
+              let type = TransactionType.COMMITMENT;
+              let description = m.dehistorico || 'Empenho Inicial';
+
+              // 400010 = Inicial, 400011 = Reforço, 400012 = Anulação
+              if (m.cdevento === 400010 || m.cdevento === 400011) {
+                vlEmpenhado += valor;
+                type = m.cdevento === 400010 ? TransactionType.COMMITMENT : TransactionType.REINFORCEMENT;
+                description = m.dehistorico || (m.cdevento === 400010 ? 'Empenho Inicial' : 'Reforço de Empenho');
+              } else if (m.cdevento === 400012) {
+                vlEmpenhado -= valor;
+                type = TransactionType.CANCELLATION;
+                description = m.dehistorico || 'Anulação de Empenho';
+              }
+
+              const txId = `sigef-empenho-${m.nunotaempenho}-${m.cdevento}-${m.dtlancamento}-${idx}`;
+              transactionsMap.set(txId, {
+                id: txId,
+                contract_id: budget.contract_id,
+                description: description,
+                commitment_id: m.nunotaempenho,
+                date: new Date(m.dtlancamento),
+                type: type,
+                amount: valor,
+                department: budget.unid_gestora,
+                budget_description: budget.dotacao,
+                nunotaempenho: m.nunotaempenho,
+                dotacao_id: budget.id
+              } as Transaction);
+            });
+            
+            let totalPago = 0;
+            
+            // Buscar pagamentos (OBs) relacionados a TODAS as notas de empenho deste vínculo orginal/reforço
+            try {
+              // Pegamos todas as notas que foram resultantes da original (incluindo ela mesma)
+              const todasNEsViculadas = Array.from(new Set(movements.map(m => m.nunotaempenho).filter(Boolean) as string[]));
+              
+              console.log('[DEBUG] Buscando OBs para NEs:', todasNEsViculadas, 'UG:', budget.unid_gestora);
+
+              const payments = await this.sigefService.getOrdemBancariaMovements(
+                anoNE,
+                todasNEsViculadas,
+                budget.unid_gestora
+              );
+              
+              console.log('[DEBUG] OBs encontradas:', payments.length, payments.map(p => ({ ob: p.nuordembancaria, ne: p.nunotaempenho, valor: p.vltotal })));
+
+              if (payments.length > 0) {
+                payments.forEach((p, pIdx) => {
+                  const valorOB = p.vltotal || 0;
+                  totalPago += valorOB;
+
+                  const obId = `sigef-ob-${p.nuordembancaria}-${p.dtpagamento || p.dtlancamento}-${pIdx}`;
+                  transactionsMap.set(obId, {
+                    id: obId,
+                    contract_id: budget.contract_id,
+                    description: p.deobservacao || p.definalidade || 'Pagamento Ordem Bancária',
+                    commitment_id: p.nunotaempenho || undefined,
+                    date: p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date()),
+                    type: TransactionType.LIQUIDATION,
+                    amount: valorOB,
+                    department: budget.unid_gestora,
+                    budget_description: budget.dotacao,
+                    nunotaempenho: p.nunotaempenho || undefined,
+                    dotacao_id: budget.id
+                  } as Transaction);
+                });
+              }
+            } catch (err) {
+              console.warn('[DEBUG] enrichBudgetsWithSigef - OB Error:', budget.nunotaempenho, err);
+            }
+            
+            const saldoDotação = budget.valor_dotacao - vlEmpenhado;
             
             enrichedBudgets[i] = {
               ...budget,
               total_empenhado: vlEmpenhado,
-              total_pago: 0,
-              saldo_disponivel: saldo
+              total_pago: totalPago,
+              saldo_disponivel: saldoDotação // Saldo de Dotação (D - E)
             };
-            console.log('[DEBUG] enrichBudgetsWithSigef - Dotação:', budget.valor_dotacao, 'Empenhado:', vlEmpenhado, 'Saldo:', saldo);
           }
         } catch (err) {
           console.warn('[DEBUG] enrichBudgetsWithSigef - Error:', budget.nunotaempenho, err);
@@ -266,7 +348,7 @@ export class ContractDetailsPageComponent {
       }
     }
 
-    return enrichedBudgets;
+    return { enrichedBudgets, sigefTransactions: Array.from(transactionsMap.values()) };
   }
 
   private async loadTransactions(contractId: string): Promise<void> {
@@ -274,10 +356,10 @@ export class ContractDetailsPageComponent {
     this.transactionsError.set(null);
     try {
       const data = await this.financialService.getTransactionsByContractId(contractId);
-      this.transactions.set(data);
+      this.dbTransactions.set(data);
     } catch (err: any) {
       this.transactionsError.set(err.message || 'Erro ao carregar transações');
-      this.transactions.set([]);
+      this.dbTransactions.set([]);
     } finally {
       this.transactionsLoading.set(false);
     }

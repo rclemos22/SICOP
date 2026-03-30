@@ -4,16 +4,20 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 
 ## Funcionalidades
 
-- **Dashboard**: Métricas gerais e alertas de contratos próximos ao vencimento
+- **Dashboard**: Métricas gerais, alertas de contratos próximos ao vencimento (≤90 dias), gráficos de distribuição
 - **Gestão de Contratos**: Cadastro, edição, aditivos e acompanhamento
   - Abas: Vigentes, Finalizados, Rescindidos
-  - Busca em todos os contratos
+  - Busca em todos os contratos (3+ caracteres)
   - Formulário com autocomplete de fornecedores
   - Campos: Unidade Gestora, Setor, Gestor do Contrato, Fiscais, Processo SEI, Link SEI
-- **Controle Financeiro**: Visualização de Notas de Empenho via API SIGEF
+- **Controle Financeiro**: 
+  - Visualização de Notas de Empenho via API SIGEF
+  - Lançamentos de Empenho, Reforço, Anulação e Liquidação
+  - Busca de Ordens Bancárias
 - **Orçamento**: Controle de dotações orçamentárias com vinculação de NE
 - **Fornecedores**: Cadastro e gestão de fornecedores
-- **Nota de Empenho**: Consulta de notas por ano fiscal e unidade gestora
+- **Nota de Empenho**: Consulta de notas por número e unidade gestora
+- **Ordem Bancária**: Consulta de OBs por número e unidade gestora
 
 ## Campos do Contrato
 
@@ -89,8 +93,10 @@ src/
 │   │   ├── pages/       # contracts, contract-details
 │   │   ├── components/  # contract-card, contract-form, aditivo-form
 │   │   └── services/    # contract.service.ts
-│   ├── financial/       # Dados financeiros
+│   ├── dashboard/       # Dashboard com métricas
+│   ├── financial/        # Dados financeiros
 │   ├── nota-empenho/    # Consulta NE via SIGEF
+│   ├── ordem-bancaria/  # Consulta OB via SIGEF
 │   └── suppliers/       # Gestão de fornecedores
 ├── shared/              # Modelos, utils, componentes reutilizáveis
 └── environments/        # Configurações por ambiente
@@ -99,8 +105,8 @@ src/
 ## Banco de Dados
 
 - **Supabase**: https://xhowiwekqliqfckndupo.supabase.co
-- **Tabelas**: contratos, aditivos, dotacoes, fornecedores
-- **Views**: vw_saldo_dotacoes
+- **Tabelas**: contratos, aditivos, dotacoes, fornecedores, transacoes
+- **Views**: vw_saldo_dotacoes, vw_contratos_vigencia
 
 ## License
 
