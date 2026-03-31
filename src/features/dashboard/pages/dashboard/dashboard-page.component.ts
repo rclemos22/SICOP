@@ -86,18 +86,15 @@ export class DashboardPageComponent implements OnInit {
       .sort((a, b) => (a.dias_restantes || 0) - (b.dias_restantes || 0));
   });
 
-  // 2. Financial Logic - from Contracts Data
+  // 2. Financial Logic - from Budget Data
   financialMetrics = computed(() => {
-    const contracts = this.contractService.contracts();
+    const budgets = this.budgetService.dotacoes();
 
-    const totalEmpenhado = contracts
-      .reduce((acc, c) => acc + (c.total_empenhado || 0), 0);
+    const totalEmpenhado = budgets
+      .reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
 
-    const totalPago = contracts
-      .reduce((acc, c) => acc + (c.total_pago || 0), 0);
-
-    const totalAPagar = contracts
-      .reduce((acc, c) => acc + (c.saldo_a_pagar || 0), 0);
+    const totalPago = budgets
+      .reduce((acc, b) => acc + (b.total_pago || 0), 0);
 
     const toPay = Math.max(0, totalEmpenhado - totalPago);
 
@@ -107,13 +104,16 @@ export class DashboardPageComponent implements OnInit {
   // 2b. Overall Financial Totals
   overallFinancials = computed(() => {
     const contracts = this.contractService.contracts();
+    const budgets = this.budgetService.dotacoes();
 
-    const totalEmpenhado = contracts.reduce((acc, c) => acc + (c.total_empenhado || 0), 0);
-    const totalPago = contracts.reduce((acc, c) => acc + (c.total_pago || 0), 0);
     const totalContratado = contracts.reduce((acc, c) => acc + c.valor_anual, 0);
-    const saldoRestante = totalContratado - totalEmpenhado;
+    const totalPago = contracts.reduce((acc, c) => acc + (c.total_pago || 0), 0);
 
-    return { totalEmpenhado, totalPago, totalContratado, saldoRestante };
+    const totalEmpenhado = budgets.reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
+    const totalCancelado = budgets.reduce((acc, b) => acc + (b.total_cancelado || 0), 0);
+    const saldoRestante = budgets.reduce((acc, b) => acc + (b.saldo_disponivel || 0), 0);
+
+    return { totalEmpenhado, totalPago, totalContratado, saldoRestante, totalCancelado };
   });
 
   // 3. Overdue Logic
