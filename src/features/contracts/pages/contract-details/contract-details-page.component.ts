@@ -4,6 +4,7 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefService } from '../../../../core/services/sigef.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria } from '../../../../core/services/sigef-cache.service';
 
 import { getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
 import {
@@ -33,6 +34,7 @@ export class ContractDetailsPageComponent {
   private appContext = inject(AppContextService);
   private sigefService = inject(SigefService);
   private sigefSyncService = inject(SigefSyncService);
+  private sigefCacheService = inject(SigefCacheService);
 
   // Inputs & Outputs
   contractId = input.required<string>();
@@ -222,7 +224,8 @@ export class ContractDetailsPageComponent {
          this.budgets.set([]);
       } else {
          this.budgetsLoading.set(true);
-         const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(result.data!);
+          // Primeiro tenta usar cache, sem forçar API
+          const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(result.data!, false);
          this.budgets.set(enrichedBudgets);
          
          // Atualiza o signal separado do SIGEF
@@ -242,11 +245,13 @@ export class ContractDetailsPageComponent {
   }
 
   /**
-   * Enriquece as dotações com valores do SIGEF (usando cache + API)
+   * Enriquece as dotações com valores do SIGEF (PRIMEIRO do cache, depois API se necessário)
+   * O botão "Atualizar" força consulta à API
    */
-  private async enrichBudgetsWithSigef(budgets: Dotacao[]): Promise<{ enrichedBudgets: Dotacao[], sigefTransactions: Transaction[] }> {
+  private async enrichBudgetsWithSigef(budgets: Dotacao[], forceApiRefresh: boolean = false): Promise<{ enrichedBudgets: Dotacao[], sigefTransactions: Transaction[] }> {
     const enrichedBudgets = [...budgets];
     const transactionsMap = new Map<string, Transaction>();
+    const ugNum = parseInt(budgets[0]?.unid_gestora || '80101', 10);
 
     for (let i = 0; i < enrichedBudgets.length; i++) {
       const budget = enrichedBudgets[i];
@@ -255,103 +260,99 @@ export class ContractDetailsPageComponent {
         try {
           const neValue = budget.nunotaempenho.trim();
           const anoNE = neValue.substring(0, 4);
+          const ug = budget.unid_gestora;
           
-          console.log('[DEBUG] Processando NE:', neValue, 'UG:', budget.unid_gestora);
+          console.log('[DEBUG] Processando NE:', neValue, 'UG:', ug, 'ForceRefresh:', forceApiRefresh);
           
-          // Usar o serviço de sync (cache + API)
-          const neResumo = await this.sigefSyncService.getNotaEmpenhoWithCache(
-            anoNE,
-            neValue,
-            budget.unid_gestora
-          );
+          // 1. Primeiro tenta obter do cache (movimentos e OBs)
+          let movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
+          let obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
           
-          console.log('[DEBUG] NE Resumo:', neResumo);
-
-          if (neResumo) {
-            // Obter movimentos para transações de engajamento
-            const movimentos = await this.sigefService.getNotaEmpenhoMovements(
-              anoNE,
-              neValue,
-              budget.unid_gestora
-            );
+          // 2. Se não tem cache ou forceApiRefresh, busca da API e salva no cache
+          if (forceApiRefresh || movimentosCache.length === 0 || obsCache.length === 0) {
+            console.log('[DEBUG] Buscando da API para NE:', neValue);
             
-            // Adicionar transações de movimentos (Empenho, Reforço, Anulação)
-            if (movimentos.length > 0) {
-              let vlEmpenhado = 0;
-              
-              movimentos.forEach((m, idx) => {
-                const valor = m.vlnotaempenho || 0;
-                let type = TransactionType.COMMITMENT;
-                let description = m.dehistorico || 'Empenho Inicial';
-
-                if (m.cdevento === 400010 || m.cdevento === 400011) {
-                  vlEmpenhado += valor;
-                  type = m.cdevento === 400010 ? TransactionType.COMMITMENT : TransactionType.REINFORCEMENT;
-                  description = m.dehistorico || (m.cdevento === 400010 ? 'Empenho Inicial' : 'Reforço de Empenho');
-                } else if (m.cdevento === 400012) {
-                  vlEmpenhado -= valor;
-                  type = TransactionType.CANCELLATION;
-                  description = m.dehistorico || 'Anulação de Empenho';
-                }
-
-                const txId = `sigef-empenho-${m.nunotaempenho}-${m.cdevento}-${m.dtlancamento}-${idx}`;
-                transactionsMap.set(txId, {
-                  id: txId,
-                  contract_id: budget.contract_id,
-                  description: description,
-                  commitment_id: m.nunotaempenho,
-                  date: new Date(m.dtlancamento),
-                  type: type,
-                  amount: valor,
-                  department: budget.unid_gestora,
-                  budget_description: budget.dotacao,
-                  nunotaempenho: m.nunotaempenho,
-                  dotacao_id: budget.id
-                } as Transaction);
-              });
-            }
+            // Buscar NE e movimentos da API
+            const neResumo = await this.sigefSyncService.getNotaEmpenhoWithCache(anoNE, neValue, ug);
             
-            // Obter OBs para transações de pagamento
-            const obs = await this.sigefService.getOrdemBancariaMovements(
-              anoNE,
-              [neValue],
-              budget.unid_gestora
-            );
-            
-            // Adicionar transações de pagamentos (Liquidação)
-            if (obs.length > 0) {
-              obs.forEach((p, pIdx) => {
-                const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
-                // Só adicionar se estiver confirmada (CB = Confirmada Banco)
-                if (situacao === 'cb' || situacao === 'confirmada banco' || situacao === 'creditado') {
-                  const valorOB = p.vltotal || 0;
-                  
-                  const obId = `sigef-ob-${p.nuordembancaria}-${p.dtpagamento || p.dtlancamento}-${pIdx}`;
-                  transactionsMap.set(obId, {
-                    id: obId,
-                    contract_id: budget.contract_id,
-                    description: p.deobservacao || p.definalidade || 'Pagamento Ordem Bancária',
-                    commitment_id: p.nunotaempenho || undefined,
-                    date: p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date()),
-                    type: TransactionType.LIQUIDATION,
-                    amount: valorOB,
-                    department: budget.unid_gestora,
-                    budget_description: budget.dotacao,
-                    nunotaempenho: p.nunotaempenho || undefined,
-                    dotacao_id: budget.id
-                  } as Transaction);
-                }
-              });
-            }
-            
-            // Atualizar valores da dotação com dados do cache
-            enrichedBudgets[i] = {
-              ...budget,
-              total_empenhado: neResumo.valor_empenhado,
-              total_pago: neResumo.valor_pago,
-              saldo_disponivel: neResumo.saldo_pagar
-            };
+            // Recarregar do cache após sync
+            movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
+            obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
           }
+          
+          console.log('[DEBUG] Movimentos do cache:', movimentosCache.length);
+          console.log('[DEBUG] OBs do cache:', obsCache.length);
+          
+          // 3. Calcular valores a partir do cache
+          const vlEmpenhado = this.sigefCacheService.calcularValorEmpenhado(movimentosCache);
+          const vlPago = this.sigefCacheService.calcularValorPago(obsCache);
+          
+          // 4. Criar transações de engajamento (movimentos)
+          movimentosCache.forEach((m, idx) => {
+            const valor = m.vlnotaempenho || 0;
+            let type = TransactionType.COMMITMENT;
+            let description = m.dehistorico || 'Empenho Inicial';
+
+            if (m.cdevento === 400010 || m.cdevento === 400011) {
+              type = m.cdevento === 400010 ? TransactionType.COMMITMENT : TransactionType.REINFORCEMENT;
+              description = m.dehistorico || (m.cdevento === 400010 ? 'Empenho Inicial' : 'Reforço de Empenho');
+            } else if (m.cdevento === 400012) {
+              type = TransactionType.CANCELLATION;
+              description = m.dehistorico || 'Anulação de Empenho';
+            }
+
+            const txId = `cache-empenho-${m.nunotaempenho}-${m.cdevento}-${m.dtlancamento}-${idx}`;
+            transactionsMap.set(txId, {
+              id: txId,
+              contract_id: budget.contract_id,
+              description: description,
+              commitment_id: m.nunotaempenho,
+              date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
+              type: type,
+              amount: valor,
+              department: ug,
+              budget_description: budget.dotacao,
+              nunotaempenho: m.nunotaempenho,
+              dotacao_id: budget.id
+            } as Transaction);
+          });
+          
+          // 5. Criar transações de pagamento (OBs confirmadas)
+          obsCache.forEach((p, pIdx) => {
+            const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
+            // Só adicionar se estiver confirmada (CB = Confirmada Banco)
+            if (situacao === 'cb' || situacao === 'confirmada banco' || situacao === 'creditado') {
+              const valorOB = p.vltotal || 0;
+              
+              const obId = `cache-ob-${p.nuordembancaria}-${p.dtpagamento || p.dtlancamento}-${pIdx}`;
+              transactionsMap.set(obId, {
+                id: obId,
+                contract_id: budget.contract_id,
+                description: p.deobservacao || p.definalidade || 'Pagamento Ordem Bancária',
+                commitment_id: p.nunotaempenho || undefined,
+                date: p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date()),
+                type: TransactionType.LIQUIDATION,
+                amount: valorOB,
+                department: ug,
+                budget_description: budget.dotacao,
+                nunotaempenho: p.nunotaempenho || undefined,
+                dotacao_id: budget.id
+              } as Transaction);
+            }
+          });
+          
+          // 6. Atualizar valores da dotação com dados do cache
+          const saldoDotacao = (budget.valor_dotacao || 0) - vlEmpenhado;
+          
+          enrichedBudgets[i] = {
+            ...budget,
+            total_empenhado: vlEmpenhado,
+            total_pago: vlPago,
+            saldo_disponivel: saldoDotacao
+          };
+          
+          console.log('[DEBUG] Valores atualizados - Empenhado:', vlEmpenhado, 'Pago:', vlPago);
+          
         } catch (err) {
           console.warn('[DEBUG] enrichBudgetsWithSigef - Error:', budget.nunotaempenho, err);
         }
@@ -545,10 +546,10 @@ export class ContractDetailsPageComponent {
         this.sigefLastSync.set(lastSyncMap);
       }
       
-      // Recarregar os dados enriquecidos
+      // Recarregar os dados enriquecidos FORÇANDO API
       const budgetsResult = await this.budgetService.getBudgetsByContractId(this.contractId());
       if (budgetsResult.data) {
-        const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(budgetsResult.data);
+        const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(budgetsResult.data, true);
         this.budgets.set(enrichedBudgets);
         this.sigefTransactions.set(sigefTransactions);
       }
