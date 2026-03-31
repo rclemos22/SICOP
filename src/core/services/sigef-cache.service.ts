@@ -104,6 +104,16 @@ export interface NeResumo {
   saldo_pagar: number;
 }
 
+/**
+ * Lista padronizada de status que indicam que a ordem bancária foi paga/confirmada.
+ */
+export const SIGEF_PAID_STATUSES = [
+  'cb', 'confirmada banco', 'creditado', 
+  'emitida', 'processada', 'registrada', 
+  'ordem bancaria emitida', 'pagamento efetuado',
+  'paga', 'pago', 'concluida', 'concluída', 'efetivada', 'liquidada'
+];
+
 @Injectable({
   providedIn: 'root'
 })
@@ -369,15 +379,10 @@ export class SigefCacheService {
 
   calcularValorPago(ordensBancarias: SigefOrdemBancaria[]): number {
     return ordensBancarias.reduce((total, ob) => {
-      // Lista de status que indicam que a ordem foi emitida/processada/paga
-      const paidStatuses = [
-        'cb', 'confirmada banco', 'creditado', 
-        'emitida', 'processada', 'registrada', 
-        'ordem bancaria emitida', 'pagamento efetuado'
-      ];
-      
       const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
-      if (paidStatuses.some(status => situacao.includes(status))) {
+      
+      // Verifica se a situação da OB contém algum dos status de pagamento confirmados
+      if (SIGEF_PAID_STATUSES.some(status => situacao.includes(status))) {
         return total + (ob.vltotal || 0);
       }
       return total;

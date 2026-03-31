@@ -133,21 +133,21 @@ export class ContractFormComponent implements OnInit {
       const setoresMap = data
         .filter(s => !ativoCol || s[ativoCol] === true || s[ativoCol] === 'true' || s[ativoCol] === 1)
         .map(s => ({
-          id: s[nomeCol],
+          id: s.id, // UUID real do banco
           name: String(s[nomeCol]).replace('_', ' ')
         }));
       this.setores.set(setoresMap);
     } else {
       // Fallback para lista hardcoded se a tabela não existir ou estiver vazia
       this.setores.set([
-        { id: 'GABINETE', name: 'GABINETE' },
-        { id: 'JURIDICO', name: 'JURIDICO' },
-        { id: 'ADMINISTRATIVO', name: 'ADMINISTRATIVO' },
-        { id: 'FINANCEIRO', name: 'FINANCEIRO' },
-        { id: 'COMPRAS', name: 'COMPRAS' },
-        { id: 'TECNOLOGIA', name: 'TECNOLOGIA' },
-        { id: 'RECURSOS_HUMANOS', name: 'RECURSOS HUMANOS' },
-        { id: 'LICITACOES', name: 'LICITAÇÕES' }
+        { id: null as any, name: 'GABINETE' },
+        { id: null as any, name: 'JURIDICO' },
+        { id: null as any, name: 'ADMINISTRATIVO' },
+        { id: null as any, name: 'FINANCEIRO' },
+        { id: null as any, name: 'COMPRAS' },
+        { id: null as any, name: 'TECNOLOGIA' },
+        { id: null as any, name: 'RECURSOS_HUMANOS' },
+        { id: null as any, name: 'LICITACOES' }
       ]);
     }
   }

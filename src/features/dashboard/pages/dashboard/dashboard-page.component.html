@@ -36,7 +36,7 @@
       </div>
       <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Contratos Vigentes</p>
       <h3 class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ activeContractsCount() }}</h3>
-      <p class="text-xs text-gray-400 mt-1">Valor: {{ totalContractValue() | currency:'BRL':'symbol':'1.0-0' }}</p>
+      <p class="text-xs text-gray-400 mt-1">Valor: {{ totalContractValue() | currency:'BRL':'symbol':'1.2-2' }}</p>
     </div>
 
     <!-- Card 2: Total Paid -->
@@ -52,7 +52,7 @@
       </div>
       <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Pago</p>
       <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ financialMetrics().totalPaid | currency:'BRL':'symbol':'1.0-0' }}
+        {{ financialMetrics().totalPaid | currency:'BRL':'symbol':'1.2-2' }}
       </h3>
     </div>
 
@@ -68,7 +68,7 @@
       </div>
       <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">A Pagar (Empenhado)</p>
       <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ financialMetrics().toPay | currency:'BRL':'symbol':'1.0-0' }}
+        {{ financialMetrics().toPay | currency:'BRL':'symbol':'1.2-2' }}
       </h3>
     </div>
 
@@ -114,14 +114,14 @@
                   <div class="w-3 h-3 rounded-full bg-sco-blue"></div>
                   <span class="text-gray-600 dark:text-gray-300">Empenhado</span>
               </div>
-              <span class="font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.0-0' }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.2-2' }}</span>
           </div>
           <div class="flex justify-between items-center text-sm">
               <div class="flex items-center gap-2">
                   <div class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
                   <span class="text-gray-600 dark:text-gray-300">Disponível</span>
               </div>
-              <span class="font-bold text-gray-900 dark:text-white">{{ budgetMetrics().available | currency:'BRL':'symbol':'1.0-0' }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ budgetMetrics().available | currency:'BRL':'symbol':'1.2-2' }}</span>
           </div>
         </div>
       </div>
@@ -199,12 +199,12 @@
           
           <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <p class="text-xs text-gray-500 uppercase">Dotações</p>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalBudget | currency:'BRL':'symbol':'1.0-0' }}</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalBudget | currency:'BRL':'symbol':'1.2-2' }}</p>
           </div>
           
           <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <p class="text-xs text-gray-500 uppercase">Empenhado</p>
-            <p class="text-2xl font-bold text-sco-blue">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.0-0' }}</p>
+            <p class="text-2xl font-bold text-sco-blue">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.2-2' }}</p>
           </div>
         </div>
       </div>

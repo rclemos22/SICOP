@@ -436,7 +436,7 @@
                   </span>
                 </div>
                 <span class="text-sm font-bold text-gray-900 dark:text-white">
-                  R$ {{ transaction.amount | number:'1.2-2':'pt-BR' }}
+                  {{ transaction.amount | currency:'BRL':'symbol':'1.2-2' }}
                 </span>
               </div>
             </div>

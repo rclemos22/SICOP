@@ -11,7 +11,8 @@
 export enum ContractStatus {
   VIGENTE = 'VIGENTE',
   RESCINDIDO = 'RESCINDIDO',
-  FINALIZANDO = 'FINALIZANDO'
+  FINALIZANDO = 'FINALIZANDO',
+  ENCERRADO = 'ENCERRADO'
 }
 
 export type TipoAditivo = 'ALTERACAO' | 'PRORROGACAO' | 'ADITIVO_PRAZO' | 'ADITIVO_PRAZO_VALOR' | 'ADITIVO_VALOR' | 'ADITIVO_OBJETO' | 'DISTRATO';
@@ -80,6 +81,10 @@ export interface Contract {
 export function getEffectiveStatus(contract: Pick<Contract, 'status'>, daysRemaining: number): ContractStatus {
   if (contract.status === ContractStatus.RESCINDIDO) {
     return ContractStatus.RESCINDIDO;
+  }
+
+  if (daysRemaining < 0) {
+    return ContractStatus.ENCERRADO;
   }
 
   if (daysRemaining <= 90) {

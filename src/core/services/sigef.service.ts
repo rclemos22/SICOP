@@ -492,20 +492,13 @@ export class SigefService implements OnDestroy {
           }
           
           const filtered = result.data.filter(ob => {
-            const matchNE = ob.nunotaempenho && numeroNEs.includes(ob.nunotaempenho);
-            // Comparar UG como número para evitar problemas com zeros à esquerda (080101 vs 80101)
+            const cleanObNE = ob.nunotaempenho?.trim().toUpperCase() || '';
+            const matchNE = numeroNEs.some(ne => ne.trim().toUpperCase() === cleanObNE);
+            
+            // Comparar UG como número para evitar problemas com zeros à esquerda
             const matchUG = Number(ob.cdunidadegestora) === Number(cdunidadegestora);
             
-            // Verificar situação - aceitar "confirmada banco" ou "creditado" ou vazio/nulo
-            const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
-            const isConfirmed = situacao === 'confirmada banco' || situacao === 'creditado' || situacao === '';
-            
-            // Debug log para cada OB
-            if (ob.nunotaempenho && numeroNEs.includes(ob.nunotaempenho)) {
-              console.log(`[SIGEF OB] Match! NE: ${ob.nunotaempenho}, UG API: ${ob.cdunidadegestora}, UG UI: ${cdunidadegestora}, Situação: '${ob.cdsituacaoordembancaria}' (matchUG: ${matchUG}, isConfirmed: ${isConfirmed})`);
-            }
-            
-            return matchNE && matchUG; // Remover filtro de situação para capturar OBs em qualquer status
+            return matchNE && matchUG; 
           });
           
           console.log(`[SIGEF OB] Ano ${anoPesquisa}: ${filtered.length} OBs filtradas`);

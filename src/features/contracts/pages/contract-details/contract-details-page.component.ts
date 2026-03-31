@@ -4,7 +4,7 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefService } from '../../../../core/services/sigef.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
-import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria } from '../../../../core/services/sigef-cache.service';
+import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria, SIGEF_PAID_STATUSES } from '../../../../core/services/sigef-cache.service';
 
 import { getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
 import {
@@ -288,12 +288,6 @@ export class ContractDetailsPageComponent {
             400012: 'Anulação de Empenho'
           };
           
-          const OB_STATUS_LIST = [
-            'cb', 'confirmada banco', 'creditado', 
-            'emitida', 'processada', 'registrada', 
-            'ordem bancaria emitida', 'pagamento efetuado'
-          ];
-          
           // 4. Criar transações de engajamento (movimentos)
           movimentosCache.forEach((m, idx) => {
             const valor = m.vlnotaempenho || 0;
@@ -310,7 +304,7 @@ export class ContractDetailsPageComponent {
             transactionsMap.set(txId, {
               id: txId,
               contract_id: budget.contract_id,
-              description: description, // Agora usa o tipo de evento
+              description: description,
               commitment_id: m.nunotaempenho,
               date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
               type: type,
@@ -321,20 +315,23 @@ export class ContractDetailsPageComponent {
               dotacao_id: budget.id
             } as Transaction);
           });
-          
+
           // 5. Criar transações de pagamento (OBs compatíveis com o serviço de cálculo)
           obsCache.forEach((p, pIdx) => {
             const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
-            const isRelevant = OB_STATUS_LIST.some(status => situacao.includes(status));
+            
+            // Verifica se a situação da OB contém algum dos status de pagamento confirmados
+            const isRelevant = SIGEF_PAID_STATUSES.some(status => situacao.includes(status));
             
             if (isRelevant) {
               const valorOB = p.vltotal || 0;
+              const obNumero = p.nuordembancaria || p.nudocumento || 'S/N';
               
-              const obId = `cache-ob-${p.nuordembancaria}-${p.dtpagamento || p.dtlancamento}-${pIdx}`;
+              const obId = `cache-ob-${obNumero}-${p.dtpagamento || p.dtlancamento || pIdx}-${pIdx}`;
               transactionsMap.set(obId, {
                 id: obId,
                 contract_id: budget.contract_id,
-                description: (p.cdsituacaoordembancaria || 'Pagamento').toUpperCase(), // Agora usa a situação da OB
+                description: `PAGAMENTO OB ${obNumero} (${p.cdsituacaoordembancaria || 'EFETUADO'})`.toUpperCase(),
                 commitment_id: p.nunotaempenho || undefined,
                 date: p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date()),
                 type: TransactionType.LIQUIDATION,
