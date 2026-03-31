@@ -3,10 +3,8 @@ import { Component, inject, computed, output, viewChild, ElementRef, effect, sig
 import * as d3 from 'd3';
 import { ContractStatus } from '../../../../shared/models/contract.model';
 
-import { TransactionType } from '../../../../shared/models/transaction.model';
 import { BudgetService } from '../../../budget/services/budget.service';
 import { ContractService } from '../../../contracts/services/contract.service';
-import { FinancialService } from '../../../financial/services/financial.service';
 import { AppContextService } from '../../../../core/services/app-context.service';
 
 @Component({
@@ -17,7 +15,6 @@ import { AppContextService } from '../../../../core/services/app-context.service
 })
 export class DashboardPageComponent implements OnInit {
   public contractService = inject(ContractService);
-  public financialService = inject(FinancialService);
   public budgetService = inject(BudgetService);
   public appContext = inject(AppContextService);
 
@@ -27,13 +24,11 @@ export class DashboardPageComponent implements OnInit {
   // States
   isLoading = computed(() => 
     this.contractService.loading() || 
-    this.financialService.loading() || 
     this.budgetService.loading()
   );
 
   hasError = computed(() => 
     this.contractService.error() || 
-    this.financialService.error() || 
     this.budgetService.error()
   );
 
@@ -54,7 +49,6 @@ export class DashboardPageComponent implements OnInit {
   async loadAllData() {
     await Promise.all([
       this.contractService.loadContracts(),
-      this.financialService.loadAllTransactions(),
       this.budgetService.loadDotacoes()
     ]);
   }
@@ -92,21 +86,34 @@ export class DashboardPageComponent implements OnInit {
       .sort((a, b) => (a.dias_restantes || 0) - (b.dias_restantes || 0));
   });
 
-  // 2. Financial Logic
+  // 2. Financial Logic - from Contracts Data
   financialMetrics = computed(() => {
-    const transactions = this.financialService.transactions();
+    const contracts = this.contractService.contracts();
 
-    const totalPaid = transactions
-      .filter(t => t.type === TransactionType.LIQUIDATION)
-      .reduce((acc, t) => acc + t.amount, 0);
+    const totalEmpenhado = contracts
+      .reduce((acc, c) => acc + (c.total_empenhado || 0), 0);
 
-    const totalCommitted = transactions
-      .filter(t => t.type === TransactionType.COMMITMENT)
-      .reduce((acc, t) => acc + t.amount, 0);
+    const totalPago = contracts
+      .reduce((acc, c) => acc + (c.total_pago || 0), 0);
 
-    const toPay = Math.max(0, totalCommitted - totalPaid);
+    const totalAPagar = contracts
+      .reduce((acc, c) => acc + (c.saldo_a_pagar || 0), 0);
 
-    return { totalPaid, toPay, totalCommitted };
+    const toPay = Math.max(0, totalEmpenhado - totalPago);
+
+    return { totalPaid: totalPago, toPay, totalCommitted: totalEmpenhado };
+  });
+
+  // 2b. Overall Financial Totals
+  overallFinancials = computed(() => {
+    const contracts = this.contractService.contracts();
+
+    const totalEmpenhado = contracts.reduce((acc, c) => acc + (c.total_empenhado || 0), 0);
+    const totalPago = contracts.reduce((acc, c) => acc + (c.total_pago || 0), 0);
+    const totalContratado = contracts.reduce((acc, c) => acc + c.valor_anual, 0);
+    const saldoRestante = totalContratado - totalEmpenhado;
+
+    return { totalEmpenhado, totalPago, totalContratado, saldoRestante };
   });
 
   // 3. Overdue Logic
@@ -131,11 +138,11 @@ export class DashboardPageComponent implements OnInit {
     };
   });
 
-  // 5. Recent Payments List
+  // 5. Recent Payments - from contracts
   recentPayments = computed(() => {
-    return this.financialService.transactions()
-      .filter(t => t.type === TransactionType.LIQUIDATION)
-      .sort((a, b) => b.date.getTime() - a.date.getTime())
+    return this.contractService.contracts()
+      .filter(c => (c.total_pago || 0) > 0)
+      .sort((a, b) => (b.total_pago || 0) - (a.total_pago || 0))
       .slice(0, 5);
   });
 

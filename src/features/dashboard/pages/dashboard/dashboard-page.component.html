@@ -23,7 +23,7 @@
   } @else {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       
-      <!-- Card 1: Contracts -->
+      <!-- Card 1: Total Contratado -->
     <div 
       (click)="goToContracts()"
       class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-sco-blue/50 transition-all cursor-pointer group"
@@ -32,14 +32,15 @@
         <div class="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sco-blue dark:text-blue-400 group-hover:bg-sco-blue group-hover:text-white transition-colors">
           <span class="material-symbols-outlined text-[24px]">description</span>
         </div>
-        <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">Ativos</span>
+        <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">{{ activeContractsCount() }} Ativos</span>
       </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Contratos Vigentes</p>
-      <h3 class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ activeContractsCount() }}</h3>
-      <p class="text-xs text-gray-400 mt-1">Valor: {{ totalContractValue() | currency:'BRL':'symbol':'1.2-2' }}</p>
+      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Contratado</p>
+      <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
+        {{ overallFinancials().totalContratado | currency:'BRL':'symbol':'1.2-2' }}
+      </h3>
     </div>
 
-    <!-- Card 2: Total Paid -->
+    <!-- Card 2: Total Empenhado -->
     <div 
       (click)="goToFinancial()"
       class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-green-500/50 transition-all cursor-pointer group"
@@ -48,15 +49,15 @@
         <div class="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-600 dark:text-green-400 group-hover:bg-green-600 group-hover:text-white transition-colors">
           <span class="material-symbols-outlined text-[24px]">payments</span>
         </div>
-        <span class="text-xs font-bold text-gray-400">{{ (financialMetrics().totalPaid / financialMetrics().totalCommitted) * 100 | number:'1.0-0' }}% Exec.</span>
+        <span class="text-xs font-bold text-gray-400">{{ (overallFinancials().totalEmpenhado / overallFinancials().totalContratado) * 100 | number:'1.0-0' }}% Exec.</span>
       </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Pago</p>
+      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Empenhado</p>
       <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ financialMetrics().totalPaid | currency:'BRL':'symbol':'1.2-2' }}
+        {{ overallFinancials().totalEmpenhado | currency:'BRL':'symbol':'1.2-2' }}
       </h3>
     </div>
 
-    <!-- Card 3: To Pay -->
+    <!-- Card 3: Total Pago -->
     <div 
       (click)="goToFinancial()"
       class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-yellow-500/50 transition-all cursor-pointer group"
@@ -66,13 +67,13 @@
           <span class="material-symbols-outlined text-[24px]">pending_actions</span>
         </div>
       </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">A Pagar (Empenhado)</p>
+      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Pago</p>
       <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ financialMetrics().toPay | currency:'BRL':'symbol':'1.2-2' }}
+        {{ overallFinancials().totalPago | currency:'BRL':'symbol':'1.2-2' }}
       </h3>
     </div>
 
-    <!-- Card 4: Overdue (Atraso) -->
+    <!-- Card 4: Saldo a Pagar -->
     <div 
       (click)="goToFinancial()"
       class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-red-500/50 transition-all cursor-pointer group"
@@ -81,15 +82,17 @@
         <div class="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400 group-hover:bg-red-600 group-hover:text-white transition-colors">
           <span class="material-symbols-outlined text-[24px]">warning</span>
         </div>
-        @if (overduePayments() > 0) {
+        @if (expiringContracts().length > 0) {
             <span class="flex h-3 w-3 relative">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
             </span>
         }
       </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Pagamentos em Atraso</p>
-      <h3 class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ overduePayments() }}</h3>
+      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Saldo a Pagar</p>
+      <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
+        {{ financialMetrics().toPay | currency:'BRL':'symbol':'1.2-2' }}
+      </h3>
     </div>
 
     </div>
@@ -224,28 +227,24 @@
           <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
               <thead class="bg-gray-50 dark:bg-gray-800/50">
                   <tr>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Data</th>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Descrição</th>
                       <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Contrato</th>
-                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Valor</th>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Fornecedor</th>
+                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Valor Pago</th>
                   </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                   @for (payment of recentPayments(); track payment.id) {
                       <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">
-                              {{ payment.date | date:'dd/MM/yyyy' }}
-                          </td>
-                          <td class="px-6 py-4">
-                              <div class="text-sm text-gray-900 dark:text-white font-medium">{{ payment.description }}</div>
-                          </td>
                           <td class="px-6 py-4 whitespace-nowrap">
-                               <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono text-gray-600 dark:text-gray-300">
-                                  {{ payment.contractId }}
+                               <span class="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded text-xs font-mono text-sco-blue dark:text-blue-400">
+                                  {{ payment.contrato }}
                                </span>
                           </td>
-                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900 dark:text-white">
-                              {{ payment.amount | currency:'BRL':'symbol':'1.2-2' }}
+                          <td class="px-6 py-4">
+                              <div class="text-sm text-gray-900 dark:text-white font-medium">{{ payment.fornecedor_nome }}</div>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-green-600 dark:text-green-400">
+                              {{ payment.total_pago | currency:'BRL':'symbol':'1.2-2' }}
                           </td>
                       </tr>
                   }
