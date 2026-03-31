@@ -67,46 +67,46 @@
   @if (filteredSuppliers().length > 0) {
 
   @if (layoutMode() === 'grid') {
-  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-10">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-10">
     @for (supplier of filteredSuppliers(); track supplier.id) {
     <div (click)="openDetails(supplier)"
-      class="bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-sco-blue/50 dark:hover:border-sco-blue/50 transition-all cursor-pointer flex flex-col group h-full relative overflow-hidden">
-      <div class="p-6">
-        <div class="flex justify-between items-start mb-4">
+      class="bg-white dark:bg-card-dark rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-sco-blue/50 dark:hover:border-sco-blue/50 transition-all cursor-pointer flex flex-col group h-full relative overflow-hidden">
+      <div class="p-4">
+        <div class="flex justify-between items-start mb-3">
           <!-- Avatar / Initials -->
           <div
-            class="h-12 w-12 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-lg font-bold text-gray-600 dark:text-gray-300">
+            class="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-300">
             {{ supplier.nome_fantasia?.substring(0, 2).toUpperCase() || supplier.razao_social.substring(0, 2).toUpperCase() }}
           </div>
           <!-- Status Badge -->
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border"
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase border"
             [class]="getStatusClass(supplier.status)">
             {{ getStatusLabel(supplier.status) }}
           </span>
         </div>
 
         <h3
-          class="text-base font-bold text-gray-900 dark:text-white leading-tight mb-1 group-hover:text-sco-blue transition-colors">
+          class="text-sm font-bold text-gray-900 dark:text-white leading-tight mb-0.5 group-hover:text-sco-blue transition-colors">
           {{ supplier.nome_fantasia || supplier.razao_social }}
         </h3>
-        <p class="text-xs text-gray-500 line-clamp-1 mb-4">{{ supplier.razao_social }}</p>
+        <p class="text-xs text-gray-500 line-clamp-1 mb-3">{{ supplier.razao_social }}</p>
 
-        <div class="space-y-2 mb-4">
-          <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <span class="material-symbols-outlined text-[16px]">badge</span>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <span class="material-symbols-outlined text-[14px]">badge</span>
             <span class="font-mono">{{ supplier.cnpj }}</span>
           </div>
-          <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <span class="material-symbols-outlined text-[16px]">category</span>
+          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <span class="material-symbols-outlined text-[14px]">category</span>
             <span>{{ supplier.categoria || 'Não categorizado' }}</span>
           </div>
         </div>
       </div>
 
       <div
-        class="mt-auto px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
-        <span class="text-xs text-gray-500">Cadastrado em {{ supplier.desde | date:'yyyy' }}</span>
-        <button class="text-sco-blue text-sm font-medium hover:underline">Ver Perfil</button>
+        class="mt-auto px-4 py-2.5 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
+        <span class="text-[10px] text-gray-500">{{ supplier.desde | date:'yyyy' }}</span>
+        <button class="text-sco-blue text-xs font-medium hover:underline">Ver</button>
       </div>
     </div>
     }
