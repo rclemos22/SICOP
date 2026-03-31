@@ -107,6 +107,7 @@ export class ContractFormComponent implements OnInit {
       object: c.objeto || '',
       startDate: c.data_inicio ? new Date(c.data_inicio).toISOString().split('T')[0] : '',
       endDate: c.data_fim ? new Date(c.data_fim).toISOString().split('T')[0] : '',
+      paymentDate: c.data_pagamento ? new Date(c.data_pagamento).toISOString().split('T')[0] : '',
       totalValue: CurrencyUtils.formatBRL(c.valor_anual),
       unid_gestora: c.unid_gestora || '',
       department: c.setor_id || c.setor || '',
@@ -164,6 +165,7 @@ export class ContractFormComponent implements OnInit {
     // Validity
     startDate: ['', Validators.required],
     endDate: ['', Validators.required],
+    paymentDate: [''], // Dia do mês para pagamento
     
     // Financial & Classification
     totalValue: ['', [Validators.required, CurrencyUtils.currencyValidator(0.01)]],
@@ -278,6 +280,13 @@ export class ContractFormComponent implements OnInit {
       
       // Converte o valor formatado para número antes de enviar
       formData.totalValue = CurrencyUtils.parseBRL(formData.totalValue);
+      
+      // Converter dia de pagamento para data (dia fixo do mês)
+      if (formData.paymentDate) {
+        // Data-placeholder para o dia fixo de pagamento (não é uma data específica, apenas o dia do mês)
+        formData.data_pagamento = formData.paymentDate;
+      }
+      delete formData.paymentDate;
       
       console.log('Dados do Contrato para Envio (processados):', JSON.stringify(formData, null, 2));
       

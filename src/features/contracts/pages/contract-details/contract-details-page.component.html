@@ -27,6 +27,19 @@
          >
            Editar
          </button>
+         <button 
+           (click)="refreshSigefData()"
+           [disabled]="sigefSyncing()"
+           class="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+         >
+           @if (sigefSyncing()) {
+             <span class="animate-spin material-symbols-outlined text-[18px]">sync</span>
+             Atualizando...
+           } @else {
+             <span class="material-symbols-outlined text-[18px]">sync</span>
+             Atualizar Dados SIGEF
+           }
+         </button>
          <button class="px-4 py-2 text-sm font-medium text-white bg-sco-blue hover:bg-blue-700 rounded-lg shadow-sm transition-all flex items-center gap-2">
            <span class="material-symbols-outlined text-[18px]">print</span>
            Imprimir

@@ -144,6 +144,10 @@ export class ContractDetailsPageComponent {
   transactionsError = signal<string | null>(null);
 
   lastSyncDate = signal<Date | null>(new Date());
+  
+  // Controlador de sync SIGEF
+  sigefSyncing = signal<boolean>(false);
+  sigefLastSync = signal<Map<string, Date>>(new Map());
 
   // Calcula total engajado das dotações do contrato (apenas do ano atual)
   budgetSummary = computed(() => {
@@ -503,5 +507,58 @@ export class ContractDetailsPageComponent {
     console.log('[ContractDetails] Editar contrato clicado');
     // Emit the contract object so the form can be populated
     this.editContract.emit(this.contract());
+  }
+  
+  /**
+   * Atualiza os dados SIGEF (empenhos e OBs) de todas as dotações do contrato
+   */
+  async refreshSigefData() {
+    const budgets = this.budgets();
+    const budgetsComNE = budgets.filter(b => b.nunotaempenho);
+    
+    if (budgetsComNE.length === 0) {
+      console.log('[ContractDetails] Nenhuma dotação com NE para atualizar');
+      return;
+    }
+    
+    this.sigefSyncing.set(true);
+    console.log('[ContractDetails] Atualizando dados SIGEF...');
+    
+    try {
+      // Atualizar cada dotação com NE
+      for (const budget of budgetsComNE) {
+        const neValue = budget.nunotaempenho!.trim();
+        const anoNE = neValue.substring(0, 4);
+        
+        console.log('[ContractDetails] Atualizando NE:', neValue);
+        
+        // Buscar e cachear dados da API (força atualização)
+        const neResumo = await this.sigefSyncService.getNotaEmpenhoWithCache(
+          anoNE,
+          neValue,
+          budget.unid_gestora
+        );
+        
+        // Atualizar timestamp
+        const lastSyncMap = new Map(this.sigefLastSync());
+        lastSyncMap.set(budget.id, new Date());
+        this.sigefLastSync.set(lastSyncMap);
+      }
+      
+      // Recarregar os dados enriquecidos
+      const budgetsResult = await this.budgetService.getBudgetsByContractId(this.contractId());
+      if (budgetsResult.data) {
+        const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(budgetsResult.data);
+        this.budgets.set(enrichedBudgets);
+        this.sigefTransactions.set(sigefTransactions);
+      }
+      
+      this.lastSyncDate.set(new Date());
+      console.log('[ContractDetails] Dados SIGEF atualizados com sucesso');
+    } catch (err) {
+      console.error('[ContractDetails] Erro ao atualizar dados SIGEF:', err);
+    } finally {
+      this.sigefSyncing.set(false);
+    }
   }
 }

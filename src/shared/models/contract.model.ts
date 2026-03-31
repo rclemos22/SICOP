@@ -41,6 +41,7 @@ export interface Contract {
   fornecedor_id?: string;
   data_inicio: Date;
   data_fim: Date;
+  data_pagamento?: Date; // Dia do mês para controle de pagamentos
   valor_anual: number;
   status: ContractStatus;
   setor_id: string;
