@@ -3,6 +3,7 @@ import { Component, inject, input, computed, signal, output, effect } from '@ang
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefService } from '../../../../core/services/sigef.service';
+import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 
 import { getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
 import {
@@ -31,6 +32,7 @@ export class ContractDetailsPageComponent {
   private financialService = inject(FinancialService);
   private appContext = inject(AppContextService);
   private sigefService = inject(SigefService);
+  private sigefSyncService = inject(SigefSyncService);
 
   // Inputs & Outputs
   contractId = input.required<string>();
@@ -236,7 +238,7 @@ export class ContractDetailsPageComponent {
   }
 
   /**
-   * Enriquece as dotações com valores do SIGEF (apenas quando entra na página)
+   * Enriquece as dotações com valores do SIGEF (usando cache + API)
    */
   private async enrichBudgetsWithSigef(budgets: Dotacao[]): Promise<{ enrichedBudgets: Dotacao[], sigefTransactions: Transaction[] }> {
     const enrichedBudgets = [...budgets];
@@ -250,69 +252,76 @@ export class ContractDetailsPageComponent {
           const neValue = budget.nunotaempenho.trim();
           const anoNE = neValue.substring(0, 4);
           
-          const movements = await this.sigefService.getNotaEmpenhoMovements(
+          console.log('[DEBUG] Processando NE:', neValue, 'UG:', budget.unid_gestora);
+          
+          // Usar o serviço de sync (cache + API)
+          const neResumo = await this.sigefSyncService.getNotaEmpenhoWithCache(
             anoNE,
             neValue,
             budget.unid_gestora
           );
+          
+          console.log('[DEBUG] NE Resumo:', neResumo);
 
-          if (movements.length > 0) {
-            let vlEmpenhado = 0;
+          if (neResumo) {
+            // Obter movimentos para transações de engajamento
+            const movimentos = await this.sigefService.getNotaEmpenhoMovements(
+              anoNE,
+              neValue,
+              budget.unid_gestora
+            );
             
-            movements.forEach((m, idx) => {
-              const valor = m.vlnotaempenho || 0;
-              let type = TransactionType.COMMITMENT;
-              let description = m.dehistorico || 'Empenho Inicial';
-
-              // 400010 = Inicial, 400011 = Reforço, 400012 = Anulação
-              if (m.cdevento === 400010 || m.cdevento === 400011) {
-                vlEmpenhado += valor;
-                type = m.cdevento === 400010 ? TransactionType.COMMITMENT : TransactionType.REINFORCEMENT;
-                description = m.dehistorico || (m.cdevento === 400010 ? 'Empenho Inicial' : 'Reforço de Empenho');
-              } else if (m.cdevento === 400012) {
-                vlEmpenhado -= valor;
-                type = TransactionType.CANCELLATION;
-                description = m.dehistorico || 'Anulação de Empenho';
-              }
-
-              const txId = `sigef-empenho-${m.nunotaempenho}-${m.cdevento}-${m.dtlancamento}-${idx}`;
-              transactionsMap.set(txId, {
-                id: txId,
-                contract_id: budget.contract_id,
-                description: description,
-                commitment_id: m.nunotaempenho,
-                date: new Date(m.dtlancamento),
-                type: type,
-                amount: valor,
-                department: budget.unid_gestora,
-                budget_description: budget.dotacao,
-                nunotaempenho: m.nunotaempenho,
-                dotacao_id: budget.id
-              } as Transaction);
-            });
-            
-            let totalPago = 0;
-            
-            // Buscar pagamentos (OBs) relacionados a TODAS as notas de empenho deste vínculo orginal/reforço
-            try {
-              // Pegamos todas as notas que foram resultantes da original (incluindo ela mesma)
-              const todasNEsViculadas = Array.from(new Set(movements.map(m => m.nunotaempenho).filter(Boolean) as string[]));
+            // Adicionar transações de movimentos (Empenho, Reforço, Anulação)
+            if (movimentos.length > 0) {
+              let vlEmpenhado = 0;
               
-              console.log('[DEBUG] Buscando OBs para NEs:', todasNEsViculadas, 'UG:', budget.unid_gestora);
+              movimentos.forEach((m, idx) => {
+                const valor = m.vlnotaempenho || 0;
+                let type = TransactionType.COMMITMENT;
+                let description = m.dehistorico || 'Empenho Inicial';
 
-              const payments = await this.sigefService.getOrdemBancariaMovements(
-                anoNE,
-                todasNEsViculadas,
-                budget.unid_gestora
-              );
-              
-              console.log('[DEBUG] OBs encontradas:', payments.length, payments.map(p => ({ ob: p.nuordembancaria, ne: p.nunotaempenho, valor: p.vltotal })));
+                if (m.cdevento === 400010 || m.cdevento === 400011) {
+                  vlEmpenhado += valor;
+                  type = m.cdevento === 400010 ? TransactionType.COMMITMENT : TransactionType.REINFORCEMENT;
+                  description = m.dehistorico || (m.cdevento === 400010 ? 'Empenho Inicial' : 'Reforço de Empenho');
+                } else if (m.cdevento === 400012) {
+                  vlEmpenhado -= valor;
+                  type = TransactionType.CANCELLATION;
+                  description = m.dehistorico || 'Anulação de Empenho';
+                }
 
-              if (payments.length > 0) {
-                payments.forEach((p, pIdx) => {
+                const txId = `sigef-empenho-${m.nunotaempenho}-${m.cdevento}-${m.dtlancamento}-${idx}`;
+                transactionsMap.set(txId, {
+                  id: txId,
+                  contract_id: budget.contract_id,
+                  description: description,
+                  commitment_id: m.nunotaempenho,
+                  date: new Date(m.dtlancamento),
+                  type: type,
+                  amount: valor,
+                  department: budget.unid_gestora,
+                  budget_description: budget.dotacao,
+                  nunotaempenho: m.nunotaempenho,
+                  dotacao_id: budget.id
+                } as Transaction);
+              });
+            }
+            
+            // Obter OBs para transações de pagamento
+            const obs = await this.sigefService.getOrdemBancariaMovements(
+              anoNE,
+              [neValue],
+              budget.unid_gestora
+            );
+            
+            // Adicionar transações de pagamentos (Liquidação)
+            if (obs.length > 0) {
+              obs.forEach((p, pIdx) => {
+                const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
+                // Só adicionar se estiver confirmada (CB = Confirmada Banco)
+                if (situacao === 'cb' || situacao === 'confirmada banco' || situacao === 'creditado') {
                   const valorOB = p.vltotal || 0;
-                  totalPago += valorOB;
-
+                  
                   const obId = `sigef-ob-${p.nuordembancaria}-${p.dtpagamento || p.dtlancamento}-${pIdx}`;
                   transactionsMap.set(obId, {
                     id: obId,
@@ -327,19 +336,16 @@ export class ContractDetailsPageComponent {
                     nunotaempenho: p.nunotaempenho || undefined,
                     dotacao_id: budget.id
                   } as Transaction);
-                });
-              }
-            } catch (err) {
-              console.warn('[DEBUG] enrichBudgetsWithSigef - OB Error:', budget.nunotaempenho, err);
+                }
+              });
             }
             
-            const saldoDotação = budget.valor_dotacao - vlEmpenhado;
-            
+            // Atualizar valores da dotação com dados do cache
             enrichedBudgets[i] = {
               ...budget,
-              total_empenhado: vlEmpenhado,
-              total_pago: totalPago,
-              saldo_disponivel: saldoDotação // Saldo de Dotação (D - E)
+              total_empenhado: neResumo.valor_empenhado,
+              total_pago: neResumo.valor_pago,
+              saldo_disponivel: neResumo.saldo_pagar
             };
           }
         } catch (err) {
