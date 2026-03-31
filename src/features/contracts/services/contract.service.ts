@@ -324,11 +324,13 @@ export class ContractService {
       contratada: raw.contratada ?? raw.razao_social ?? raw.nome_fornecedor ?? raw.nome_contratada ?? '',
       cnpj_contratada: raw.cnpj_contratada ?? raw.cnpj ?? undefined,
       fornecedor_id: raw.fornecedor_id ?? undefined,
+      fornecedor_nome: raw.fornecedor_nome ?? undefined,
       data_inicio: this.parseDate(raw.data_inicio),
       data_fim: dataFimOriginal,
       valor_anual: this.parseNumeric(raw.valor_anual),
       status: (raw.status as ContractStatus) || ContractStatus.VIGENTE,
       setor_id: raw.setor_id ?? raw.setor ?? undefined,
+      setor_nome: raw.setor_nome ?? undefined,
       unid_gestora: raw.unid_gestora ?? undefined,
       objeto: raw.objeto ?? raw.descricao ?? undefined,
       gestor_contrato: raw.gestor_contrato ?? raw.gestor ?? undefined,
@@ -361,6 +363,7 @@ export class ContractService {
   private mapRawToAditivo(raw: any): Aditivo {
     // Se houver relação com tipo_aditivo, usar o nome, senão usar o campo tipo diretamente
     const tipo = raw.tipo_aditivo?.nome || raw.tipo || 'ALTERACAO';
+    const tipo_id = raw.tipo_id ?? undefined;
     
     console.log('[DEBUG] mapRawToAditivo - raw:', raw, '-> tipo:', tipo);
     
@@ -370,6 +373,7 @@ export class ContractService {
       numero_contrato: raw.numero_contrato ?? undefined,
       numero_aditivo: raw.numero_aditivo ?? '',
       tipo: tipo,
+      tipo_id: tipo_id,
       data_assinatura: raw.data_assinatura ? this.parseDate(raw.data_assinatura) : undefined,
       nova_vigencia: raw.nova_vigencia ? this.parseDate(raw.nova_vigencia) : undefined,
       valor_aditivo: raw.valor_aditivo != null ? this.parseNumeric(raw.valor_aditivo) : undefined

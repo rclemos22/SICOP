@@ -109,7 +109,7 @@ interface UnidadeGestora {
           <div class="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
             <div class="flex items-center justify-between">
               <div>
-                <h2 class="text-xl font-bold text-green-600 dark:text-green-400">{{ ordemBancaria()!.nuordembancaria }}</h2>
+                <h2 class="text-xl font-bold text-green-600 dark:text-green-400">{{ ordemBancaria()!.nuordembancaria || ordemBancaria()!.nudocumento }}</h2>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Ordem Bancária</p>
               </div>
               <span class="px-3 py-1 rounded-full text-sm font-medium"
@@ -305,7 +305,8 @@ export class OrdemBancariaPageComponent implements OnInit {
           `${ano}-12-31`,
           page,
           cleanOB, // Usar nuordembancaria para buscar por número da OB
-          undefined
+          undefined,
+          ug // Passar a UG selecionada para o filtro da API
         );
         
         console.log(`[DEBUG OB] Página ${page}: ${ob.data.length} resultados, next: ${ob.next}`);
@@ -317,18 +318,15 @@ export class OrdemBancariaPageComponent implements OnInit {
         
         // Log dos primeiros resultados para debug
         if (page === 1) {
-          console.log('[DEBUG OB] Primeiros resultados:', ob.data.slice(0, 3).map((item: any) => ({
-            nuordembancaria: item.nuordembancaria,
-            cdunidadegestora: item.cdunidadegestora,
-            nunotaempenho: item.nunotaempenho,
-            vltotal: item.vltotal
-          })));
+          console.log('[DEBUG OB] Primeiros resultados (keys):', ob.data.slice(0, 3).map((item: any) => Object.keys(item)));
+          console.log('[DEBUG OB] Primeiros resultados (full):', ob.data.slice(0, 3));
         }
         
-        // Filtrar pelo número da OB e UG
+        // Filtrar pelo número da OB e UG - usar nudocumento como fallback
+        // Normalizar UG para número para evitar problemas com zeros à esquerda
         found = ob.data.find(item => 
-          item.nuordembancaria?.toUpperCase() === cleanOB && 
-          item.cdunidadegestora?.toString() === ug
+          (item.nuordembancaria?.toUpperCase() === cleanOB || item.nudocumento?.toUpperCase() === cleanOB) && 
+          Number(item.cdunidadegestora) === Number(ug)
         ) || null;
         
         console.log(`[DEBUG OB] após filtro: found=${found ? found.nuordembancaria : null}`);
@@ -341,7 +339,7 @@ export class OrdemBancariaPageComponent implements OnInit {
         }
       }
       
-      console.log('[DEBUG OB] Resultado:', found ? `Encontrado: ${found.nuordembancaria} UG:${found.cdunidadegestora}` : 'Não encontrado');
+      console.log('[DEBUG OB] Resultado:', found ? `Encontrado: nudocumento:${found.nudocumento} nuordembancaria:${found.nuordembancaria} UG:${found.cdunidadegestora}` : 'Não encontrado');
       
       if (found) {
         this.ordemBancaria.set(found);

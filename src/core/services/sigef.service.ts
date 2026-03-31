@@ -31,7 +31,7 @@ export interface NotaEmpenho {
 }
 
 export interface OrdemBancaria {
-  nuordembancaria: string;
+  nuordembancaria: string | null;
   cdunidadegestora: number | null;
   cdgestao: number | null;
   cdevento: number | null;
@@ -383,7 +383,7 @@ export class SigefService implements OnDestroy {
   /**
    * Consulta ordens bancárias filtradas por período.
    */
-  async getOrdemBancaria(datainicio: string, datafim: string, page: number = 1, nuordembancaria?: string, nunotaempenho?: string): Promise<SigefResponse<OrdemBancaria>> {
+  async getOrdemBancaria(datainicio: string, datafim: string, page: number = 1, nuordembancaria?: string, nunotaempenho?: string, cdunidadegestora?: string): Promise<SigefResponse<OrdemBancaria>> {
     this._loading.set(true);
     this._error.set(null);
 
@@ -404,6 +404,10 @@ export class SigefService implements OnDestroy {
       if (nunotaempenho) {
         params.append('search', nunotaempenho);
         params.append('nunotaempenho', nunotaempenho); // Tenta um filtro exato se a API suportar
+      }
+      
+      if (cdunidadegestora) {
+        params.append('cdunidadegestora', cdunidadegestora);
       }
 
       const fullUrl = `${url}?${params}`;
@@ -478,7 +482,7 @@ export class SigefService implements OnDestroy {
 
       while (page <= MAX_PAGES) {
         try {
-          const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, searchParams);
+          const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, searchParams, cdunidadegestora);
           
           console.log(`[SIGEF OB] Ano ${anoPesquisa} página ${page}: ${result.data.length} resultados`);
           
@@ -489,14 +493,16 @@ export class SigefService implements OnDestroy {
           
           const filtered = result.data.filter(ob => {
             const matchNE = ob.nunotaempenho && numeroNEs.includes(ob.nunotaempenho);
-            const matchUG = ob.cdunidadegestora?.toString() === cdunidadegestora;
+            // Comparar UG como número para evitar problemas com zeros à esquerda (080101 vs 80101)
+            const matchUG = Number(ob.cdunidadegestora) === Number(cdunidadegestora);
+            
             // Verificar situação - aceitar "confirmada banco" ou "creditado" ou vazio/nulo
             const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
             const isConfirmed = situacao === 'confirmada banco' || situacao === 'creditado' || situacao === '';
             
             // Debug log para cada OB
             if (ob.nunotaempenho && numeroNEs.includes(ob.nunotaempenho)) {
-              console.log(`[SIGEF OB] Match! NE: ${ob.nunotaempenho}, UG: ${ob.cdunidadegestora}, Situação: '${ob.cdsituacaoordembancaria}' (matchUG: ${matchUG}, isConfirmed: ${isConfirmed})`);
+              console.log(`[SIGEF OB] Match! NE: ${ob.nunotaempenho}, UG API: ${ob.cdunidadegestora}, UG UI: ${cdunidadegestora}, Situação: '${ob.cdsituacaoordembancaria}' (matchUG: ${matchUG}, isConfirmed: ${isConfirmed})`);
             }
             
             return matchNE && matchUG; // Remover filtro de situação para capturar OBs em qualquer status

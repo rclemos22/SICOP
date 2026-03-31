@@ -3,14 +3,14 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport" />
     <title>SICOP - Sistema de Gestão de Contratos Públicos</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap"
         rel="stylesheet" />
     <link
         href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
         rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -26,11 +26,11 @@
                         primary: "#004B85",
                         secondary: "#008C34",
                         "background-light": "#F9FAFB",
-                        "background-dark": "#111827",
+                        "background-dark": "#0F1419",
                         "card-light": "#FFFFFF",
-                        "card-dark": "#1F2937",
+                        "card-dark": "#1C2833",
                         "text-primary-light": "#111827",
-                        "text-primary-dark": "#F9FAFB",
+                        "text-primary-dark": "#E5E7EB",
                         "text-secondary-light": "#6B7280",
                         "text-secondary-dark": "#9CA3AF",
                     },
@@ -39,9 +39,13 @@
                         body: ["Inter", "sans-serif"],
                     },
                     borderRadius: {
-                        DEFAULT: "0.5rem",
-                        'lg': '0.75rem',
-                        'xl': '1rem',
+                        DEFAULT: "0px",
+                        'sm': '0px',
+                        'md': '2px',
+                        'lg': '4px',
+                    },
+                    borderWidth: {
+                        DEFAULT: '1px',
                     },
                 },
             },
@@ -57,6 +61,93 @@
             height: 100%;
             margin: 0;
             overflow: hidden;
+        }
+        
+        /* Global form field improvements for dark mode */
+        .dark input[type="text"],
+        .dark input[type="date"],
+        .dark input[type="number"],
+        .dark input[type="email"],
+        .dark input[type="url"],
+        .dark input[type="search"],
+        .dark select,
+        .dark textarea {
+            background-color: #1C2833 !important;
+            border-color: #4B5563 !important;
+            color: #E5E7EB !important;
+        }
+        
+        .dark input::placeholder,
+        .dark textarea::placeholder {
+            color: #9CA3AF !important;
+        }
+        
+        .dark input:focus,
+        .dark select:focus,
+        .dark textarea:focus {
+            border-color: #004B85 !important;
+            background-color: #1C2833 !important;
+            color: #E5E7EB !important;
+        }
+        
+        /* Select dropdown arrow */
+        .dark select {
+            appearance: auto;
+        }
+        
+        /* Responsive fixes */
+        @media (max-width: 768px) {
+            .flex.flex-col.md\\:flex-row {
+                flex-direction: column !important;
+            }
+            .grid-cols-1.md\\:grid-cols-2 {
+                grid-template-columns: 1fr !important;
+            }
+            .grid-cols-1.md\\:grid-cols-3 {
+                grid-template-columns: 1fr !important;
+            }
+            .grid-cols-1.md\\:grid-cols-4 {
+                grid-template-columns: 1fr !important;
+            }
+            .lg\\:grid-cols-3 {
+                grid-template-columns: 1fr !important;
+            }
+            .lg\\:grid-cols-4 {
+                grid-template-columns: 1fr !important;
+            }
+            .hidden.md\\:flex {
+                display: none !important;
+            }
+            .md\\:w-64 {
+                width: 100% !important;
+            }
+            aside.w-64 {
+                position: fixed !important;
+                z-index: 100 !important;
+                height: 100vh !important;
+            }
+            main.flex-1 {
+                min-width: 0 !important;
+            }
+            .p-6 {
+                padding: 1rem !important;
+            }
+            .text-3xl {
+                font-size: 1.75rem !important;
+            }
+            .text-xl {
+                font-size: 1.25rem !important;
+            }
+        }
+        
+        /* Make buttons more square (less rounded) */
+        button, .btn {
+            border-radius: 0 !important;
+        }
+        
+        /* Remove rounded corners from cards and containers */
+        .rounded-lg, .rounded-xl, .rounded-md, .rounded {
+            border-radius: 0 !important;
         }
     </style>
     <style>
@@ -77,11 +168,19 @@
 
         *::-webkit-scrollbar-thumb {
             background-color: rgba(156, 163, 175, 0.5);
-            border-radius: 20px;
+            border-radius: 0px;
         }
 
         *::-webkit-scrollbar-thumb:hover {
             background-color: rgba(107, 114, 128, 0.8);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed !important;
+                z-index: 50;
+            }
         }
     </style>
     <script type="importmap">
@@ -106,7 +205,7 @@
 </head>
 
 <body
-    class="bg-background-light dark:bg-background-dark font-body antialiased transition-colors duration-200 text-slate-800">
+    class="bg-background-light dark:bg-background-dark font-body antialiased transition-colors duration-200 text-slate-800 dark:text-gray-200">
     <app-root></app-root>
 </body>
 

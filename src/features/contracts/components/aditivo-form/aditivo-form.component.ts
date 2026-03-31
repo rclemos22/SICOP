@@ -5,6 +5,7 @@ import { CurrencyUtils } from '../../../../app/shared/utils/currency-utils';
 import { ContractService } from '../../services/contract.service';
 import { Aditivo } from '../../../../shared/models/contract.model';
 import { SupabaseService } from '../../../../core/services/supabase.service';
+import { TipoAditivoService } from '../../services/tipo-aditivo.service';
 
 
 @Component({
@@ -17,9 +18,10 @@ export class AditivoFormComponent implements OnInit {
   private fb: FormBuilder = inject(FormBuilder);
   private contractService = inject(ContractService);
   private supabaseService = inject(SupabaseService);
+  private tipoAditivoService = inject(TipoAditivoService);
 
-  // Tipos de aditivo carregados do banco
-  tiposAditivo = signal<Array<{ id: string, nome: string }>>([]);
+  // Tipos de aditivo carregados do banco via Service
+  tiposAditivo = this.tipoAditivoService.tipos;
 
   // Inputs & Outputs
   contractId = input.required<string>();
@@ -35,7 +37,7 @@ export class AditivoFormComponent implements OnInit {
     this.aditivoForm = this.fb.group({
       id: [''],
       numero_aditivo: ['', Validators.required],
-      tipo: ['ALTERACAO', Validators.required],
+      tipo_id: ['', Validators.required],
       data_assinatura: [new Date().toISOString().split('T')[0], Validators.required],
       nova_vigencia: [''],
       valor_aditivo: ['', [CurrencyUtils.currencyValidator(0)]]
@@ -43,14 +45,13 @@ export class AditivoFormComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadTiposAditivo();
     
     const aditivoData = this.aditivo();
     if (aditivoData) {
       this.aditivoForm.patchValue({
         id: aditivoData.id,
         numero_aditivo: aditivoData.numero_aditivo,
-        tipo: aditivoData.tipo,
+        tipo_id: aditivoData.tipo_id || '',
         data_assinatura: aditivoData.data_assinatura ? new Date(aditivoData.data_assinatura).toISOString().split('T')[0] : '',
         nova_vigencia: aditivoData.nova_vigencia ? new Date(aditivoData.nova_vigencia).toISOString().split('T')[0] : '',
         valor_aditivo: CurrencyUtils.formatBRL(aditivoData.valor_aditivo)
@@ -64,10 +65,13 @@ export class AditivoFormComponent implements OnInit {
       }
     }
 
-    // Watch for 'tipo' changes to toggle 'nova_vigencia' requirement
-    this.aditivoForm.get('tipo')?.valueChanges.subscribe(tipo => {
+    // Watch for 'tipo_id' changes to toggle 'nova_vigencia' requirement
+    this.aditivoForm.get('tipo_id')?.valueChanges.subscribe(tipo_id => {
+      const selectedTipo = this.tiposAditivo().find(t => t.id === tipo_id);
+      const tipoNome = selectedTipo?.nome || '';
       const novaVigenciaControl = this.aditivoForm.get('nova_vigencia');
-      if (tipo?.includes('PRAZO')) {
+      
+      if (tipoNome.includes('PRAZO') || tipoNome.includes('PRORROGACAO')) {
         novaVigenciaControl?.setValidators([Validators.required]);
       } else {
         novaVigenciaControl?.clearValidators();
@@ -85,40 +89,19 @@ export class AditivoFormComponent implements OnInit {
 
   get f() { return this.aditivoForm.controls; }
 
+  isAditivoDePrazo(): boolean {
+    const tipo_id = this.aditivoForm.get('tipo_id')?.value;
+    if (!tipo_id) return false;
+    const selectedTipo = this.tiposAditivo().find(t => t.id === tipo_id);
+    const tipoNome = selectedTipo?.nome || '';
+    return tipoNome.includes('PRAZO') || tipoNome.includes('PRORROGACAO');
+  }
+
   get isEditing(): boolean {
     return !!this.aditivo();
   }
 
-  async loadTiposAditivo() {
-    const { data, error } = await this.supabaseService.client
-      .from('tipo_aditivo')
-      .select('*')
-      .order('nome');
-    
-    if (!error && data && data.length > 0) {
-      // Detectar quais colunas existem
-      const firstRow = data[0];
-      const nomeCol = firstRow.nome !== undefined ? 'nome' : 'descricao';
-      const ativoCol = firstRow.ativo !== undefined ? 'ativo' : (firstRow.status !== undefined ? 'status' : null);
-      
-      const tiposMap = data
-        .filter(t => !ativoCol || t[ativoCol] === true || t[ativoCol] === 'true' || t[ativoCol] === 1)
-        .map(t => ({
-          id: t[nomeCol],
-          nome: String(t[nomeCol]).replace('_', ' ')
-        }));
-      this.tiposAditivo.set(tiposMap);
-    } else {
-      // Fallback para valores padrão se a tabela não existir ou estiver vazia
-      this.tiposAditivo.set([
-        { id: 'ADITIVO_PRAZO', nome: 'ADITIVO PRAZO' },
-        { id: 'ADITIVO_PRAZO_VALOR', nome: 'ADITIVO PRAZO E VALOR' },
-        { id: 'DISTRATO', nome: 'DISTRATO' },
-        { id: 'ADITIVO_VALOR', nome: 'ADITIVO VALOR' },
-        { id: 'ADITIVO_OBJETO', nome: 'ADITIVO OBJETO' }
-      ]);
-    }
-  }
+  // loadTiposAditivo removido pois TipoAditivoService gerencia isso
 
   async onSubmit() {
     if (this.aditivoForm.valid) {
@@ -131,7 +114,7 @@ export class AditivoFormComponent implements OnInit {
           const updateData = {
             numero_contrato: this.numeroContrato(),
             numero_aditivo: formData.numero_aditivo,
-            tipo: formData.tipo,
+            tipo_id: formData.tipo_id,
             data_assinatura: new Date(formData.data_assinatura),
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
             valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null
@@ -154,7 +137,7 @@ export class AditivoFormComponent implements OnInit {
             contract_id: this.contractId(),
             numero_contrato: this.numeroContrato(),
             numero_aditivo: formData.numero_aditivo,
-            tipo: formData.tipo,
+            tipo_id: formData.tipo_id,
             data_assinatura: new Date(formData.data_assinatura),
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
             valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null

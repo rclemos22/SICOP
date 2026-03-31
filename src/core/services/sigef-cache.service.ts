@@ -369,9 +369,15 @@ export class SigefCacheService {
 
   calcularValorPago(ordensBancarias: SigefOrdemBancaria[]): number {
     return ordensBancarias.reduce((total, ob) => {
-      // Situação "CB" = Confirmada Banco
+      // Lista de status que indicam que a ordem foi emitida/processada/paga
+      const paidStatuses = [
+        'cb', 'confirmada banco', 'creditado', 
+        'emitida', 'processada', 'registrada', 
+        'ordem bancaria emitida', 'pagamento efetuado'
+      ];
+      
       const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
-      if (situacao === 'cb' || situacao === 'confirmada banco' || situacao === 'creditado') {
+      if (paidStatuses.some(status => situacao.includes(status))) {
         return total + (ob.vltotal || 0);
       }
       return total;

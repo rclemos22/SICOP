@@ -151,22 +151,17 @@ export class ContractDetailsPageComponent {
   sigefSyncing = signal<boolean>(false);
   sigefLastSync = signal<Map<string, Date>>(new Map());
 
-  // Calcula total engajado das dotações do contrato (apenas do ano atual)
+  // Calcula total engajado das dotações do contrato (considera todo o histórico)
   budgetSummary = computed(() => {
     const allBudgets = this.budgets();
-    const currentYear = this.appContext.anoExercicio();
     
-    // Filtrar apenas dotações do ano atual
-    const budgetsDoAno = allBudgets.filter(b => {
-      const data = new Date(b.data_disponibilidade);
-      return data.getFullYear() === currentYear;
-    });
+    // Para contratos, somamos todos os orçamentos vinculados, independente do ano
+    // Isso garante que o gestor veja o total empenhado/pago de toda a vida do contrato
+    const totalEmpenhado = allBudgets.reduce((sum, b) => sum + (b.total_empenhado || 0), 0);
+    const totalPago = allBudgets.reduce((sum, b) => sum + (b.total_pago || 0), 0);
+    const saldoDisponivel = allBudgets.reduce((sum, b) => sum + (b.saldo_disponivel || 0), 0);
     
-    const totalEmpenhado = budgetsDoAno.reduce((sum, b) => sum + (b.total_empenhado || 0), 0);
-    const totalPago = budgetsDoAno.reduce((sum, b) => sum + (b.total_pago || 0), 0);
-    const saldoDisponivel = budgetsDoAno.reduce((sum, b) => sum + (b.saldo_disponivel || 0), 0);
-    
-    console.log('[DEBUG] budgetSummary - currentYear:', currentYear, 'budgetsDoAno:', budgetsDoAno.length, 'totalEmpenhado:', totalEmpenhado);
+    console.log('[DEBUG] budgetSummary - complete contract history. Budgets:', allBudgets.length, 'totalEmpenhado:', totalEmpenhado);
     
     return { totalEmpenhado, totalPago, saldoDisponivel };
   });
@@ -287,25 +282,35 @@ export class ContractDetailsPageComponent {
           const vlEmpenhado = this.sigefCacheService.calcularValorEmpenhado(movimentosCache);
           const vlPago = this.sigefCacheService.calcularValorPago(obsCache);
           
+          const EVENTO_LABELS: Record<number, string> = {
+            400010: 'Empenho Inicial',
+            400011: 'Reforço de Empenho',
+            400012: 'Anulação de Empenho'
+          };
+          
+          const OB_STATUS_LIST = [
+            'cb', 'confirmada banco', 'creditado', 
+            'emitida', 'processada', 'registrada', 
+            'ordem bancaria emitida', 'pagamento efetuado'
+          ];
+          
           // 4. Criar transações de engajamento (movimentos)
           movimentosCache.forEach((m, idx) => {
             const valor = m.vlnotaempenho || 0;
             let type = TransactionType.COMMITMENT;
-            let description = m.dehistorico || 'Empenho Inicial';
+            let description = EVENTO_LABELS[m.cdevento] || 'Evento ' + m.cdevento;
 
             if (m.cdevento === 400010 || m.cdevento === 400011) {
               type = m.cdevento === 400010 ? TransactionType.COMMITMENT : TransactionType.REINFORCEMENT;
-              description = m.dehistorico || (m.cdevento === 400010 ? 'Empenho Inicial' : 'Reforço de Empenho');
             } else if (m.cdevento === 400012) {
               type = TransactionType.CANCELLATION;
-              description = m.dehistorico || 'Anulação de Empenho';
             }
 
             const txId = `cache-empenho-${m.nunotaempenho}-${m.cdevento}-${m.dtlancamento}-${idx}`;
             transactionsMap.set(txId, {
               id: txId,
               contract_id: budget.contract_id,
-              description: description,
+              description: description, // Agora usa o tipo de evento
               commitment_id: m.nunotaempenho,
               date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
               type: type,
@@ -317,18 +322,19 @@ export class ContractDetailsPageComponent {
             } as Transaction);
           });
           
-          // 5. Criar transações de pagamento (OBs confirmadas)
+          // 5. Criar transações de pagamento (OBs compatíveis com o serviço de cálculo)
           obsCache.forEach((p, pIdx) => {
             const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
-            // Só adicionar se estiver confirmada (CB = Confirmada Banco)
-            if (situacao === 'cb' || situacao === 'confirmada banco' || situacao === 'creditado') {
+            const isRelevant = OB_STATUS_LIST.some(status => situacao.includes(status));
+            
+            if (isRelevant) {
               const valorOB = p.vltotal || 0;
               
               const obId = `cache-ob-${p.nuordembancaria}-${p.dtpagamento || p.dtlancamento}-${pIdx}`;
               transactionsMap.set(obId, {
                 id: obId,
                 contract_id: budget.contract_id,
-                description: p.deobservacao || p.definalidade || 'Pagamento Ordem Bancária',
+                description: (p.cdsituacaoordembancaria || 'Pagamento').toUpperCase(), // Agora usa a situação da OB
                 commitment_id: p.nunotaempenho || undefined,
                 date: p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date()),
                 type: TransactionType.LIQUIDATION,
@@ -562,4 +568,4 @@ export class ContractDetailsPageComponent {
       this.sigefSyncing.set(false);
     }
   }
-}
+}

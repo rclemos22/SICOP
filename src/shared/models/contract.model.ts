@@ -24,6 +24,7 @@ export interface Aditivo {
   numero_contrato?: string;
   numero_aditivo: string;
   tipo: TipoAditivo;
+  tipo_id?: string;
   data_assinatura?: Date;
   nova_vigencia?: Date;
   valor_aditivo?: number;
@@ -39,12 +40,14 @@ export interface Contract {
   contratada: string;
   cnpj_contratada?: string;
   fornecedor_id?: string;
+  fornecedor_nome?: string;
   data_inicio: Date;
   data_fim: Date;
   data_pagamento?: Date; // Dia do mês para controle de pagamentos
   valor_anual: number;
   status: ContractStatus;
   setor_id: string;
+  setor_nome?: string;
   unid_gestora: string;
   objeto: string;
   gestor_contrato?: string;
