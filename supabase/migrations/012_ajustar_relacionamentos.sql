@@ -6,7 +6,7 @@ DROP VIEW IF EXISTS public.vw_contratos_vigencia;
 ALTER TABLE public.contratos 
   ALTER COLUMN setor_id TYPE UUID USING (
     CASE 
-      WHEN setor_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN setor_id::UUID 
+      WHEN setor_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN setor_id::UUID 
       ELSE NULL 
     END
   );

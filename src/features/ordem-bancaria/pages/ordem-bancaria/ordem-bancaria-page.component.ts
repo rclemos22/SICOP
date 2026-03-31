@@ -165,10 +165,10 @@ interface UnidadeGestora {
                 <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.nudocumento || '---' }}</p>
               </div>
 
-              <!-- Evento -->
+              <!-- Situação da Ordem -->
               <div class="space-y-1">
-                <label class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Evento</label>
-                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.cdevento }}</p>
+                <label class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Situação da Ordem</label>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ ordemBancaria()!.cdsituacaoordembancaria || '---' }}</p>
               </div>
 
               <!-- Tipo OB -->
