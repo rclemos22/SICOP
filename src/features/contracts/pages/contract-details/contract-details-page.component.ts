@@ -70,6 +70,7 @@ export class ContractDetailsPageComponent {
   // ── Modals State ────────────────────────────────────────────────────────
   isAditivoModalOpen = signal(false);
   isDotacaoModalOpen = signal(false);
+  isObjetoModalOpen = signal(false);
   editingAditivo = signal<Aditivo | null>(null);
   editingDotacao = signal<Dotacao | null>(null);
 
