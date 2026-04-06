@@ -214,7 +214,7 @@
                 type="text" 
                 formControlName="totalValue"
                 placeholder="0,00"
-                (input)="onCurrencyInput($event)"
+                (input)="onCurrencyInput($event, 'totalValue')"
                 class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:text-white"
                 [class.border-red-500]="f['totalValue'].touched && f['totalValue'].invalid"
               >
@@ -230,7 +230,7 @@
                 type="text" 
                 formControlName="monthlyValue"
                 placeholder="0,00"
-                (input)="onCurrencyInput($event)"
+                (input)="onCurrencyInput($event, 'monthlyValue')"
                 class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:text-white"
               >
             </div>

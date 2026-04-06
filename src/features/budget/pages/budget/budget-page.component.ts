@@ -1,4 +1,4 @@
-import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Dotacao, calcularSaldoDotacao, getUnidadeBadgeClass, UnidadeOrcamentaria } from '../../../../shared/models/budget.model';
@@ -10,7 +10,7 @@ import { BudgetService } from '../../services/budget.service';
 @Component({
   selector: 'app-budget-page',
   standalone: true,
-  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe, FormsModule],
+  imports: [CommonModule, CurrencyPipe, DatePipe, FormsModule],
   templateUrl: './budget-page.component.html'
 })
 export class BudgetPageComponent implements OnInit {

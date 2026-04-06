@@ -87,21 +87,12 @@ export class ContractFormComponent implements OnInit {
   private populateFormWithContract(c: any) {
     console.log('[ContractForm] populateFormWithContract - c:', c);
     
-    // Setar o supplierSearch para exibir o nome da contratada
-    this.supplierSearch.set(c.contratada || c.supplier || '');
-    this.selectedSupplier.set({
-      id: c.fornecedor_id || '',
-      razao_social: c.contratada || '',
-      nome_fantasia: c.contratada || '',
-      cnpj: c.cnpj_contratada || '',
-      email: '',
-      telefone: '',
-      categoria: '',
-      endereco: '',
-      status: 'ACTIVE' as any,
-      desde: new Date()
-    });
-    
+    // Vincular fornecedor ao sinalizador para exibir indicador visual
+    this.selectedSupplier.set({ 
+      id: c.fornecedor_id, 
+      razao_social: c.fornecedor_nome || c.contratada 
+    } as any);
+
     this.contractForm.patchValue({
       number: c.contrato || '',
       processNumber: c.processo_sei || '',
@@ -199,11 +190,11 @@ export class ContractFormComponent implements OnInit {
     return null;
   }
 
-  onCurrencyInput(event: any) {
+  onCurrencyInput(event: any, controlName: string) {
     const input = event.target as HTMLInputElement;
     const masked = CurrencyUtils.applyMask(input.value);
     input.value = masked;
-    this.contractForm.get('totalValue')?.setValue(masked, { emitEvent: false });
+    this.contractForm.get(controlName)?.setValue(masked, { emitEvent: false });
   }
 
   // Helper for template access

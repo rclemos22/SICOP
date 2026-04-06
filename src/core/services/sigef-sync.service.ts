@@ -1,6 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { SigefService, NotaEmpenho, OrdemBancaria } from './sigef.service';
 import { SigefCacheService, SigefNotaEmpenho, SigefNeMovimento, SigefOrdemBancaria, NeResumo } from './sigef-cache.service';
+import { signal, computed } from '@angular/core';
+
+export interface SyncTask {
+  ne: string;
+  ug: string;
+  ano: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  message?: string;
+  timestamp?: number;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -8,6 +18,83 @@ import { SigefCacheService, SigefNotaEmpenho, SigefNeMovimento, SigefOrdemBancar
 export class SigefSyncService {
   private sigefService = inject(SigefService);
   private cacheService = inject(SigefCacheService);
+
+  // Queue State
+  private _syncQueue = signal<SyncTask[]>([]);
+  private _currentIdx = signal<number>(-1);
+  
+  readonly syncQueue = this._syncQueue.asReadonly();
+  readonly currentIdx = this._currentIdx.asReadonly();
+  
+  readonly isSyncing = computed(() => this._currentIdx() >= 0 && this._currentIdx() < this._syncQueue().length);
+  
+  readonly progress = computed(() => {
+    const queue = this._syncQueue();
+    if (queue.length === 0) return null;
+    return {
+      current: Math.max(0, this._currentIdx() + 1),
+      total: queue.length,
+      percentage: Math.round(((this._currentIdx()) / queue.length) * 100)
+    };
+  });
+
+  /**
+   * Sincroniza um lote de NEs criando uma fila controlada
+   */
+  async syncBatch(tasks: { ne: string, ug: string, ano: string }[]): Promise<void> {
+    if (this.isSyncing()) {
+      console.warn('[SIGEF SYNC] Já existe uma sincronização em andamento.');
+      return;
+    }
+
+    const queue: SyncTask[] = tasks.map(t => ({
+      ...t,
+      status: 'pending'
+    }));
+
+    this._syncQueue.set(queue);
+    this._currentIdx.set(0);
+
+    for (let i = 0; i < queue.length; i++) {
+        this._currentIdx.set(i);
+        const task = queue[i];
+        
+        // Atualiza status local da fila
+        this.updateTaskStatus(i, 'processing');
+        
+        try {
+            console.log(`[SIGEF SYNC] Processando fila: ${i+1}/${queue.length} - NE: ${task.ne}`);
+            await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true);
+            this.updateTaskStatus(i, 'completed');
+        } catch (err: any) {
+            console.error(`[SIGEF SYNC] Erro na fila para NE ${task.ne}:`, err);
+            this.updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
+        }
+
+        // Delay de cortesia para a API (500ms entre requisições de NEs)
+        if (i < queue.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
+    // Resetar após conclusão (mantendo a fila visível por alguns segundos se necessário)
+    setTimeout(() => {
+        if (!this.isSyncing()) {
+            this._currentIdx.set(-1);
+            // Opcional: limpar fila ou manter para histórico
+        }
+    }, 5000);
+  }
+
+  private updateTaskStatus(index: number, status: SyncTask['status'], message?: string) {
+    this._syncQueue.update(q => {
+        const newQueue = [...q];
+        if (newQueue[index]) {
+            newQueue[index] = { ...newQueue[index], status, message, timestamp: Date.now() };
+        }
+        return newQueue;
+    });
+  }
 
   /**
    * Obtém resumo de NE usando cache quando disponível, mas garantindo sincronização de movimentos e OBs

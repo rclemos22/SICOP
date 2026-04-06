@@ -45,6 +45,46 @@
     </div>
   </div>
 
+  <!-- Sync Progress Panel -->
+  @if (isSyncing() && syncProgress()) {
+    <div class="mb-8 p-6 bg-white dark:bg-gray-800 border border-blue-100 dark:border-blue-900/30 shadow-lg shadow-blue-500/5 overflow-hidden relative group">
+      <!-- Glow effect -->
+      <div class="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all duration-700"></div>
+      
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+        <div class="flex items-center">
+          <div class="p-3 bg-blue-50 dark:bg-blue-900/40 rounded mr-4">
+            <span class="material-symbols-outlined text-blue-600 dark:text-blue-400 text-[24px] animate-spin">sync</span>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider mb-0.5">Sincronização em Lote</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Processando dotações do exercício via API SIGEF</p>
+          </div>
+        </div>
+        
+        <div class="flex-1 max-w-md">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Progresso: {{ syncProgress()?.current }} de {{ syncProgress()?.total }}</span>
+            <span class="text-xs font-black text-blue-600 dark:text-blue-400">{{ syncProgress()?.percentage }}%</span>
+          </div>
+          <div class="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden border border-gray-50 dark:border-gray-800">
+            <div 
+              class="h-full bg-indigo-600 transition-all duration-500 shadow-[0_0_10px_rgba(79,70,229,0.5)]"
+              [style.width.%]="syncProgress()?.percentage">
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+          <!-- Mini summary of the current task if we had it, or just a simple status -->
+          <div class="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black border border-emerald-100 dark:border-emerald-800">
+            EVITANDO CONCORRÊNCIA
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (isLoading() && !isSyncing()) {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <div class="animate-pulse h-32 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"></div>
@@ -264,9 +304,12 @@
             @for (p of recentPayments(); track p.id) {
               <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-750/30 transition-colors group">
                 <td class="px-6 py-4">
-                  <span class="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-gray-700 text-[10px] font-bold text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-                    {{ p.contrato }}
-                  </span>
+                  <div class="flex flex-col">
+                    <span class="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-gray-700 text-[10px] font-bold text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 w-fit mb-1">
+                      {{ p.contrato }}
+                    </span>
+                    <span class="text-[9px] text-gray-400 font-medium">OB {{ p.nuordembancaria }}</span>
+                  </div>
                 </td>
                 <td class="px-6 py-4">
                   <div class="flex items-center">
@@ -278,12 +321,12 @@
                 </td>
                 <td class="px-6 py-4 text-center">
                    <div class="inline-flex flex-col items-center">
-                      <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ p.data_ultimo_pagamento | date:'dd/MM/yyyy' }}</span>
-                      <span class="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">Confirmado</span>
+                      <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ p.data_pagamento | date:'dd/MM/yyyy' }}</span>
+                      <span class="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">{{ p.situacao }}</span>
                    </div>
                 </td>
                 <td class="px-6 py-4 text-right">
-                  <p class="text-sm font-black text-emerald-600 dark:text-emerald-400">{{ p.total_pago | currency:'BRL' }}</p>
+                  <p class="text-sm font-black text-emerald-600 dark:text-emerald-400">{{ p.vltotal | currency:'BRL' }}</p>
                 </td>
               </tr>
             }

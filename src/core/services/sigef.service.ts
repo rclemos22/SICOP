@@ -400,9 +400,8 @@ export class SigefService implements OnDestroy {
         params.append('nuordembancaria', nuordembancaria);
       }
       
-      // Tentar passar nunotaempenho e search para o Django Rest Framework filtrar
+      // Tentar passar nunotaempenho via parâmetro de busca textual (mais flexível)
       if (nunotaempenho) {
-        // Enviar os dois parâmetros pois a API pode responder melhor a um ou outro
         params.append('search', nunotaempenho);
         params.append('nunotaempenho', nunotaempenho);
       }
@@ -488,9 +487,10 @@ export class SigefService implements OnDestroy {
               // Filtrar no frontend para garantir que a OB realmente pertence à NE solicitada (se a API retornar busca aproximada)
               const filteredMatches = result.data.filter(ob => 
                 !neNumber || 
-                ob.nunotaempenho === neNumber || 
+                ob.nunotaempenho?.includes(neNumber) || 
                 ob.deobservacao?.includes(neNumber) || 
-                ob.definalidade?.includes(neNumber)
+                ob.definalidade?.includes(neNumber) ||
+                ob.nudocumento?.includes(neNumber)
               );
               
               if (filteredMatches.length > 0) {

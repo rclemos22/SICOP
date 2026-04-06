@@ -72,7 +72,7 @@
       }
 
       <!-- Key Metrics Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         
         <!-- Total Value -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -85,21 +85,39 @@
           </div>
         </div>
 
-        <!-- Executed Value -->
+        <!-- Total Empenhado -->
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Empenhado</span>
+          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+            {{ budgetSummary().totalEmpenhado | currency:'BRL':'symbol':'1.2-2' }}
+          </div>
+          <!-- Progress Bar (Empenhado vs Global) -->
+          <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-2">
+            <div 
+              class="h-1 bg-blue-500 rounded-full transition-all duration-500"
+              [style.width.%]="(budgetSummary().totalEmpenhado / c.valor_anual) * 100"
+            ></div>
+          </div>
+          <p class="text-[10px] text-gray-400 mt-2 text-right">
+            {{ (budgetSummary().totalEmpenhado / c.valor_anual) * 100 | number:'1.0-1' }}% Empenhado
+          </p>
+        </div>
+
+        <!-- Total Pago -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Pago</span>
-          <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+          <div class="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
             {{ financialSummary().totalPaid | currency:'BRL':'symbol':'1.2-2' }}
           </div>
-           <!-- Progress Bar -->
+           <!-- Progress Bar (Pago vs Empenhado) -->
            <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-2">
              <div 
                class="h-1 bg-green-500 rounded-full transition-all duration-500"
-               [style.width.%]="(financialSummary().totalPaid / c.valor_anual) * 100"
+               [style.width.%]="(financialSummary().totalPaid / budgetSummary().totalEmpenhado) * 100"
              ></div>
            </div>
            <p class="text-[10px] text-gray-400 mt-2 text-right">
-             {{ (financialSummary().totalPaid / c.valor_anual) * 100 | number:'1.0-1' }}% Executado
+             {{ (financialSummary().totalPaid / budgetSummary().totalEmpenhado) * 100 | number:'1.0-1' }}% do Empenho
            </p>
         </div>
 
@@ -110,7 +128,7 @@
             {{ (c.valor_anual - financialSummary().totalPaid) | currency:'BRL':'symbol':'1.2-2' }}
           </div>
           <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-             Disponível para execução
+             Restante a pagar
           </p>
         </div>
 
@@ -264,10 +282,11 @@
                                 </div>
                                 <div>
                                    <p class="text-sm font-bold text-gray-900 dark:text-white">{{ payment.monthLabel }}</p>
-                                   <p class="text-xs text-gray-500">Vence em {{ payment.daysUntil }} dias</p>
+                                   <p class="text-[10px] uppercase font-bold text-sco-blue dark:text-blue-400">Vencimento: {{ payment.date | date:'dd/MM/yyyy' }}</p>
+                                   <p class="text-xs text-gray-500 font-medium">Faltam {{ payment.daysUntil }} dias</p>
                                 </div>
                              </div>
-                             <span class="font-bold text-gray-900 dark:text-white">{{ payment.valor | currency:'BRL' }}</span>
+                             <span class="font-bold text-gray-900 dark:text-white">{{ payment.valor | currency:'BRL':'symbol':'1.2-2' }}</span>
                           </div>
                         }
                       } @else {

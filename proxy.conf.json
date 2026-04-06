@@ -6,6 +6,8 @@
     "logLevel": "debug",
     "pathRewrite": {
       "^/sigef-api": "/api/v1"
-    }
+    },
+    "timeout": 300000,
+    "proxyTimeout": 300000
   }
 }

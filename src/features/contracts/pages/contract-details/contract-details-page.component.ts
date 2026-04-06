@@ -111,10 +111,15 @@ export class ContractDetailsPageComponent {
     const endDate = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
     const monthlyValue = Number(c.valor_mensal);
 
-    let currentDate = new Date(startDate);
-    currentDate.setDate(paymentDay);
+    console.log(`[DEBUG] Gerando próximos pagamentos para o contrato ${c.contrato}: Dia ${paymentDay}, Valor R$ ${monthlyValue}`);
 
+    let currentDate = new Date(startDate);
+    
     while (currentDate <= endDate) {
+      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+      const actualDay = Math.min(paymentDay, lastDayOfMonth);
+      currentDate.setDate(actualDay);
+
       if (currentDate >= today) {
         const daysUntil = Math.ceil((currentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
@@ -574,30 +579,34 @@ export class ContractDetailsPageComponent {
     }
     
     this.sigefSyncing.set(true);
-    console.log('[ContractDetails] Atualizando dados SIGEF...');
+    console.log('[ContractDetails] Atualizando dados SIGEF via Batch Sync...');
     
     try {
-      // Atualizar cada dotação com NE
-      for (const budget of budgetsComNE) {
+      // 1. Criar tarefas para a fila de sincronização
+      const tasks = budgetsComNE.map(budget => {
         const neValue = budget.nunotaempenho!.trim();
         const anoNE = neValue.substring(0, 4);
-        
-        console.log('[ContractDetails] Atualizando NE:', neValue);
-        
-        // Buscar e cachear dados da API (força atualização)
-        const neResumo = await this.sigefSyncService.getNotaEmpenhoWithCache(
-          anoNE,
-          neValue,
-          budget.unid_gestora
-        );
-        
-        // Atualizar timestamp
-        const lastSyncMap = new Map(this.sigefLastSync());
-        lastSyncMap.set(budget.id, new Date());
-        this.sigefLastSync.set(lastSyncMap);
-      }
+        return {
+          ne: neValue,
+          ug: budget.unid_gestora,
+          ano: anoNE
+        };
+      });
+
+      // 2. Executar a sincronização em lote (fila controlada)
+      await this.sigefSyncService.syncBatch(tasks);
       
-      // Recarregar os dados enriquecidos FORÇANDO API
+      // 3. Atualizar carimbos de data de sincronização local para cada dotação
+      const lastSyncMap = new Map(this.sigefLastSync());
+      for (const budget of budgetsComNE) {
+        lastSyncMap.set(budget.id, new Date());
+      }
+      this.sigefLastSync.set(lastSyncMap);
+      
+      // 4. Recarregar contratos para atualizar os cálculos financeiros (Totais Empenhado/Pago) baseados no novo cache
+      await this.contractService.loadContracts();
+      
+      // 5. Recarregar e enriquecer as dotações para atualizar as tabelas de transações
       const budgetsResult = await this.budgetService.getBudgetsByContractId(this.contractId());
       if (budgetsResult.data) {
         const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(budgetsResult.data, true);
@@ -607,8 +616,8 @@ export class ContractDetailsPageComponent {
       
       this.lastSyncDate.set(new Date());
       console.log('[ContractDetails] Dados SIGEF atualizados com sucesso');
-    } catch (err) {
-      console.error('[ContractDetails] Erro ao atualizar dados SIGEF:', err);
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro na sincronização batch:', err);
     } finally {
       this.sigefSyncing.set(false);
     }

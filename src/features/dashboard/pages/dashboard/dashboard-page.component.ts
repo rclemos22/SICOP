@@ -7,6 +7,7 @@ import { BudgetService } from '../../../budget/services/budget.service';
 import { ContractService } from '../../../contracts/services/contract.service';
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { SupabaseService } from '../../../../core/services/supabase.service';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -18,6 +19,8 @@ export class DashboardPageComponent implements OnInit {
   public contractService = inject(ContractService);
   public budgetService = inject(BudgetService);
   public appContext = inject(AppContextService);
+  private supabaseService = inject(SupabaseService);
+  public sigefSync = inject(SigefSyncService);
 
   // D3 Container for Status Chart
   statusChartContainer = viewChild<ElementRef>('statusChart');
@@ -50,15 +53,26 @@ export class DashboardPageComponent implements OnInit {
   async loadAllData() {
     await Promise.all([
       this.contractService.loadContracts(),
-      this.budgetService.loadDotacoes()
+      this.budgetService.loadDotacoes(),
+      (async () => {
+        const { data: payments, error: paymentsError } = await this.supabaseService.client
+          .from('vw_recent_payments')
+          .select('*')
+          .order('data_pagamento', { ascending: false })
+          .limit(10);
+        
+        if (!paymentsError) {
+          this.recentPaymentsList.set(payments || []);
+        }
+      })()
     ]);
   }
 
   // --- Metrics Calculation ---
 
   // --- Sync State ---
-  private sigefSyncService = inject(SigefSyncService);
-  isSyncing = signal<boolean>(false);
+  syncProgress = computed(() => this.sigefSync.progress());
+  isSyncing = computed(() => this.sigefSync.isSyncing());
   lastSyncTimestamp = signal<Date | null>(null);
 
   /**
@@ -71,28 +85,22 @@ export class DashboardPageComponent implements OnInit {
     
     if (dotacoesComNE.length === 0) return;
 
-    this.isSyncing.set(true);
-    console.log('[DASHBOARD] Iniciando sincronização global para', dotacoesComNE.length, 'NEs');
+    console.log('[DASHBOARD] Iniciando sincronização em lote para', dotacoesComNE.length, 'NEs');
+
+    const tasks = dotacoesComNE.map(dot => ({
+      ne: dot.nunotaempenho!,
+      ano: dot.nunotaempenho!.substring(0, 4),
+      ug: dot.unid_gestora || '080901'
+    }));
 
     try {
-      // Processar em batch ou sequencial? Sequencial para evitar rate limiting agressivo do SIGEF
-      for (const dot of dotacoesComNE) {
-        const ne = dot.nunotaempenho!;
-        const ano = ne.substring(0, 4);
-        const ug = dot.unid_gestora || '80101';
-        
-        await this.sigefSyncService.getNotaEmpenhoWithCache(ano, ne, ug, true);
-        console.log('[DASHBOARD] Sincronizado:', ne);
-      }
-
-      // Recarregar os caches locais dos serviços
-      await this.loadAllData();
+      await this.sigefSync.syncBatch(tasks);
+      
       this.lastSyncTimestamp.set(new Date());
-      console.log('[DASHBOARD] Sincronização global concluída');
+      // Recarregar os caches locais após a sincronização
+      await this.loadAllData();
     } catch (err) {
-      console.error('[DASHBOARD] Erro na sincronização global:', err);
-    } finally {
-      this.isSyncing.set(false);
+      console.error('[DASHBOARD] Falha na sincronização global:', err);
     }
   }
 
@@ -157,7 +165,8 @@ export class DashboardPageComponent implements OnInit {
   });
 
   // 2. Budget Logic (Distribution)
-  budgetMetrics = computed(() => {
+  readonly recentPaymentsList = signal<any[]>([]);
+  readonly budgetMetrics = computed(() => {
     const budgets = this.budgetService.dotacoes();
 
     const totalBudget = budgets.reduce((acc, b) => acc + b.valor_dotacao, 0);
@@ -175,14 +184,7 @@ export class DashboardPageComponent implements OnInit {
 
   // 3. Recent Payments - from all budgets/OBs tracked via contracts
   recentPayments = computed(() => {
-    return this.contractService.contracts()
-      .filter(c => (c.total_pago || 0) > 0 && c.data_ultimo_pagamento)
-      .sort((a, b) => {
-        const dateA = a.data_ultimo_pagamento?.getTime() || 0;
-        const dateB = b.data_ultimo_pagamento?.getTime() || 0;
-        return dateB - dateA;
-      })
-      .slice(0, 8);
+    return this.recentPaymentsList().slice(0, 8);
   });
 
   constructor() {
