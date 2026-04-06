@@ -44,6 +44,11 @@ export class ContractFormComponent implements OnInit {
   
   statusOptions = ['VIGENTE', 'ASSINADO', 'EM ELABORAÇÃO'];
 
+  tipoOptions = [
+    { value: 'serviço', label: 'Serviço' },
+    { value: 'material', label: 'Material' }
+  ];
+
   // Fornecedor search
   supplierSearch = signal('');
   supplierResults = signal<Supplier[]>([]);
@@ -107,14 +112,16 @@ export class ContractFormComponent implements OnInit {
       object: c.objeto || '',
       startDate: c.data_inicio ? new Date(c.data_inicio).toISOString().split('T')[0] : '',
       endDate: c.data_fim ? new Date(c.data_fim).toISOString().split('T')[0] : '',
-      paymentDate: c.data_pagamento ? new Date(c.data_pagamento).toISOString().split('T')[0] : '',
+      paymentDate: c.data_pagamento || '',
       totalValue: CurrencyUtils.formatBRL(c.valor_anual),
+      monthlyValue: c.valor_mensal ? CurrencyUtils.formatBRL(c.valor_mensal) : '',
       unid_gestora: c.unid_gestora || '',
       department: c.setor_id || c.setor || '',
       status: c.status || 'VIGENTE',
       gestor_contrato: c.gestor_contrato || '',
       fiscal_admin: c.fiscal_admin || '',
-      fiscal_tecnico: c.fiscal_tecnico || ''
+      fiscal_tecnico: c.fiscal_tecnico || '',
+      tipo: c.tipo || 'serviço'
     });
   }
 
@@ -169,9 +176,11 @@ export class ContractFormComponent implements OnInit {
     
     // Financial & Classification
     totalValue: ['', [Validators.required, CurrencyUtils.currencyValidator(0.01)]],
+    monthlyValue: [''],
     unid_gestora: ['', Validators.required],
     department: ['', Validators.required],
     status: ['VIGENTE', Validators.required],
+    tipo: ['serviço', Validators.required],
     
     // Gestores
     gestor_contrato: [''],
@@ -280,11 +289,11 @@ export class ContractFormComponent implements OnInit {
       
       // Converte o valor formatado para número antes de enviar
       formData.totalValue = CurrencyUtils.parseBRL(formData.totalValue);
+      formData.monthlyValue = formData.monthlyValue ? CurrencyUtils.parseBRL(formData.monthlyValue) : null;
       
-      // Converter dia de pagamento para data (dia fixo do mês)
+      // Converter dia de pagamento para número antes de enviar ao Supabase
       if (formData.paymentDate) {
-        // Data-placeholder para o dia fixo de pagamento (não é uma data específica, apenas o dia do mês)
-        formData.data_pagamento = formData.paymentDate;
+        formData.data_pagamento = Number(formData.paymentDate);
       }
       delete formData.paymentDate;
       

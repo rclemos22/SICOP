@@ -44,7 +44,7 @@ export interface Contract {
   fornecedor_nome?: string;
   data_inicio: Date;
   data_fim: Date;
-  data_pagamento?: Date; // Dia do mês para controle de pagamentos
+  data_pagamento?: number; // Dia do mês para controle de pagamentos (1-31)
   valor_anual: number;
   status: ContractStatus;
   setor_id: string;
@@ -61,6 +61,8 @@ export interface Contract {
   total_pago?: number;
   saldo_a_pagar?: number;
   data_ultimo_pagamento?: Date;
+  tipo?: 'serviço' | 'material';
+  valor_mensal?: number;
 }
 
 // ─── Funções Utilitárias ─────────────────────────────────────────────────────
