@@ -60,6 +60,7 @@ export interface Contract {
   total_empenhado?: number;
   total_pago?: number;
   saldo_a_pagar?: number;
+  data_ultimo_pagamento?: Date;
 }
 
 // ─── Funções Utilitárias ─────────────────────────────────────────────────────

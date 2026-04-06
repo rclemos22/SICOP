@@ -1,4 +1,4 @@
-import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, inject, computed, output, viewChild, ElementRef, effect, signal, OnInit } from '@angular/core';
 import * as d3 from 'd3';
 import { ContractStatus } from '../../../../shared/models/contract.model';
@@ -6,11 +6,12 @@ import { ContractStatus } from '../../../../shared/models/contract.model';
 import { BudgetService } from '../../../budget/services/budget.service';
 import { ContractService } from '../../../contracts/services/contract.service';
 import { AppContextService } from '../../../../core/services/app-context.service';
+import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe],
+  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe, NgTemplateOutlet],
   templateUrl: './dashboard-page.component.html',
 })
 export class DashboardPageComponent implements OnInit {
@@ -55,15 +56,67 @@ export class DashboardPageComponent implements OnInit {
 
   // --- Metrics Calculation ---
 
-  // 1. Contracts Logic
+  // --- Sync State ---
+  private sigefSyncService = inject(SigefSyncService);
+  isSyncing = signal<boolean>(false);
+  lastSyncTimestamp = signal<Date | null>(null);
+
+  /**
+   * Sincroniza todos os empenhos e pagamentos das dotações do exercício selecionado.
+   * Isso irá disparar a busca exaustiva (multianual e multipáginas) para cada NE.
+   */
+  async syncAllSigef() {
+    const dots = this.budgetService.dotacoes();
+    const dotacoesComNE = dots.filter(d => d.nunotaempenho);
+    
+    if (dotacoesComNE.length === 0) return;
+
+    this.isSyncing.set(true);
+    console.log('[DASHBOARD] Iniciando sincronização global para', dotacoesComNE.length, 'NEs');
+
+    try {
+      // Processar em batch ou sequencial? Sequencial para evitar rate limiting agressivo do SIGEF
+      for (const dot of dotacoesComNE) {
+        const ne = dot.nunotaempenho!;
+        const ano = ne.substring(0, 4);
+        const ug = dot.unid_gestora || '80101';
+        
+        await this.sigefSyncService.getNotaEmpenhoWithCache(ano, ne, ug, true);
+        console.log('[DASHBOARD] Sincronizado:', ne);
+      }
+
+      // Recarregar os caches locais dos serviços
+      await this.loadAllData();
+      this.lastSyncTimestamp.set(new Date());
+      console.log('[DASHBOARD] Sincronização global concluída');
+    } catch (err) {
+      console.error('[DASHBOARD] Erro na sincronização global:', err);
+    } finally {
+      this.isSyncing.set(false);
+    }
+  }
+
+  // 1. Contracts Filtered by Selected Year
+  filteredContracts = computed(() => {
+    const selectedYear = this.appContext.anoExercicio();
+    const inicioAno = new Date(selectedYear, 0, 1);
+    const fimAno = new Date(selectedYear, 11, 31);
+
+    return this.contractService.contracts().filter(c => {
+      const start = c.data_inicio;
+      const end = c.data_fim_efetiva || c.data_fim;
+      return (start <= fimAno) && (end >= inicioAno);
+    });
+  });
+
   activeContractsCount = computed(() => {
-    return this.contractService.contracts()
+    return this.filteredContracts()
       .filter(c => c.status === ContractStatus.VIGENTE).length;
   });
 
   // Contracts by status metrics
   contractsByStatus = computed(() => {
-    const contracts = this.contractService.contracts();
+    const contracts = this.filteredContracts();
     return {
       vigentes: contracts.filter(c => c.status === ContractStatus.VIGENTE).length,
       finalizando: contracts.filter(c => c.status === ContractStatus.FINALIZANDO).length,
@@ -74,59 +127,41 @@ export class DashboardPageComponent implements OnInit {
 
   // Total value of active contracts
   totalContractValue = computed(() => {
-    return this.contractService.contracts()
+    return this.filteredContracts()
       .filter(c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO)
-      .reduce((acc, c) => acc + c.valor_anual, 0);
+      .reduce((acc, c) => acc + (c.valor_anual || 0), 0);
+  });
+
+  // Total Committed (Empenhado Real do SIGEF)
+  totalCommittedValue = computed(() => {
+    return this.budgetService.dotacoes()
+      .reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
+  });
+
+  // Total Paid (Pago Real do SIGEF)
+  totalPaidValue = computed(() => {
+    return this.budgetService.dotacoes()
+      .reduce((acc, b) => acc + (b.total_pago || 0), 0);
+  });
+
+  // Balance (Saldo real a pagar)
+  totalBalanceToPay = computed(() => {
+    return Math.max(0, this.totalCommittedValue() - this.totalPaidValue());
   });
 
   // Contracts expiring soon (≤ 90 days)
   expiringContracts = computed(() => {
-    return this.contractService.contracts()
+    return this.filteredContracts()
       .filter(c => c.status_efetivo === ContractStatus.FINALIZANDO)
       .sort((a, b) => (a.dias_restantes || 0) - (b.dias_restantes || 0));
   });
 
-  // 2. Financial Logic - from Budget Data
-  financialMetrics = computed(() => {
-    const budgets = this.budgetService.dotacoes();
-
-    const totalEmpenhado = budgets
-      .reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
-
-    const totalPago = budgets
-      .reduce((acc, b) => acc + (b.total_pago || 0), 0);
-
-    const toPay = Math.max(0, totalEmpenhado - totalPago);
-
-    return { totalPaid: totalPago, toPay, totalCommitted: totalEmpenhado };
-  });
-
-  // 2b. Overall Financial Totals
-  overallFinancials = computed(() => {
-    const contracts = this.contractService.contracts();
-    const budgets = this.budgetService.dotacoes();
-
-    const totalContratado = contracts.reduce((acc, c) => acc + c.valor_anual, 0);
-    const totalPago = contracts.reduce((acc, c) => acc + (c.total_pago || 0), 0);
-
-    const totalEmpenhado = budgets.reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
-    const totalCancelado = budgets.reduce((acc, b) => acc + (b.total_cancelado || 0), 0);
-    const saldoRestante = budgets.reduce((acc, b) => acc + (b.saldo_disponivel || 0), 0);
-
-    return { totalEmpenhado, totalPago, totalContratado, saldoRestante, totalCancelado };
-  });
-
-  // 3. Overdue Logic
-  overduePayments = computed(() => {
-    return 0;
-  });
-
-  // 4. Budget Logic (Distribution)
+  // 2. Budget Logic (Distribution)
   budgetMetrics = computed(() => {
     const budgets = this.budgetService.dotacoes();
 
     const totalBudget = budgets.reduce((acc, b) => acc + b.valor_dotacao, 0);
-    const totalUsed = budgets.reduce((acc, b) => acc + ((b.total_empenhado || 0) - (b.total_cancelado || 0)), 0);
+    const totalUsed = budgets.reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
 
     const percentageUsed = totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0;
 
@@ -138,12 +173,16 @@ export class DashboardPageComponent implements OnInit {
     };
   });
 
-  // 5. Recent Payments - from contracts
+  // 3. Recent Payments - from all budgets/OBs tracked via contracts
   recentPayments = computed(() => {
     return this.contractService.contracts()
-      .filter(c => (c.total_pago || 0) > 0)
-      .sort((a, b) => (b.total_pago || 0) - (a.total_pago || 0))
-      .slice(0, 5);
+      .filter(c => (c.total_pago || 0) > 0 && c.data_ultimo_pagamento)
+      .sort((a, b) => {
+        const dateA = a.data_ultimo_pagamento?.getTime() || 0;
+        const dateB = b.data_ultimo_pagamento?.getTime() || 0;
+        return dateB - dateA;
+      })
+      .slice(0, 8);
   });
 
   constructor() {

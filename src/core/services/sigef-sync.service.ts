@@ -10,53 +10,61 @@ export class SigefSyncService {
   private cacheService = inject(SigefCacheService);
 
   /**
-   * Obtém resumo de NE usando cache quando disponível
-   * Falls back para API se não tiver cache
+   * Obtém resumo de NE usando cache quando disponível, mas garantindo sincronização de movimentos e OBs
    */
-  async getNotaEmpenhoWithCache(ano: string, neNumber: string, ug: string): Promise<NeResumo | null> {
+  async getNotaEmpenhoWithCache(ano: string, neNumber: string, ug: string, forceSync: boolean = true): Promise<NeResumo | null> {
     const ugNum = parseInt(ug, 10);
     
-    // 1. Tentar do cache primeiro
-    const cached = await this.cacheService.getNeResumo(ugNum, neNumber);
+    // 1. Tentar obter os dados básicos da NE do cache
+    let neCached = await this.cacheService.getNotaEmpenho(ugNum, neNumber);
     
-    if (cached) {
-      console.log('[SIGEF SYNC] Usando cache para NE:', neNumber);
-      return cached;
-    }
-
-    // 2. Se não tem cache, buscar da API e salvar
-    console.log('[SIGEF SYNC] Buscando NE da API:', neNumber);
-    
-    try {
-      // Buscar NE
-      const ne = await this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ug);
-      if (ne) {
-        await this.cacheService.saveNotaEmpenho(this.mapApiNeToCache(ne, ugNum));
-      }
-
-      // Buscar movimentos (eventos: 400010, 400011, 400012)
-      const movements = await this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ug);
-      if (movements.length > 0) {
-        const cacheMovimentos = movements.map(m => this.mapApiMovementToCache(m, ugNum));
-        await this.cacheService.saveNeMovimentos(cacheMovimentos);
-      }
-
-      // Buscar OBs vinculadas (busca de anos anteriores até atual)
-      const nesViculadas = [...new Set(movements.map(m => m.nunotaempenho).filter(Boolean))] as string[];
-      if (nesViculadas.length > 0) {
-        const obs = await this.sigefService.getOrdemBancariaMovements(ano, nesViculadas, ug);
-        if (obs.length > 0) {
-          const cacheObs = obs.map(ob => this.mapApiObToCache(ob, ugNum));
-          await this.cacheService.saveOrdensBancarias(cacheObs);
+    // 2. Se não tem NE no cache ou forceSync, buscar dados básicos da NE
+    if (!neCached || (forceSync && this.isCacheOld(neCached.last_sync))) {
+      console.log('[SIGEF SYNC] Sincronizando dados básicos da NE:', neNumber);
+      try {
+        const ne = await this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ug);
+        if (ne) {
+          await this.cacheService.saveNotaEmpenho(this.mapApiNeToCache(ne, ugNum));
+          neCached = await this.cacheService.getNotaEmpenho(ugNum, neNumber);
         }
+      } catch (err) {
+        console.warn('[SIGEF SYNC] Erro ao buscar NE base:', neNumber, err);
       }
-
-      // Retornar resumo calculado
-      return await this.cacheService.getNeResumo(ugNum, neNumber);
-    } catch (err) {
-      console.error('[SIGEF SYNC] Erro ao sincronizar NE:', err);
-      return null;
     }
+
+    // 3. Sincronizar movimentos e OBs (Isto deve ocorrer sempre que forceSync for true ou cache for antigo)
+    // Para garantir que "pesquisa sempre até a data atual", buscamos movimentos/OBs se solicitado
+    if (forceSync) {
+      console.log('[SIGEF SYNC] Sincronizando movimentos e OBs para:', neNumber);
+      try {
+        // Buscar movimentos (empenhos/anulações)
+        const movements = await this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ug);
+        if (movements.length > 0) {
+          await this.cacheService.saveNeMovimentos(movements.map(m => this.mapApiMovementToCache(m, ugNum)));
+        }
+
+        // Buscar OBs vinculadas percorrendo todas as NEs encontradas nos movimentos
+        const nesVinculadas = [...new Set([neNumber, ...movements.map(m => m.nunotaempenho).filter(Boolean)])] as string[];
+        
+        const obs = await this.sigefService.getOrdemBancariaMovements(ano, nesVinculadas, ug);
+        if (obs.length > 0) {
+          await this.cacheService.saveOrdensBancarias(obs.map(ob => this.mapApiObToCache(ob, ugNum)));
+        }
+      } catch (err) {
+        console.error('[SIGEF SYNC] Falha na sincronização financeira profunda de:', neNumber, err);
+      }
+    }
+
+    // 4. Retornar resumo final consolidado (calculado via View ou Função no CacheService)
+    return await this.cacheService.getNeResumo(ugNum, neNumber);
+  }
+
+  private isCacheOld(lastSync: Date | string | undefined): boolean {
+    if (!lastSync) return true;
+    const last = new Date(lastSync).getTime();
+    const now = Date.now();
+    // Cache de dados básicos da NE dura 12 horas, mas movimentos/OBs o dashboard força sync
+    return (now - last) > (12 * 60 * 60 * 1000); 
   }
 
   private mapApiNeToCache(ne: NotaEmpenho, ug: number): SigefNotaEmpenho {

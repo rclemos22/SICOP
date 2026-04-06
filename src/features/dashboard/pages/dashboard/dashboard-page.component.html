@@ -1,263 +1,308 @@
-<div class="flex-1 overflow-y-auto p-6 md:px-10 md:py-8 h-full">
+<div class="flex-1 overflow-y-auto p-6 md:px-10 md:py-8 h-full bg-gray-50 dark:bg-gray-900/40">
   
-  <!-- Header -->
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Dashboard</h1>
-    <p class="text-sm text-gray-500 mt-1">Visão geral dos indicadores de contratos e execução financeira.</p>
+  <!-- Header Section -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight flex items-center">
+        Dashboard Financeiro
+        @if (isSyncing()) {
+          <span class="ml-3 flex h-2 w-2 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+          </span>
+        }
+      </h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-1">Visão consolidada da execução orçamentária e contratos</p>
+    </div>
+    
+    <div class="flex flex-wrap items-center gap-3">
+      <!-- Last Sync Info -->
+      @if (lastSyncTimestamp()) {
+        <div class="hidden sm:flex items-center text-xs text-gray-500 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-100 dark:border-gray-700 shadow-sm">
+          <span class="material-symbols-outlined text-[14px] mr-1.5 opacity-60 text-blue-500">schedule</span>
+          Atualizado às {{ lastSyncTimestamp() | date:'HH:mm' }}
+        </div>
+      }
+
+      <!-- Sync Button -->
+      <button 
+        (click)="syncAllSigef()"
+        [disabled]="isSyncing() || isLoading()"
+        class="flex items-center px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded shadow-sm hover:shadow-md hover:border-blue-400/50 dark:hover:border-blue-500/50 transition-all duration-200 disabled:opacity-50 group"
+      >
+        <span class="material-symbols-outlined text-[18px] mr-2 text-blue-500 group-hover:rotate-180 transition-transform duration-500" [class.animate-spin]="isSyncing()">sync</span>
+        <span class="font-semibold text-sm">{{ isSyncing() ? 'Sincronizando...' : 'Sincronizar SIGEF' }}</span>
+      </button>
+
+      <!-- Refresh Button -->
+      <button 
+        (click)="retry()"
+        class="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow-md transition-all duration-200 flex items-center justify-center transform hover:scale-105 active:scale-95"
+        title="Recarregar dados locais"
+      >
+        <span class="material-symbols-outlined text-[20px]" [class.animate-spin]="isLoading() && !isSyncing()">refresh</span>
+      </button>
+    </div>
   </div>
 
-  <!-- KPI Cards Row -->
-  @if (isLoading()) {
+  @if (isLoading() && !isSyncing()) {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-      <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-      <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-      <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+      <div class="animate-pulse h-32 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"></div>
+      <div class="animate-pulse h-32 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"></div>
+      <div class="animate-pulse h-32 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"></div>
+      <div class="animate-pulse h-32 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"></div>
     </div>
   } @else if (hasError()) {
-    <div class="flex flex-col items-center justify-center py-16 text-red-500 bg-white dark:bg-card-dark rounded-xl border border-red-200 dark:border-red-900/30 mb-8">
-      <span class="material-symbols-outlined text-[48px] mb-2">error</span>
-      <p class="mb-4 font-medium">Erro ao carregar dados do dashboard.</p>
-      <button (click)="retry()" class="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 transition-colors font-semibold">Tentar Novamente</button>
+    <div class="flex flex-col items-center justify-center py-16 text-red-500 bg-white dark:bg-gray-800 border border-red-100 dark:border-red-900/30 mb-8 shadow-sm">
+      <div class="p-4 bg-red-50 dark:bg-red-900/20 rounded-full mb-4">
+        <span class="material-symbols-outlined text-[32px]">warning</span>
+      </div>
+      <p class="mb-4 font-bold text-lg">Erro ao carregar dados do dashboard</p>
+      <button (click)="retry()" class="px-6 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors font-bold shadow-lg shadow-red-500/20">Tentar Novamente</button>
     </div>
   } @else {
+    <!-- Main Metrics Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      
-      <!-- Card 1: Total Contratado -->
-    <div 
-      (click)="goToContracts()"
-      class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-sco-blue/50 transition-all cursor-pointer group"
-    >
-      <div class="flex items-center justify-between mb-4">
-        <div class="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sco-blue dark:text-blue-400 group-hover:bg-sco-blue group-hover:text-white transition-colors">
-          <span class="material-symbols-outlined text-[24px]">description</span>
-        </div>
-        <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">{{ activeContractsCount() }} Ativos</span>
-      </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Contratado</p>
-      <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ overallFinancials().totalContratado | currency:'BRL':'symbol':'1.2-2' }}
-      </h3>
-    </div>
-
-    <!-- Card 2: Total Empenhado -->
-    <div 
-      (click)="goToFinancial()"
-      class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-green-500/50 transition-all cursor-pointer group"
-    >
-      <div class="flex items-center justify-between mb-4">
-        <div class="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-600 dark:text-green-400 group-hover:bg-green-600 group-hover:text-white transition-colors">
-          <span class="material-symbols-outlined text-[24px]">payments</span>
-        </div>
-        <span class="text-xs font-bold text-gray-400">{{ (overallFinancials().totalEmpenhado / overallFinancials().totalContratado) * 100 | number:'1.0-0' }}% Exec.</span>
-      </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Empenhado</p>
-      <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ overallFinancials().totalEmpenhado | currency:'BRL':'symbol':'1.2-2' }}
-      </h3>
-    </div>
-
-    <!-- Card 3: Total Pago -->
-    <div 
-      (click)="goToFinancial()"
-      class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-yellow-500/50 transition-all cursor-pointer group"
-    >
-      <div class="flex items-center justify-between mb-4">
-        <div class="p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-yellow-600 dark:text-yellow-400 group-hover:bg-yellow-500 group-hover:text-white transition-colors">
-          <span class="material-symbols-outlined text-[24px]">pending_actions</span>
-        </div>
-      </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Pago</p>
-      <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ overallFinancials().totalPago | currency:'BRL':'symbol':'1.2-2' }}
-      </h3>
-    </div>
-
-    <!-- Card 4: Saldo a Pagar -->
-    <div 
-      (click)="goToFinancial()"
-      class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-red-500/50 transition-all cursor-pointer group"
-    >
-      <div class="flex items-center justify-between mb-4">
-        <div class="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400 group-hover:bg-red-600 group-hover:text-white transition-colors">
-          <span class="material-symbols-outlined text-[24px]">warning</span>
-        </div>
-        @if (expiringContracts().length > 0) {
-            <span class="flex h-3 w-3 relative">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
-        }
-      </div>
-      <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Saldo a Pagar</p>
-      <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1 tracking-tight">
-        {{ financialMetrics().toPay | currency:'BRL':'symbol':'1.2-2' }}
-      </h3>
-    </div>
-
-    </div>
-
-    <!-- Charts Section -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      
-      <!-- Budget Distribution (Donut Chart) -->
+      <!-- Total Contratado (Previsão) -->
       <div 
-          (click)="goToBudget()"
-          class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-sco-blue/30 transition-all flex flex-col"
+        (click)="goToContracts()"
+        class="bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-6 hover:shadow-md hover:border-blue-500/30 transition-all cursor-pointer group"
       >
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold text-gray-900 dark:text-white">Orçamento</h3>
-        </div>
-
-        <div #chart class="flex-1 flex justify-center items-center min-h-[180px] relative"></div>
-
-        <div class="space-y-2 mt-2">
-          <div class="flex justify-between items-center text-sm">
-              <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-sco-blue"></div>
-                  <span class="text-gray-600 dark:text-gray-300">Empenhado</span>
-              </div>
-              <span class="font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.2-2' }}</span>
-          </div>
-          <div class="flex justify-between items-center text-sm">
-              <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
-                  <span class="text-gray-600 dark:text-gray-300">Disponível</span>
-              </div>
-              <span class="font-bold text-gray-900 dark:text-white">{{ budgetMetrics().available | currency:'BRL':'symbol':'1.2-2' }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Contract Status Distribution -->
-      <div 
-          (click)="goToContracts()"
-          class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-sco-blue/30 transition-all flex flex-col"
-      >
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold text-gray-900 dark:text-white">Contratos</h3>
-          <span class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300">{{ appContext.anoExercicio() }}</span>
-        </div>
-
-        <div #statusChart class="flex-1 flex justify-center items-center min-h-[180px] relative"></div>
-
-        <div class="space-y-2 mt-2">
-          <div class="flex justify-between items-center text-sm">
-              <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                  <span class="text-gray-600 dark:text-gray-300">Vigentes</span>
-              </div>
-              <span class="font-bold text-gray-900 dark:text-white">{{ contractsByStatus().vigentes }}</span>
-          </div>
-          <div class="flex justify-between items-center text-sm">
-              <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-amber-500"></div>
-                  <span class="text-gray-600 dark:text-gray-300">Finalizando</span>
-              </div>
-              <span class="font-bold text-gray-900 dark:text-white">{{ contractsByStatus().finalizando }}</span>
-          </div>
-          <div class="flex justify-between items-center text-sm">
-              <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                  <span class="text-gray-600 dark:text-gray-300">Rescindidos</span>
-              </div>
-              <span class="font-bold text-gray-900 dark:text-white">{{ contractsByStatus().rescindidos }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Expiring Soon Alert -->
-      <div class="bg-white dark:bg-card-dark p-6 rounded-xl border border-amber-200 dark:border-amber-800/30 shadow-sm flex flex-col">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-bold text-gray-900 dark:text-white">Expirando</h3>
-          <span class="material-symbols-outlined text-amber-500">warning</span>
+          <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[24px]">payments</span>
+          </div>
+          <span class="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-2.5 py-1 border border-blue-100 dark:border-blue-800">{{ activeContractsCount() }} Ativos</span>
         </div>
-        
-        <div class="flex-1 overflow-y-auto max-h-[200px]">
-          @if (expiringContracts().length > 0) {
-            @for (contract of expiringContracts().slice(0, 5); track contract.id) {
-              <div class="py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ contract.contrato }}</p>
-                <p class="text-xs text-gray-500">{{ contract.contratada }}</p>
-                <p class="text-xs font-bold text-amber-600 mt-1">{{ contract.dias_restantes }} dias restantes</p>
-              </div>
-            }
-          } @else {
-            <div class="flex items-center justify-center h-full text-gray-400 text-sm">
-              Nenhum contrato expirando
+        <h3 class="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total Previsto</h3>
+        <p class="text-2xl font-black text-gray-900 dark:text-white">{{ totalContractValue() | currency:'BRL' }}</p>
+        <p class="mt-2 text-[10px] text-gray-400 font-medium">Soma do valor anual dos contratos</p>
+      </div>
+
+      <!-- Total Empenhado (Real) -->
+      <div 
+        (click)="goToBudget()"
+        class="bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-6 hover:shadow-md hover:border-amber-500/30 transition-all cursor-pointer group"
+      >
+        <div class="flex items-center justify-between mb-4">
+          <div class="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+          </div>
+          @if (isSyncing()) {
+            <div class="flex space-x-1">
+               <div class="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce"></div>
+               <div class="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+               <div class="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
             </div>
           }
         </div>
+        <h3 class="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total Empenhado</h3>
+        <p class="text-2xl font-black text-gray-900 dark:text-white">
+          @if (!isSyncing()) {
+            {{ totalCommittedValue() | currency:'BRL' }}
+          } @else {
+            <ng-container *ngTemplateOutlet="loadingVal"></ng-container>
+          }
+        </p>
+        <div class="mt-2 flex items-center text-[10px]">
+          <span class="text-amber-600 font-black mr-1.5">{{ (totalCommittedValue() / (totalContractValue() || 1)) * 100 | number:'1.0-1' }}%</span>
+          <span class="text-gray-400 uppercase font-medium">da previsão anual</span>
+        </div>
       </div>
 
-      <!-- Quick Stats -->
-      <div class="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col">
-        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Resumo</h3>
-        
-        <div class="space-y-4 flex-1">
-          <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <p class="text-xs text-gray-500 uppercase">Total Contratos</p>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ contractsByStatus().total }}</p>
-          </div>
-          
-          <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <p class="text-xs text-gray-500 uppercase">Dotações</p>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalBudget | currency:'BRL':'symbol':'1.2-2' }}</p>
-          </div>
-          
-          <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <p class="text-xs text-gray-500 uppercase">Empenhado</p>
-            <p class="text-2xl font-bold text-sco-blue">{{ budgetMetrics().totalUsed | currency:'BRL':'symbol':'1.2-2' }}</p>
+      <!-- Total Pago (Real) -->
+      <div 
+        (click)="goToFinancial()"
+        class="bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-6 hover:shadow-md hover:border-emerald-500/30 transition-all cursor-pointer group"
+      >
+        <div class="flex items-center justify-between mb-4">
+          <div class="p-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[24px]">verified</span>
           </div>
         </div>
+        <h3 class="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total Pago</h3>
+        <p class="text-2xl font-black text-gray-900 dark:text-white">
+          @if (!isSyncing()) {
+            {{ totalPaidValue() | currency:'BRL' }}
+          } @else {
+            <ng-container *ngTemplateOutlet="loadingVal"></ng-container>
+          }
+        </p>
+        <div class="mt-2 flex items-center text-[10px]">
+          <span class="text-emerald-600 font-black mr-1.5">{{ (totalPaidValue() / (totalCommittedValue() || 1)) * 100 | number:'1.0-1' }}%</span>
+          <span class="text-gray-400 uppercase font-medium">da reserva empenhada</span>
+        </div>
+      </div>
+
+      <!-- Saldo a Pagar -->
+      <div 
+        (click)="goToFinancial()"
+        class="bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-6 hover:shadow-md hover:border-purple-500/30 transition-all cursor-pointer group"
+      >
+        <div class="flex items-center justify-between mb-4">
+          <div class="p-3 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-[24px]">request_quote</span>
+          </div>
+        </div>
+        <h3 class="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Saldo a Pagar</h3>
+        <p class="text-2xl font-black text-gray-900 dark:text-white">
+          @if (!isSyncing()) {
+            {{ totalBalanceToPay() | currency:'BRL' }}
+          } @else {
+            <ng-container *ngTemplateOutlet="loadingVal"></ng-container>
+          }
+        </p>
+        <p class="mt-2 text-[10px] text-gray-400 font-medium italic">Compromissos pendentes de liquidação</p>
       </div>
     </div>
 
-    <!-- Lists Section -->
+    <!-- Middle Section: Charts -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
       
-      <!-- Recent Payments (Full Width) -->
-      <div class="lg:col-span-3 bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
-        <div class="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-           <h3 class="text-lg font-bold text-gray-900 dark:text-white">Últimos Pagamentos</h3>
-           <button (click)="goToFinancial()" class="text-sm text-sco-blue hover:underline font-medium">Ver todos</button>
+      <!-- Budget Distribution (Donut Chart) -->
+      <div class="bg-white dark:bg-gray-800 p-8 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-6 w-full">Execução Orçamentária</h3>
+        <div #chart class="relative flex justify-center items-center h-[220px] w-full">
+           <!-- D3 Chart will render here -->
         </div>
-        
-        <div class="flex-1 overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
-              <thead class="bg-gray-50 dark:bg-gray-800/50">
-                  <tr>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Contrato</th>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Fornecedor</th>
-                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Valor Pago</th>
-                  </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                  @for (payment of recentPayments(); track payment.id) {
-                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                          <td class="px-6 py-4 whitespace-nowrap">
-                               <span class="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded text-xs font-mono text-sco-blue dark:text-blue-400">
-                                  {{ payment.contrato }}
-                               </span>
-                          </td>
-                          <td class="px-6 py-4">
-                              <div class="text-sm text-gray-900 dark:text-white font-medium">{{ payment.fornecedor_nome }}</div>
-                          </td>
-                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-green-600 dark:text-green-400">
-                              {{ payment.total_pago | currency:'BRL':'symbol':'1.2-2' }}
-                          </td>
-                      </tr>
-                  }
-              </tbody>
-          </table>
-          @if (recentPayments().length === 0) {
-              <div class="p-8 text-center text-gray-400">
-                  Nenhum pagamento recente.
-              </div>
-          }
+        <div class="grid grid-cols-2 gap-4 w-full mt-8">
+          <div class="p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
+            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Empenhado</p>
+            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalUsed | currency:'BRL' }}</p>
+          </div>
+          <div class="p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
+            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Disponível</p>
+            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().available | currency:'BRL' }}</p>
+          </div>
         </div>
       </div>
 
+      <!-- Contract Status (Donut Chart) -->
+      <div class="bg-white dark:bg-gray-800 p-8 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-6 w-full">Status dos Contratos</h3>
+        <div #statusChart class="relative flex justify-center items-center h-[220px] w-full">
+           <!-- D3 Chart will render here -->
+        </div>
+        <div class="flex flex-wrap justify-center gap-3 mt-8">
+           <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
+             <span class="w-2 h-2 rounded-full bg-green-500 mr-1.5"></span> Vigentes
+           </span>
+           <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
+             <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span> Finalizando
+           </span>
+           <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
+             <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5"></span> Rescindidos
+           </span>
+        </div>
+      </div>
+
+      <!-- Expiring Alert & Quick Summary -->
+      <div class="flex flex-col gap-6">
+        <!-- Expiring Contracts -->
+        <div class="bg-white dark:bg-gray-800 p-6 border border-amber-100 dark:border-amber-900/30 shadow-sm flex-1">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-md font-bold text-gray-900 dark:text-white">Fim de Vigência</h3>
+            <span class="px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 text-[10px] font-black border border-amber-100 dark:border-amber-800">PRÓX. 90 DIAS</span>
+          </div>
+          <div class="space-y-3 overflow-y-auto max-h-[200px] pr-2 custom-scrollbar">
+            @if (expiringContracts().length > 0) {
+              @for (c of expiringContracts(); track c.id) {
+                <div class="flex items-start justify-between p-3 hover:bg-amber-50/50 dark:hover:bg-amber-900/10 border border-transparent hover:border-amber-100 transition-all">
+                  <div class="flex-1 min-w-0 mr-3">
+                    <p class="text-xs font-bold text-gray-900 dark:text-white truncate">{{ c.contrato }}</p>
+                    <p class="text-[10px] text-gray-500 truncate">{{ c.contratada }}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-[10px] font-black text-amber-600">{{ c.dias_restantes }} dias</span>
+                  </div>
+                </div>
+              }
+            } @else {
+              <div class="h-32 flex flex-col items-center justify-center text-gray-400">
+                <span class="material-symbols-outlined text-[32px] mb-2 opacity-20">verified_user</span>
+                <p class="text-[10px] font-bold uppercase tracking-widest">Atenção em dia</p>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Quick Summary Mini-Card -->
+        <div class="bg-indigo-600 p-6 text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden">
+          <div class="relative z-10">
+            <p class="text-[10px] font-bold uppercase opacity-70 mb-1">Média de Execução</p>
+            <p class="text-3xl font-black">{{ budgetMetrics().percentageUsed | number:'1.0-1' }}%</p>
+            <div class="mt-4 h-1.5 w-full bg-white/20 overflow-hidden">
+              <div class="h-full bg-white transition-all duration-1000" [style.width.%]="budgetMetrics().percentageUsed"></div>
+            </div>
+            <p class="mt-3 text-[10px] font-medium opacity-80">Saldo remanescente de {{ budgetMetrics().available | currency:'BRL' }}</p>
+          </div>
+          <span class="material-symbols-outlined absolute -bottom-4 -right-4 text-[96px] opacity-10 rotate-12">trending_up</span>
+        </div>
+      </div>
     </div>
-    }
+
+    <!-- Bottom Section: Latest Payments Table -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div class="p-6 border-b border-gray-50 dark:border-gray-750 flex items-center justify-between">
+        <h3 class="text-lg font-black text-gray-900 dark:text-white">Últimos Pagamentos Localizados</h3>
+        <button (click)="goToFinancial()" class="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center">
+          Ver Histórico Completo <span class="material-symbols-outlined text-[14px] ml-2">chevron_right</span>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto min-h-[300px]">
+        <table class="w-full">
+          <thead>
+            <tr class="text-left border-b border-gray-50 dark:border-gray-750">
+              <th class="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Nº Contrato</th>
+              <th class="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Contratada / Fornecedor</th>
+              <th class="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center">Data Pagamento</th>
+              <th class="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-right">Valor do Pagamento</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50 dark:divide-gray-750">
+            @for (p of recentPayments(); track p.id) {
+              <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-750/30 transition-colors group">
+                <td class="px-6 py-4">
+                  <span class="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-gray-700 text-[10px] font-bold text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                    {{ p.contrato }}
+                  </span>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="flex items-center">
+                    <div class="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-[10px] mr-3">
+                       {{ p.contratada.substring(0, 2).toUpperCase() }}
+                    </div>
+                    <p class="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{{ p.contratada }}</p>
+                  </div>
+                </td>
+                <td class="px-6 py-4 text-center">
+                   <div class="inline-flex flex-col items-center">
+                      <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ p.data_ultimo_pagamento | date:'dd/MM/yyyy' }}</span>
+                      <span class="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">Confirmado</span>
+                   </div>
+                </td>
+                <td class="px-6 py-4 text-right">
+                  <p class="text-sm font-black text-emerald-600 dark:text-emerald-400">{{ p.total_pago | currency:'BRL' }}</p>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        
+        @if (recentPayments().length === 0) {
+          <div class="flex flex-col items-center justify-center py-20 text-gray-300 dark:text-gray-600">
+            <span class="material-symbols-outlined text-[48px] mb-4 opacity-20">history_edu</span>
+            <p class="font-bold text-sm uppercase tracking-widest">Nenhum pagamento registrado no sistema</p>
+            <p class="text-[10px] mt-1 font-medium italic opacity-60">Sincronize com o SIGEF para buscar dados atualizados</p>
+          </div>
+        }
+      </div>
+    </div>
+  }
 </div>
+
+<!-- Template for loading value pulse -->
+<ng-template #loadingVal>
+  <div class="h-6 w-24 bg-gray-200 dark:bg-gray-700 animate-pulse"></div>
+</ng-template>

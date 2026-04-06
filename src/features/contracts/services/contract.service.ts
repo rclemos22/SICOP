@@ -338,7 +338,11 @@ export class ContractService {
       fiscal_tecnico: raw.fiscal_tecnico ?? undefined,
       data_fim_efetiva: dataFimEfetiva,
       dias_restantes: diasRestantes,
-      status_efetivo: statusEfetivo
+      status_efetivo: statusEfetivo,
+      total_empenhado: this.parseNumeric(raw.total_empenhado),
+      total_pago: this.parseNumeric(raw.total_pago),
+      saldo_a_pagar: this.parseNumeric(raw.saldo_a_pagar),
+      data_ultimo_pagamento: raw.data_pagamento ? this.parseDate(raw.data_pagamento) : undefined
     };
   }
 

@@ -402,12 +402,13 @@ export class SigefService implements OnDestroy {
       
       // Tentar passar nunotaempenho e search para o Django Rest Framework filtrar
       if (nunotaempenho) {
+        // Enviar os dois parâmetros pois a API pode responder melhor a um ou outro
         params.append('search', nunotaempenho);
-        params.append('nunotaempenho', nunotaempenho); // Tenta um filtro exato se a API suportar
+        params.append('nunotaempenho', nunotaempenho);
       }
       
       if (cdunidadegestora) {
-        params.append('cdunidadegestora', cdunidadegestora);
+        params.append('cdunidadegestora', cdunidadegestora.toString());
       }
 
       const fullUrl = `${url}?${params}`;
@@ -458,65 +459,61 @@ export class SigefService implements OnDestroy {
    */
   async getOrdemBancariaMovements(ano: string, numeroNEs: string[], cdunidadegestora: string): Promise<OrdemBancaria[]> {
     console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements ===', { ano, numeroNEs, ug: cdunidadegestora });
-    const movements: OrdemBancaria[] = [];
-    const MAX_PAGES = 50;
+    const allOBs: OrdemBancaria[] = [];
+    const MAX_PAGES = 500;
     const anoNE = parseInt(ano, 10);
     const anoAtual = new Date().getFullYear();
     
-    // Buscar OBs do ano da NE até o ano atual (pagamentos podem ser efetuados em anos posteriores)
     const anosAPesquisar = [];
     for (let a = anoNE; a <= anoAtual; a++) {
       anosAPesquisar.push(a.toString());
     }
     console.log('[SIGEF OB] Anos a pesquisar para OBs:', anosAPesquisar);
 
-    // Se quiséssemos otimizar na API, usaríamos o originalNE, mas como a API só suporta search simples, passamos o primeiro.
-    const searchParams = numeroNEs.length > 0 ? numeroNEs[0] : undefined;
-
-    for (const anoPesquisa of anosAPesquisar) {
-      let page = 1;
-      const datainicio = `${anoPesquisa}-01-01`;
-      const datafim = `${anoPesquisa}-12-31`;
+    // Iterar sobre todas as NEs encontradas para este contrato/UG
+    for (const neNumber of numeroNEs) {
+      console.log(`[SIGEF OB] Buscando OBs para NE: ${neNumber} na UG: ${cdunidadegestora}`);
       
-      console.log(`[SIGEF OB] Buscando OBs no ano ${anoPesquisa}...`);
+      for (const anoPesquisa of anosAPesquisar) {
+        let page = 1;
+        // O SIGEF espera formato DD/MM/YYYY para OBs
+        const datainicio = `01/01/${anoPesquisa}`;
+        const datafim = `31/12/${anoPesquisa}`;
 
-      while (page <= MAX_PAGES) {
-        try {
-          const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, searchParams, cdunidadegestora);
-          
-          console.log(`[SIGEF OB] Ano ${anoPesquisa} página ${page}: ${result.data.length} resultados`);
-          
-          // Log dos campos das primeiras OBs para debug
-          if (result.data.length > 0 && page === 1) {
-            console.log('[SIGEF OB] Sample OB fields:', JSON.stringify(result.data[0], null, 2));
+        while (page <= MAX_PAGES) {
+          try {
+            const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, neNumber, cdunidadegestora);
+            
+            if (result.data.length > 0) {
+              // Filtrar no frontend para garantir que a OB realmente pertence à NE solicitada (se a API retornar busca aproximada)
+              const filteredMatches = result.data.filter(ob => 
+                !neNumber || 
+                ob.nunotaempenho === neNumber || 
+                ob.deobservacao?.includes(neNumber) || 
+                ob.definalidade?.includes(neNumber)
+              );
+              
+              if (filteredMatches.length > 0) {
+                allOBs.push(...filteredMatches);
+                console.log(`[SIGEF OB] NE ${neNumber} (${anoPesquisa}) - Pág ${page}: Encontradas ${filteredMatches.length} OBs válidas`);
+              }
+            }
+
+            // Se não houver próxima página ou se a página atual estiver vazia, encerra a busca para este ano/NE
+            if (!result.next || result.data.length === 0) break;
+            page++;
+          } catch (err) {
+            console.error(`[SIGEF OB] Erro na página ${page} para NE ${neNumber}:`, err);
+            break;
           }
-          
-          const filtered = result.data.filter(ob => {
-            const cleanObNE = ob.nunotaempenho?.trim().toUpperCase() || '';
-            const matchNE = numeroNEs.some(ne => ne.trim().toUpperCase() === cleanObNE);
-            
-            // Comparar UG como número para evitar problemas com zeros à esquerda
-            const matchUG = Number(ob.cdunidadegestora) === Number(cdunidadegestora);
-            
-            return matchNE && matchUG; 
-          });
-          
-          console.log(`[SIGEF OB] Ano ${anoPesquisa}: ${filtered.length} OBs filtradas`);
-          movements.push(...filtered);
-          
-          if (!result.next) break;
-          page++;
-          
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (err) {
-          console.warn(`[SIGEF OB] Erro na paginação do ano ${anoPesquisa}, continuando para próximo ano:`, err);
-          break;
         }
       }
     }
-    
-    console.log(`[SIGEF] Total de OBs confirmadas encontradas: ${movements.length}`);
-    return movements;
+
+    // Remover duplicatas
+    const uniqueOBs = Array.from(new Map(allOBs.map(ob => [ob.nuordembancaria + '-' + ob.cdunidadegestora, ob])).values());
+    console.log(`[SIGEF OB] Busca concluída para o contrato. Total único: ${uniqueOBs.length} OBs`);
+    return uniqueOBs;
   }
 
 
