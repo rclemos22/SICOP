@@ -272,35 +272,34 @@
             </div>
 
             <!-- Tipo -->
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Tipo *</label>
-              <select 
-                formControlName="tipo"
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white cursor-pointer"
-                [class.border-red-500]="f['tipo'].invalid && f['tipo'].touched"
-              >
-                @for (opt of tipoOptions; track opt.value) {
-                  <option [value]="opt.value">{{ opt.label }}</option>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Tipo *</label>
+                <select 
+                  formControlName="tipo"
+                  class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white cursor-pointer"
+                  [class.border-red-500]="f['tipo'].invalid && f['tipo'].touched"
+                >
+                  @for (opt of tipoOptions; track opt.value) {
+                    <option [value]="opt.value">{{ opt.label }}</option>
+                  }
+                </select>
+                @if (f['tipo'].invalid && f['tipo'].touched) {
+                  <span class="text-xs text-red-500 mt-1">Campo obrigatório.</span>
                 }
-              </select>
-              @if (f['tipo'].invalid && f['tipo'].touched) {
-                <span class="text-xs text-red-500 mt-1">Campo obrigatório.</span>
-              }
-            </div>
-          </div>
+              </div>
 
-          <!-- Status Row -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Status Inicial *</label>
-              <select 
-                formControlName="status"
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white cursor-pointer"
-              >
-                @for (opt of statusOptions; track opt) {
-                  <option [value]="opt">{{ opt }}</option>
-                }
-              </select>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Status Inicial *</label>
+                <select 
+                  formControlName="status"
+                  class="w-full px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all text-slate-900 dark:text-white cursor-pointer"
+                >
+                  @for (opt of statusOptions; track opt) {
+                    <option [value]="opt">{{ opt }}</option>
+                  }
+                </select>
+              </div>
             </div>
           </div>
         </section>
