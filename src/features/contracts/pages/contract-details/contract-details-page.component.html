@@ -251,25 +251,33 @@
                   </div>
                </div>
 
-               <!-- Bottom Section: Payments -->
-               <div>
-                  <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-3">Próximos Pagamentos / Vencimentos</h3>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <!-- FUTURE: Real Upcoming Payment -->
-                     <div class="flex items-center justify-between p-4 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-100 dark:border-yellow-900/30 rounded-lg">
-                        <div class="flex items-center gap-3">
-                           <div class="bg-yellow-100 text-yellow-700 p-2 rounded-lg">
-                              <span class="material-symbols-outlined">event</span>
-                           </div>
-                           <div>
-                              <p class="text-sm font-bold text-gray-900 dark:text-white">Previsão Pagamento Nota Fiscal 003</p>
-                              <p class="text-xs text-gray-500">Vence em 5 dias</p>
-                           </div>
+                <!-- Bottom Section: Payments -->
+                <div>
+                   <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-3">Próximos Pagamentos / Vencimentos</h3>
+                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      @if (upcomingPayments().length > 0) {
+                        @for (payment of upcomingPayments(); track payment.date) {
+                          <div class="flex items-center justify-between p-4 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-100 dark:border-yellow-900/30 rounded-lg">
+                             <div class="flex items-center gap-3">
+                                <div class="bg-yellow-100 text-yellow-700 p-2 rounded-lg">
+                                   <span class="material-symbols-outlined">event</span>
+                                </div>
+                                <div>
+                                   <p class="text-sm font-bold text-gray-900 dark:text-white">{{ payment.monthLabel }}</p>
+                                   <p class="text-xs text-gray-500">Vence em {{ payment.daysUntil }} dias</p>
+                                </div>
+                             </div>
+                             <span class="font-bold text-gray-900 dark:text-white">{{ payment.valor | currency:'BRL' }}</span>
+                          </div>
+                        }
+                      } @else {
+                        <div class="col-span-2 text-center py-6 text-gray-400 text-sm">
+                          <span class="material-symbols-outlined text-3xl mb-2 opacity-50">calendar_today</span>
+                          <p>Configure o dia de pagamento e valor mensal para ver os próximos vencimentos</p>
                         </div>
-                        <span class="font-bold text-gray-900 dark:text-white">R$ 15.000,00</span>
-                     </div>
-                  </div>
-               </div>
+                      }
+                   </div>
+                </div>
             </div>
           }
 

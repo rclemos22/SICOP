@@ -21,6 +21,14 @@ import { FinancialService } from '../../../financial/services/financial.service'
 import { AditivoFormComponent } from '../../components/aditivo-form/aditivo-form.component';
 import { ContractService } from '../../services/contract.service';
 
+interface PaymentSchedule {
+  monthLabel: string;
+  date: Date;
+  valor: number;
+  daysUntil: number;
+  isPast: boolean;
+}
+
 @Component({
   selector: 'app-contract-details-page',
   standalone: true,
@@ -84,6 +92,45 @@ export class ContractDetailsPageComponent {
   daysRemaining = computed(() => {
     const c = this.contract();
     return c?.dias_restantes ?? 0;
+  });
+
+  // ── Lógica de Negócio: Próximos Pagamentos ─────────────────────────────────
+
+  upcomingPayments = computed(() => {
+    const c = this.contract();
+    if (!c || !c.data_inicio || !c.data_pagamento || !c.valor_mensal) {
+      return [];
+    }
+
+    const payments: PaymentSchedule[] = [];
+    const paymentDay = Number(c.data_pagamento);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startDate = new Date(c.data_inicio);
+    const endDate = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
+    const monthlyValue = Number(c.valor_mensal);
+
+    let currentDate = new Date(startDate);
+    currentDate.setDate(paymentDay);
+
+    while (currentDate <= endDate) {
+      if (currentDate >= today) {
+        const daysUntil = Math.ceil((currentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+        
+        payments.push({
+          monthLabel,
+          date: new Date(currentDate),
+          valor: monthlyValue,
+          daysUntil,
+          isPast: false
+        });
+      }
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+
+    return payments.slice(0, 6);
   });
 
   // ── Lógica de Negócio: Prorrogação ─────────────────────────────────────
