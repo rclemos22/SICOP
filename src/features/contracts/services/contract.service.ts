@@ -251,7 +251,7 @@ export class ContractService {
       total_empenhado: this.parseNumeric(raw.total_empenhado),
       total_pago: this.parseNumeric(raw.total_pago),
       saldo_a_pagar: this.parseNumeric(raw.saldo_a_pagar),
-      data_ultimo_pagamento: raw.data_pagamento ? this.parseDate(raw.data_pagamento) : undefined,
+      data_ultimo_pagamento: raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined,
       tipo: raw.tipo as 'serviço' | 'material' | undefined,
       valor_mensal: this.parseNumeric(raw.valor_mensal)
     };

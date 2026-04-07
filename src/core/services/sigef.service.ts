@@ -129,7 +129,8 @@ export class SigefService implements OnDestroy {
     this.refreshInterval = setInterval(() => {
       if (this.bearerToken && this.tokenExpiry) {
         const timeLeft = this.tokenExpiry - Date.now();
-        if (timeLeft > 0 && timeLeft < 300000) {
+        // Se faltar menos de 5 minutos, renova
+        if (timeLeft < 300000) {
           this.refreshTokenIfNeeded();
         }
         this.updateExpiresAt();
@@ -502,11 +503,16 @@ export class SigefService implements OnDestroy {
             // Se não houver próxima página ou se a página atual estiver vazia, encerra a busca para este ano/NE
             if (!result.next || result.data.length === 0) break;
             page++;
+            
+            // Delay de cortesia para a API (1200ms entre requisições para evitar bloqueio TLS/Network)
+            await new Promise(resolve => setTimeout(resolve, 1200));
           } catch (err) {
             console.error(`[SIGEF OB] Erro na página ${page} para NE ${neNumber}:`, err);
             break;
           }
         }
+        // Delay extra entre anos de pesquisa
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
 

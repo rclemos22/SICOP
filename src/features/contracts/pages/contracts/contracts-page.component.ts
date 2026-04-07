@@ -242,6 +242,8 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
       data_inicio: data.startDate ? new Date(data.startDate).toISOString().split('T')[0] : null,
       data_fim: data.endDate ? new Date(data.endDate).toISOString().split('T')[0] : null,
       valor_anual: Number(data.totalValue),
+      valor_mensal: data.monthlyValue ? Number(data.monthlyValue) : null,
+      data_pagamento: data.data_pagamento || null,
       status: data.status as ContractStatus,
       setor_id: (data.department && data.department.length === 36) ? data.department : null,
       unid_gestora: data.unid_gestora,

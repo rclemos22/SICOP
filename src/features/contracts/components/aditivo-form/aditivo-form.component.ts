@@ -15,7 +15,7 @@ import { TipoAditivoService } from '../../services/tipo-aditivo.service';
   templateUrl: './aditivo-form.component.html',
 })
 export class AditivoFormComponent implements OnInit {
-  private fb: FormBuilder = inject(FormBuilder);
+  private fb = inject(FormBuilder);
   private contractService = inject(ContractService);
   private supabaseService = inject(SupabaseService);
   private tipoAditivoService = inject(TipoAditivoService);

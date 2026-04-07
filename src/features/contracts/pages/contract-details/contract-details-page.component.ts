@@ -523,7 +523,7 @@ export class ContractDetailsPageComponent {
         return;
       }
       
-      this.aditivos.update(current => current.filter(a => a.id !== aditivoId));
+      this.onAditivoDeleted(aditivoId);
     } catch (err) {
       alert('Erro ao excluir aditivo');
     }
