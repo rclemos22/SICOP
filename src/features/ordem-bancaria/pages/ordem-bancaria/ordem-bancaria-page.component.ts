@@ -294,6 +294,9 @@ export class OrdemBancariaPageComponent implements OnInit {
     this.ordemBancaria.set(null);
     
     try {
+      // Garantir autenticação antes de qualquer busca
+      await this.sigefService.ensureAuthenticated();
+      
       // Buscar com paginação para encontrar a OB
       let page = 1;
       const maxPages = 100;

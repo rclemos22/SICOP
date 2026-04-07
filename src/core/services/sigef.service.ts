@@ -114,10 +114,10 @@ export class SigefService implements OnDestroy {
   private refreshToken: string | null = null;
   private tokenExpiry: number | null = null;
   private refreshInterval: any = null;
-  private isRefreshing = false;
+  private authPromise: Promise<void> | null = null;
 
   constructor() {
-    this.autoAuthenticate();
+    this.ensureAuthenticated().catch(err => console.error('[SIGEF] Falha inicial:', err));
     this.startTokenMonitor();
   }
 
@@ -131,7 +131,7 @@ export class SigefService implements OnDestroy {
         const timeLeft = this.tokenExpiry - Date.now();
         // Se faltar menos de 5 minutos, renova
         if (timeLeft < 300000) {
-          this.refreshTokenIfNeeded();
+          this.ensureAuthenticated();
         }
         this.updateExpiresAt();
       }
@@ -147,41 +147,37 @@ export class SigefService implements OnDestroy {
   private updateExpiresAt(): void {
     if (this.tokenExpiry) {
       const expiryDate = new Date(this.tokenExpiry);
-      this._tokenExpiresAt.set(expiryDate.toLocaleTimeString('pt-BR'));
+      this._tokenExpiresAt.set(expiryDate.toLocaleString('pt-BR'));
     }
   }
 
+  /**
+   * Verifica se o token é válido com um buffer de tempo.
+   */
   private isTokenExpired(): boolean {
-    if (!this.tokenExpiry) return true;
-    return Date.now() >= this.tokenExpiry;
+    if (!this.bearerToken || !this.tokenExpiry) return true;
+    // Buffer de 5 minutos para garantir que o token não expire durante uma operação longa
+    return Date.now() >= (this.tokenExpiry - 300000);
+  }
+
+  /**
+   * Força a revalidação do token. Útil para botões de "Reconectar".
+   */
+  async revalidateToken(): Promise<boolean> {
+    try {
+      await this.ensureAuthenticated(true);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async checkTokenValidity(): Promise<boolean> {
-    if (!this.bearerToken || this.isTokenExpired()) {
-      await this.refreshTokenIfNeeded();
-    }
-    return !!this.bearerToken && !this.isTokenExpired();
-  }
-
-  private async refreshTokenIfNeeded(): Promise<void> {
-    if (this.isRefreshing) return;
-    
-    this.isRefreshing = true;
-    this._apiStatus.set('refreshing');
-    
     try {
-      if (this.refreshToken) {
-        await this.refreshAccessToken();
-      } else {
-        await this.autoAuthenticate();
-      }
-      this._apiStatus.set('connected');
-    } catch (err: any) {
-      console.error('[SIGEF] Falha ao verificar/renovar token:', err);
-      this._apiStatus.set('error');
-      this._error.set('Erro ao conectar com a API: ' + err.message);
-    } finally {
-      this.isRefreshing = false;
+      await this.ensureAuthenticated();
+      return !!this.bearerToken && !this.isTokenExpired();
+    } catch {
+      return false;
     }
   }
 
@@ -190,42 +186,56 @@ export class SigefService implements OnDestroy {
     this._apiStatus.set('refreshing');
     try {
       await this.authenticate(environment.sigefUsername, environment.sigefPassword);
-      console.log('[SIGEF] Autenticacao OK, token:', this.bearerToken?.substring(0, 20) + '...');
+      console.log('[SIGEF] Autenticacao OK');
       this._apiStatus.set('connected');
     } catch (err: any) {
-      console.error('[SIGEF] Falha na autenticacao automatica:', err.message);
-      this._error.set('Falha na autenticação: ' + err.message);
-      this._apiStatus.set('disconnected');
+      console.error('[SIGEF] Falha na autenticacao automatica após retentativas:', err.message);
+      this._error.set('Falha na autenticação (TimeOut): ' + err.message);
+      this._apiStatus.set('error');
+      throw err;
     }
   }
 
-  private async refreshAccessToken(): Promise<void> {
+  private async refreshAccessToken(retries: number = 3): Promise<void> {
     if (!this.refreshToken) {
       throw new Error('Refresh token não disponível');
     }
     
+    this._apiStatus.set('refreshing');
     const url = `${this.apiUrl}/token/refresh/`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh: this.refreshToken }),
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh: this.refreshToken }),
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        throw new Error('Falha ao renovar token');
+      }
+
+      const data = await response.json();
+      this.bearerToken = data.access;
+      const expiresIn = data.expires_in || 3600;
+      this.tokenExpiry = Date.now() + (expiresIn * 1000);
+      this._authenticated.set(true);
+      this._apiStatus.set('connected');
+      this.updateExpiresAt();
+    } catch (err: any) {
+      if (retries > 0 && err.message?.includes('ETIMEDOUT')) {
+        console.warn(`[SIGEF] Timeout no refresh. Retentando... (${retries} restantes)`);
+        await new Promise(r => setTimeout(r, 2000));
+        return this.refreshAccessToken(retries - 1);
+      }
       this._authenticated.set(false);
-      this._apiStatus.set('disconnected');
-      throw new Error('Falha ao renovar token');
+      this.refreshToken = null;
+      throw err;
     }
-
-    const data = await response.json();
-    this.bearerToken = data.access;
-    this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
-    this._authenticated.set(true);
-    this.updateExpiresAt();
   }
 
   setToken(token: string): void {
     this.bearerToken = token;
+    this._authenticated.set(!!token);
   }
 
   private getHeaders(): HeadersInit {
@@ -238,33 +248,69 @@ export class SigefService implements OnDestroy {
     return headers;
   }
 
-  async ensureAuthenticated(): Promise<void> {
-    if (!this.bearerToken || this.isTokenExpired()) {
-      this._apiStatus.set('refreshing');
-      if (this.refreshToken) {
-        await this.refreshAccessToken();
-      } else {
-        await this.autoAuthenticate();
-      }
-      this._apiStatus.set('connected');
+  /**
+   * Garante que o serviço está autenticado. 
+   * Usa um bloqueio de promessa para evitar múltiplas chamadas simultâneas.
+   */
+  async ensureAuthenticated(force: boolean = false): Promise<void> {
+    if (!force && this.bearerToken && !this.isTokenExpired()) {
+      return;
     }
+
+    if (this.authPromise) {
+      return this.authPromise;
+    }
+
+    this.authPromise = (async () => {
+      try {
+        if (this.refreshToken && !force) {
+          try {
+            await this.refreshAccessToken();
+            return;
+          } catch (e) {
+            console.warn('[SIGEF] Falha no refresh, tentando login completo...');
+          }
+        }
+        await this.autoAuthenticate();
+      } finally {
+        this.authPromise = null;
+      }
+    })();
+
+    return this.authPromise;
   }
 
   private async handleUnauthorized(): Promise<void> {
-    this._authenticated.set(false);
-    this._apiStatus.set('refreshing');
+    console.warn('[SIGEF] 401/403 detectado, forçando reautenticação...');
     this.bearerToken = null;
-    this.tokenExpiry = null;
-    if (this.refreshToken) {
-      try {
-        await this.refreshAccessToken();
-        this._apiStatus.set('connected');
-        return;
-      } catch {
-        this.refreshToken = null;
+    this._authenticated.set(false);
+    await this.ensureAuthenticated(true);
+  }
+
+  private async callApi(url: string, options: RequestInit = {}, retries: number = 3, backoff: number = 2000): Promise<Response> {
+    try {
+      const response = await fetch(url, options);
+      
+      if (response.status === 401 || response.status === 403) {
+        await this.handleUnauthorized();
+        const newOptions = { ...options, headers: this.getHeaders() };
+        return await fetch(url, newOptions);
       }
+      
+      return response;
+    } catch (err: any) {
+      const isNetworkError = err.message?.includes('network') || 
+                             err.message?.includes('socket') || 
+                             err.message?.includes('disconnected') ||
+                             err.message?.includes('ETIMEDOUT');
+      
+      if (isNetworkError && retries > 0) {
+        console.warn(`[SIGEF] Erro de rede detectado (${err.message}). Retentando em ${backoff}ms... (${retries} tentativas restantes)`);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return this.callApi(url, options, retries - 1, backoff * 1.5);
+      }
+      throw err;
     }
-    await this.autoAuthenticate();
   }
 
   async getNotaEmpenho(ano: string, search?: string, page: number = 1, cdunidadegestora?: string): Promise<{ data: NotaEmpenho[], count: number, next: string | null, previous: string | null }> {
@@ -273,8 +319,7 @@ export class SigefService implements OnDestroy {
 
     try {
       await this.ensureAuthenticated();
-      console.log('[SIGEF] Token disponivel, fazendo requisicao');
-
+      
       const url = `${this.apiUrl}/sigef/notaempenho/`;
       let queryParams = `ano=${ano}&page=${page}`;
       if (search) {
@@ -284,25 +329,14 @@ export class SigefService implements OnDestroy {
         queryParams += `&cdunidadegestora=${cdunidadegestora}`;
       }
       const fullUrl = `${url}?${queryParams}`;
-      console.log('[SIGEF NE] URL:', fullUrl);
-      console.log('[SIGEF NE] Headers:', JSON.stringify(this.getHeaders()));
-
-      const response = await fetch(fullUrl, {
+      
+      const response = await this.callApi(fullUrl, {
         method: 'GET',
         headers: this.getHeaders(),
       });
 
-      console.log('[SIGEF NE] Status:', response.status);
-      console.log('[SIGEF NE] StatusText:', response.statusText);
-      console.log('[SIGEF NE] Response headers:', response.headers.get('content-type'));
-
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          await this.handleUnauthorized();
-          return this.getNotaEmpenho(ano, search, page);
-        }
         const errorText = await response.text();
-        console.error('[SIGEF NE] Error response:', errorText);
         this._apiStatus.set('error');
         throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
       }
@@ -310,7 +344,6 @@ export class SigefService implements OnDestroy {
       this._authenticated.set(true);
       this._apiStatus.set('connected');
       const data = await response.json();
-      console.log('[SIGEF NE] Response:', data);
       return {
         data: (data.results || []) as NotaEmpenho[],
         count: data.count || 0,
@@ -349,6 +382,8 @@ export class SigefService implements OnDestroy {
         return null;
       }
       page++;
+      // Delay de cortesia para evitar bloqueio TLS
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
   }
 
@@ -375,6 +410,8 @@ export class SigefService implements OnDestroy {
       
       if (!result.next) break;
       page++;
+      // Delay de cortesia entre páginas
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     console.log(`[SIGEF] Total de movimentações encontradas: ${movements.length}`);
@@ -414,12 +451,10 @@ export class SigefService implements OnDestroy {
       const fullUrl = `${url}?${params}`;
       console.log('[SIGEF OB] URL:', fullUrl);
 
-      const response = await fetch(fullUrl, {
+      const response = await this.callApi(fullUrl, {
         method: 'GET',
         headers: this.getHeaders(),
       });
-
-      console.log('[SIGEF OB] Response status:', response.status);
 
       // Retornar array vazio em vez de lançar erro para erros 5xx
       if (!response.ok) {
@@ -534,16 +569,13 @@ export class SigefService implements OnDestroy {
       const queryParams = `ano=${ano}&page=${page}`;
       console.log('[SIGEF NE ITEM] URL:', url, '?', queryParams);
 
-      const response = await fetch(`${url}?${queryParams}`, {
+      const response = await this.callApi(`${url}?${queryParams}`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
 
-      console.log('[SIGEF NE ITEM] Status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[SIGEF NE ITEM] Error:', errorText);
         throw new Error(`Erro na API: ${response.status}`);
       }
 
@@ -576,7 +608,7 @@ export class SigefService implements OnDestroy {
     return itens;
   }
 
-  async authenticate(username: string, password: string): Promise<string> {
+  async authenticate(username: string, password: string, retries: number = 3): Promise<string> {
     this._loading.set(true);
     this._error.set(null);
     this._apiStatus.set('refreshing');
@@ -594,7 +626,6 @@ export class SigefService implements OnDestroy {
       });
 
       console.log('[SIGEF AUTH] Status:', response.status);
-      console.log('[SIGEF AUTH] StatusText:', response.statusText);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -604,7 +635,6 @@ export class SigefService implements OnDestroy {
       }
 
       const data = await response.json();
-      console.log('[SIGEF AUTH] Response received, access token:', data.access ? 'OK' : 'MISSING');
       this.bearerToken = data.access;
       this.refreshToken = data.refresh || null;
       this.tokenExpiry = data.exp ? Date.now() + (data.exp * 1000) - 60000 : Date.now() + (3600 * 1000) - 60000;
@@ -613,6 +643,11 @@ export class SigefService implements OnDestroy {
       this.updateExpiresAt();
       return data.access;
     } catch (err: any) {
+      if (retries > 0 && (err.message?.includes('ETIMEDOUT') || err.message?.includes('fetch'))) {
+        console.warn(`[SIGEF AUTH] Timeout ou erro de rede no login. Retentando em 3s... (${retries} restantes)`);
+        await new Promise(r => setTimeout(r, 3000));
+        return this.authenticate(username, password, retries - 1);
+      }
       console.error('[SIGEF AUTH] Erro capturado:', err);
       this._error.set(err.message || 'Erro na autenticação');
       this._authenticated.set(false);
@@ -624,7 +659,6 @@ export class SigefService implements OnDestroy {
   }
 
   async reconnect(): Promise<void> {
-    this._apiStatus.set('refreshing');
-    await this.autoAuthenticate();
+    await this.ensureAuthenticated(true);
   }
 }

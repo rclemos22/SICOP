@@ -219,6 +219,9 @@ export class DotacaoFormComponent implements OnInit {
     this.notaEmpenhoResult.set(null);
 
     try {
+      // Garantir autenticação antes de qualquer busca
+      await this.sigefService.ensureAuthenticated();
+      
       // Extrair ano dos 4 primeiros dígitos da NE (ex: "2025NE000302" -> "2025")
       const anoNE = ne.trim().substring(0, 4);
       console.log('[DotacaoForm] Buscando NE:', ne, 'com ano:', anoNE);

@@ -193,36 +193,58 @@ export class ContractService {
   private mapRawToContract(raw: any, aditivos: Aditivo[] = []): Contract {
     const dataFimOriginal = this.parseDate(raw.data_fim);
     
+    // Filtrar aditivos que alteram vigência (Prorrogação/Prazo)
     const aditivosComVigencia = aditivos
       .filter(a => {
         const tipoUpper = (a.tipo || '').toUpperCase();
         const hasNovaVigencia = !!a.nova_vigencia;
-        const isTipoPrazo = tipoUpper.includes('PRAZO') || tipoUpper === 'PRORROGACAO';
+        const isTipoPrazo = tipoUpper.includes('PRAZO') || tipoUpper === 'PRORROGACAO' || tipoUpper.includes('PRAZO');
         return hasNovaVigencia && isTipoPrazo;
       })
       .sort((a, b) => (b.nova_vigencia?.getTime() || 0) - (a.nova_vigencia?.getTime() || 0));
     
+    // Calcular Valor Global Atualizado (Original + Sum of Aditivos de Valor)
+    const totalAditivosValor = aditivos
+      .filter(a => {
+        const tipoUpper = (a.tipo || '').toUpperCase();
+        return tipoUpper.includes('VALOR') && a.valor_aditivo != null;
+      })
+      .reduce((acc, current) => acc + (current.valor_aditivo || 0), 0);
+
+    const valorGlobalAtualizado = this.parseNumeric(raw.valor_anual) + totalAditivosValor;
+
     let dataFimEfetiva: Date;
     let diasRestantes: number;
-    let statusEfetivo: ContractStatus;
     
     if (aditivosComVigencia.length > 0 && aditivosComVigencia[0].nova_vigencia) {
       dataFimEfetiva = aditivosComVigencia[0].nova_vigencia;
       const hoje = new Date();
-      const diffTime = dataFimEfetiva.getTime() - hoje.getTime();
+      hoje.setHours(0, 0, 0, 0);
+      const dataFimZero = new Date(dataFimEfetiva);
+      dataFimZero.setHours(0, 0, 0, 0);
+      
+      const diffTime = dataFimZero.getTime() - hoje.getTime();
       diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      statusEfetivo = this.calculateEffectiveStatus(raw.status, diasRestantes);
     } else {
       dataFimEfetiva = raw.data_fim_efetiva ? this.parseDate(raw.data_fim_efetiva) : dataFimOriginal;
       if (raw.dias_restantes != null) {
         diasRestantes = Number(raw.dias_restantes);
       } else {
         const hoje = new Date();
-        const diffTime = dataFimEfetiva.getTime() - hoje.getTime();
+        hoje.setHours(0, 0, 0, 0);
+        const dataFimZero = new Date(dataFimEfetiva);
+        dataFimZero.setHours(0, 0, 0, 0);
+        
+        const diffTime = dataFimZero.getTime() - hoje.getTime();
         diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       }
-      statusEfetivo = (raw.status_efetivo as ContractStatus) || this.calculateEffectiveStatus(raw.status, diasRestantes);
     }
+
+    // Usar utilitário do model para garantir consistência no status
+    // Importante: Pick de status para satisfazer a interface
+    const statusEfetivo = (raw.status === 'RESCINDIDO') 
+      ? ContractStatus.RESCINDIDO 
+      : (diasRestantes < 0) ? ContractStatus.ENCERRADO : (diasRestantes <= 90) ? ContractStatus.FINALIZANDO : ContractStatus.VIGENTE;
 
     return {
       id: raw.id,
@@ -235,7 +257,7 @@ export class ContractService {
       fornecedor_nome: raw.fornecedor_nome ?? undefined,
       data_inicio: this.parseDate(raw.data_inicio),
       data_fim: dataFimOriginal,
-      data_pagamento: this.parseNumeric(raw.data_pagamento) || undefined,
+      data_pagamento: raw.data_pagamento != null ? Number(raw.data_pagamento) : undefined,
       valor_anual: this.parseNumeric(raw.valor_anual),
       status: (raw.status as ContractStatus) || ContractStatus.VIGENTE,
       setor_id: raw.setor_id ?? raw.setor ?? undefined,
@@ -253,7 +275,9 @@ export class ContractService {
       saldo_a_pagar: this.parseNumeric(raw.saldo_a_pagar),
       data_ultimo_pagamento: raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined,
       tipo: raw.tipo as 'serviço' | 'material' | undefined,
-      valor_mensal: this.parseNumeric(raw.valor_mensal)
+      valor_mensal: raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined,
+      valor_global_atualizado: valorGlobalAtualizado,
+      total_aditivos_valor: totalAditivosValor
     };
   }
 

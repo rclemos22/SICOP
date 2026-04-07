@@ -71,9 +71,9 @@ export class SigefSyncService {
             this.updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
         }
 
-        // Delay de cortesia para a API (500ms entre requisições de NEs)
+        // Delay de cortesia para a API (1500ms entre requisições de NEs de dotações diferentes)
         if (i < queue.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 1500));
         }
     }
 

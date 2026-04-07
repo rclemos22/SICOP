@@ -63,6 +63,8 @@ export interface Contract {
   data_ultimo_pagamento?: Date;
   tipo?: 'serviço' | 'material';
   valor_mensal?: number;
+  valor_global_atualizado?: number;
+  total_aditivos_valor?: number;
 }
 
 // ─── Funções Utilitárias ─────────────────────────────────────────────────────

@@ -278,21 +278,22 @@ export class ContractFormComponent implements OnInit {
     if (this.contractForm.valid) {
       const formData = { ...this.contractForm.value };
       
-      // Converte o valor formatado para número antes de enviar
-      formData.totalValue = CurrencyUtils.parseBRL(formData.totalValue);
+      // Converte valores formatados em números puros antes de emitir
+      formData.totalValue = CurrencyUtils.parseBRL(formData.totalValue) || 0;
       formData.monthlyValue = formData.monthlyValue ? CurrencyUtils.parseBRL(formData.monthlyValue) : null;
       
-      // Converter dia de pagamento para número antes de enviar ao Supabase
-      if (formData.paymentDate) {
+      // Tratamento do Dia de Pagamento (garantir que seja número ou null)
+      if (formData.paymentDate && formData.paymentDate !== '') {
         formData.data_pagamento = Number(formData.paymentDate);
+      } else {
+        formData.data_pagamento = null;
       }
+      
+      // Limpeza de campos temporários ou disparidade de nomes
       delete formData.paymentDate;
-      
-      console.log('Dados do Contrato para Envio (processados):', JSON.stringify(formData, null, 2));
-      
-      // Emit save first, then close
+
+      console.log('Emitindo dados do contrato para salvamento:', formData);
       this.save.emit(formData);
-      // Don't close here - let parent handle it
     } else {
       this.contractForm.markAllAsTouched();
       alert('Por favor, corrija os erros no formulário antes de salvar.');

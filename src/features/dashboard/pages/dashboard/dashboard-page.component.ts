@@ -77,7 +77,6 @@ export class DashboardPageComponent implements OnInit {
 
   /**
    * Sincroniza todos os empenhos e pagamentos das dotações do exercício selecionado.
-   * Isso irá disparar a busca exaustiva (multianual e multipáginas) para cada NE.
    */
   async syncAllSigef() {
     const dots = this.budgetService.dotacoes();
@@ -230,7 +229,6 @@ export class DashboardPageComponent implements OnInit {
       .attr('transform', `translate(${width / 2},${height / 2})`);
 
     // Data for D3
-    // Order: Used (Empenhado), Available (Disponível)
     const data = {
       Used: metrics.totalUsed,
       Available: metrics.available
@@ -243,29 +241,24 @@ export class DashboardPageComponent implements OnInit {
     });
 
     // Color Palette
-    // SICOP Blue (#004B85) for Used
-    // Gray (#E5E7EB) for Available (works as neutral background ring)
     const color = d3.scaleOrdinal()
       .domain(['Used', 'Available'])
       .range(['#004B85', '#E5E7EB']);
 
     const pie = d3.pie<any>()
       .value((d: any) => d[1])
-      .sort(null); // Keep order defined in data object
+      .sort(null);
 
     const data_ready = pie(Object.entries(data));
 
-    // Arc Generator
     const arc = d3.arc()
-      .innerRadius(radius * 0.65) // Donut Hole
+      .innerRadius(radius * 0.65)
       .outerRadius(radius);
 
-    // Hover Arc (slightly larger)
     const arcHover = d3.arc()
       .innerRadius(radius * 0.65)
       .outerRadius(radius * 1.05);
 
-    // Draw Slices
     svg.selectAll('allSlices')
       .data(data_ready)
       .join('path')
@@ -276,14 +269,10 @@ export class DashboardPageComponent implements OnInit {
       .style('cursor', 'pointer')
       .style('opacity', 0.9)
       .on('mouseover', function (event, d: any) {
-        // Zoom effect
         d3.select(this).transition().duration(200).attr('d', arcHover as any);
-
-        // Tooltip Content
-        const key = d.data[0]; // 'Used' or 'Available'
+        const key = d.data[0];
         const value = d.data[1];
         const label = key === 'Used' ? 'Empenhado' : 'Disponível';
-
         tooltip.html(`
           <span class="font-bold block mb-0.5 text-gray-300 uppercase text-[10px]">${label}</span>
           <span class="text-sm font-semibold">${currencyFormatter.format(value)}</span>
@@ -292,34 +281,29 @@ export class DashboardPageComponent implements OnInit {
           .classed('hidden', false);
       })
       .on('mousemove', function (event) {
-        // Calculate position relative to container
         const [x, y] = d3.pointer(event, container);
-        // Offset slightly so cursor doesn't block text
         tooltip
           .style('left', `${x + 15}px`)
           .style('top', `${y + 15}px`);
       })
       .on('mouseout', function (event, d) {
-        // Reset Zoom
         d3.select(this).transition().duration(200).attr('d', arc as any);
-        // Hide Tooltip
         tooltip.style('opacity', 0).classed('hidden', true);
       });
 
-    // Add Percentage Text in Center
     svg.append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "-0.2em")
       .style("font-size", "24px")
       .style("font-weight", "bold")
-      .style("fill", "#004B85") // SICOP Blue text
+      .style("fill", "#004B85")
       .text(`${metrics.percentageUsed.toFixed(1)}%`);
 
     svg.append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "1.2em")
       .style("font-size", "12px")
-      .style("fill", "#6B7280") // Gray 500
+      .style("fill", "#6B7280")
       .text(`Executado`);
   }
 

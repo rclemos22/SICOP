@@ -231,27 +231,30 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   async handleSave(data: any) {
     console.log('=== [handleSave] dados recebidos:', data);
     console.log('=== [handleSave] selectedContract (isEditing):', this.selectedContract());
-    
-    const contractData = {
-      contrato: data.number,
-      processo_sei: data.processNumber || null,
-      link_sei: data.linkSei || null,
-      contratada: data.supplier,
-      cnpj_contratada: data.cnpjContratada || null,
-      fornecedor_id: data.fornecedor_id || null,
-      data_inicio: data.startDate ? new Date(data.startDate).toISOString().split('T')[0] : null,
-      data_fim: data.endDate ? new Date(data.endDate).toISOString().split('T')[0] : null,
-      valor_anual: Number(data.totalValue),
-      valor_mensal: data.monthlyValue ? Number(data.monthlyValue) : null,
-      data_pagamento: data.data_pagamento || null,
-      status: data.status as ContractStatus,
-      setor_id: (data.department && data.department.length === 36) ? data.department : null,
-      unid_gestora: data.unid_gestora,
-      objeto: data.object,
-      gestor_contrato: data.gestor_contrato || null,
-      fiscal_admin: data.fiscal_admin || null,
-      fiscal_tecnico: data.fiscal_tecnico || null
-    };
+        // Mapeamento preciso entre campos do formulário (vinda do emitter) e colunas da tabela 'contratos'
+      const contractData = {
+        contrato: data.number,
+        processo_sei: data.processNumber,
+        link_sei: data.linkSei || null,
+        fornecedor_id: data.fornecedor_id,
+        contratada: data.supplier,
+        cnpj_contratada: data.cnpjContratada || null,
+        objeto: data.object,
+        data_inicio: data.startDate,
+        data_fim: data.endDate,
+        data_pagamento: data.data_pagamento != null ? Number(data.data_pagamento) : null,
+        valor_anual: Number(data.totalValue), // 'totalValue' do form mapeia para 'valor_anual' (Global)
+        valor_mensal: data.monthlyValue != null ? Number(data.monthlyValue) : null,
+        unid_gestora: data.unid_gestora,
+        setor_id: data.department,
+        status: data.status || ContractStatus.VIGENTE,
+        tipo: data.tipo,
+        gestor_contrato: data.gestor_contrato || null,
+        fiscal_admin: data.fiscal_admin || null,
+        fiscal_tecnico: data.fiscal_tecnico || null,
+      };
+
+      console.log('Dados processados para o banco de dados:', contractData);
     
     console.log('=== [handleSave] contractData formatted:', JSON.stringify(contractData, null, 2));
 
