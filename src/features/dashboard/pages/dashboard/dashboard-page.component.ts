@@ -1,4 +1,4 @@
-import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
+import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
 import { Component, inject, computed, output, viewChild, ElementRef, effect, signal, OnInit } from '@angular/core';
 import * as d3 from 'd3';
 import { ContractStatus } from '../../../../shared/models/contract.model';
@@ -12,7 +12,7 @@ import { SupabaseService } from '../../../../core/services/supabase.service';
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe, NgTemplateOutlet],
+  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe],
   templateUrl: './dashboard-page.component.html',
 })
 export class DashboardPageComponent implements OnInit {
