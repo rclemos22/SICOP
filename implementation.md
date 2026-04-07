@@ -43,10 +43,13 @@ src/
 ### Contract
 - `id`, `contrato`, `processo_sei`, `link_sei`, `contratada`, `cnpj_contratada`, `fornecedor_id`
 - `data_inicio`, `data_fim`
-- `valor_anual`, `status`, `setor_id`, `unid_gestora`
+- `valor_anual`, `valor_mensal`, `status`, `setor_id`, `unid_gestora`
 - `objeto`
 - `gestor_contrato`, `fiscal_admin`, `fiscal_tecnico`
 - `data_fim_efetiva`, `dias_restantes`, `status_efetivo`
+- `tipo` ('serviço' | 'material')
+- `data_pagamento` (dia do mês para pagamentos)
+- `total_empenhado`, `total_pago`, `saldo_a_pagar`, `data_ultimo_pagamento`
 
 ### Aditivo
 - `id`, `contract_id`, `numero_aditivo`, `tipo`

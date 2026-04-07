@@ -69,9 +69,12 @@ Para criar ou editar um contrato:
    - **Fornecedor**: Digite para buscar (autocomplete). O CNPJ é preenchido automaticamente. Se não encontrar, clique em "Cadastrar novo fornecedor"
    - **Objeto do Contrato**
    - **Data de Início** e **Data de Fim**
-   - **Valor Global (R$)**
+   - **Dia Pagamento**: Dia do mês para pagamento (opcional)
+   - **Valor Global (R$)**: Valor total anual do contrato
+   - **Valor Mensal (R$)**: Valor mensal (opcional)
    - **Unidade Gestora**: 080101 - DPEMA ou 080901 - FADEP
    - **Setor Responsável**: GABINETE, JURIDICO, ADMINISTRATIVO, etc.
+   - **Tipo**: Serviço ou Material
    - **Status Inicial**
    - **Gestor do Contrato** (opcional)
    - **Fiscal Administrativo** (opcional)
@@ -83,9 +86,20 @@ Para criar ou editar um contrato:
 #### Detalhes do Contrato
 A página de detalhes possui abas:
 - **Visão Geral**: Dados do contrato, objeto, informações financeiras
+- **Próximos Pagamentos**: Lista automática de pagamentos futuros calculados com base no dia de pagamento e valor mensal cadastrados
 - **Aditivos**: Lista de aditivos (criar, editar, excluir)
 - **Dotações**: Dotações orçamentárias vinculadas
 - **Financeiro**: Transações e Notas de Empenho
+
+#### Próximos Pagamentos
+Na seção "Próximos Pagamentos / Vencimentos" da aba Visão Geral:
+1. Sistema calcula automaticamente os pagamentos com base em:
+   - **Dia de pagamento**: Configurado no campo `data_pagamento` (dia do mês)
+   - **Valor mensal**: Configurado no campo `valor_mensal`
+   - **Data de início** e **Data de fim** do contrato
+2. Gera os próximos 6 pagamentos a partir da data atual
+3. Exibe: mês/ano do pagamento, dias até o vencimento, valor
+4. Se não houver dia de pagamento ou valor mensal configurados, exibe mensagem informativa
 
 ### Aditivos
 

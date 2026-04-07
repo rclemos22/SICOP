@@ -139,8 +139,20 @@ O formulário também possui autocomplete de fornecedores que preenche automatic
 - Gráfico de rosca de distribuição de contratos por status (D3.js)
 - KPIs: Total Contratos, Dotações, Empenhado
 - Tabela de últimos pagamentos
+- Botão de sincronização SIGEF com indicadores em tempo real
+- Métricas de execução financeira (Empenhado, Pago, Saldo a Pagar)
 
-### Consulta de Ordem Bancária
+### Formulário de Contratos - Melhorias Recentes
+- **Campo Tipo**: Adicionado campo com opções "Serviço" ou "Material"
+- **Campo Valor Mensal**: Novo campo para valor mensal após Valor Global
+- **Dia Pagamento**: Movido para a mesma linha da Data de Fim
+- **Status Inicial**: Agora posicionado ao lado do campo Tipo
+- **Próximos Pagamentos/Vencimentos**: Seção na visão geral do contrato que calcula automaticamente os próximos pagamentos com base em:
+  - Dia de pagamento configurado (`data_pagamento`)
+  - Valor mensal (`valor_mensal`)
+  - Gera automaticamente os próximos 6 pagamentos a partir da data de início
+
+### Correções na Integração SIGEF
 - Nova página dedicada para consulta de OBs via API SIGEF
 - Seleção de Unidade Gestora (080101 - DPEMA, 080901 - FADEP)
 - Ano extraído automaticamente dos 4 primeiros dígitos do número da OB

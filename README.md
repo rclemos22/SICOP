@@ -29,9 +29,14 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 | Fornecedor | `contratada` |
 | CNPJ | `cnpj_contratada` |
 | Objeto | `objeto` |
+| Data Início | `data_inicio` |
+| Data Fim | `data_fim` |
+| Dia Pagamento | `data_pagamento` |
 | Valor Global | `valor_anual` |
+| Valor Mensal | `valor_mensal` |
 | Unidade Gestora | `unid_gestora` |
 | Setor | `setor_id` |
+| Tipo | `tipo` (serviço/material) |
 
 ## Tech Stack
 
