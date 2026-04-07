@@ -320,16 +320,41 @@ export class ContractService {
   }
 
   async updateContract(id: string, contract: Partial<Contract>): Promise<Result<null>> {
+    console.log('[ContractService.updateContract] Starting update for id:', id);
+    console.log('[ContractService.updateContract] Data to update:', JSON.stringify(contract, null, 2));
+    
     try {
+      // Filter out undefined values and only keep valid columns
+      const updateData: any = {};
+      const allowedFields = [
+        'contrato', 'processo_sei', 'link_sei', 'contratada', 'cnpj_contratada', 'fornecedor_id',
+        'data_inicio', 'data_fim', 'data_pagamento', 'valor_anual', 'valor_mensal', 'status',
+        'setor_id', 'unid_gestora', 'objeto', 'gestor_contrato', 'fiscal_admin', 'fiscal_tecnico', 'tipo'
+      ];
+      
+      for (const key of allowedFields) {
+        if (contract[key] !== undefined) {
+          updateData[key] = contract[key];
+        }
+      }
+      
+      console.log('[ContractService.updateContract] Filtered update data:', JSON.stringify(updateData, null, 2));
+      
       const { error } = await this.supabaseService.client
         .from('contratos')
-        .update(contract as any)
+        .update(updateData)
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ContractService.updateContract] Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('[ContractService.updateContract] Update successful');
       await this.loadContracts();
       return ok(null);
     } catch (err: any) {
+      console.error('[ContractService.updateContract] Caught error:', err);
       this.errorHandler.handle(err, 'ContractService.updateContract');
       return fail(err.message || 'Erro ao atualizar contrato');
     }
