@@ -3,7 +3,6 @@ import { ErrorHandlerService } from '../../../core/services/error-handler.servic
 
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { SigefCacheService } from '../../../core/services/sigef-cache.service';
-import { SigefSyncService } from '../../../core/services/sigef-sync.service';
 import { Transaction, TransactionType } from '../../../shared/models/transaction.model';
 import { BudgetService } from '../../budget/services/budget.service';
 
@@ -14,7 +13,6 @@ export class FinancialService {
   private supabaseService = inject(SupabaseService);
   private errorHandler = inject(ErrorHandlerService);
   private sigefCacheService = inject(SigefCacheService);
-  private sigefSyncService = inject(SigefSyncService);
   private budgetService = inject(BudgetService);
 
   private _transactions = signal<Transaction[]>([]);
@@ -49,8 +47,8 @@ export class FinancialService {
 
       const transactions = (data || []).map(this.mapRawToTransaction);
       
-      // Enrich with SIGEF data from budgets
-      const sigefTransactions = await this.loadSigefTransactions();
+      // Load from local cache only (no API calls)
+      const sigefTransactions = await this.loadSigefFromCache();
       
       // Combine local transactions with SIGEF transactions
       const allTransactions = [...transactions, ...sigefTransactions];
@@ -67,7 +65,7 @@ export class FinancialService {
     }
   }
 
-  private async loadSigefTransactions(): Promise<Transaction[]> {
+  private async loadSigefFromCache(): Promise<Transaction[]> {
     const transactions: Transaction[] = [];
     const budgets = this.budgetService.dotacoes();
     
@@ -81,22 +79,13 @@ export class FinancialService {
       if (!budget.nunotaempenho) continue;
 
       const neValue = budget.nunotaempenho.trim();
-      const anoNE = neValue.substring(0, 4);
       const ug = budget.unid_gestora || '080101';
       const ugNum = parseInt(ug, 10);
 
       try {
-        // Try to get from cache first
-        let movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
-        let obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
-
-        // If cache is empty, fetch from API
-        if (movimentosCache.length === 0 || obsCache.length === 0) {
-          await this.sigefSyncService.getNotaEmpenhoWithCache(anoNE, neValue, ug, true);
-          
-          movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
-          obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
-        }
+        // Only read from local cache - NO API calls
+        const movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
+        const obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
 
         // Add movement transactions
         movimentosCache.forEach((m, idx) => {
@@ -143,7 +132,7 @@ export class FinancialService {
           });
         });
       } catch (err) {
-        console.warn('[FinancialService] Error loading SIGEF for NE:', neValue, err);
+        console.warn('[FinancialService] Error loading from cache for NE:', neValue, err);
       }
     }
 
