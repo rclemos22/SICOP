@@ -511,9 +511,9 @@ export class SigefService implements OnDestroy {
       
       for (const anoPesquisa of anosAPesquisar) {
         let page = 1;
-        // O SIGEF espera formato DD/MM/YYYY para OBs
-        const datainicio = `01/01/${anoPesquisa}`;
-        const datafim = `31/12/${anoPesquisa}`;
+        // O SIGEF espera formato YYYY-MM-DD para OBs
+        const datainicio = `${anoPesquisa}-01-01`;
+        const datafim = `${anoPesquisa}-12-31`;
 
         while (page <= MAX_PAGES) {
           try {
