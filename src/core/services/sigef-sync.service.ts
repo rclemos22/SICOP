@@ -130,10 +130,15 @@ export class SigefSyncService {
           await this.cacheService.saveNeMovimentos(movements.map(m => this.mapApiMovementToCache(m, ugNum)));
         }
 
+        // Determinar a data mínima (primeiro empenho) para filtrar OBs indevidas (pagamento não pode preceder empenho)
+        const allDates = movements.map(m => m.dtlancamento).filter(Boolean) as string[];
+        const minDate = allDates.length > 0 ? allDates.sort()[0] : undefined;
+
         // Buscar OBs vinculadas percorrendo todas as NEs encontradas nos movimentos
         const nesVinculadas = [...new Set([neNumber, ...movements.map(m => m.nunotaempenho).filter(Boolean)])] as string[];
         
-        const obs = await this.sigefService.getOrdemBancariaMovements(ano, nesVinculadas, ug);
+        console.log('[SIGEF SYNC] Buscando OBs com data mínima:', minDate);
+        const obs = await this.sigefService.getOrdemBancariaMovements(ano, nesVinculadas, ug, minDate);
         if (obs.length > 0) {
           await this.cacheService.saveOrdensBancarias(obs.map(ob => this.mapApiObToCache(ob, ugNum)));
         }

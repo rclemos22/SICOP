@@ -5,6 +5,7 @@ import { AppContextService } from '../../../../core/services/app-context.service
 import { SigefService } from '../../../../core/services/sigef.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria, SIGEF_PAID_STATUSES } from '../../../../core/services/sigef-cache.service';
+import { SupabaseService } from '../../../../core/services/supabase.service';
 
 import { getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
 import {
@@ -23,10 +24,13 @@ import { ContractService } from '../../services/contract.service';
 
 interface PaymentSchedule {
   monthLabel: string;
+  reference: string; // YYYY-MM
   date: Date;
   valor: number;
   daysUntil: number;
   isPast: boolean;
+  status: 'PAID' | 'OPEN' | 'OVERDUE';
+  linkedTransactions: Transaction[];
 }
 
 @Component({
@@ -43,6 +47,7 @@ export class ContractDetailsPageComponent {
   private sigefService = inject(SigefService);
   private sigefSyncService = inject(SigefSyncService);
   private sigefCacheService = inject(SigefCacheService);
+  private supabaseService = inject(SupabaseService);
 
   // Inputs & Outputs
   contractId = input.required<string>();
@@ -79,8 +84,18 @@ export class ContractDetailsPageComponent {
   isAditivoModalOpen = signal(false);
   isDotacaoModalOpen = signal(false);
   isObjetoModalOpen = signal(false);
+  isLinkObModalOpen = signal(false);
+  
   editingAditivo = signal<Aditivo | null>(null);
   editingDotacao = signal<Dotacao | null>(null);
+  selectedInstallment = signal<PaymentSchedule | null>(null);
+
+  // Filtra transações de liquidação (pagamentos) que podem ser vinculadas
+  availableObs = computed(() => {
+    const allTrans = this.transactions();
+    // Apenas liquidações
+    return allTrans.filter(t => t.type === 'LIQUIDATION');
+  });
 
   // ── Computed Contract ───────────────────────────────────────────────────
 
@@ -96,12 +111,13 @@ export class ContractDetailsPageComponent {
 
   // ── Lógica de Negócio: Próximos Pagamentos ─────────────────────────────────
 
-  upcomingPayments = computed(() => {
+  paymentSchedule = computed(() => {
     const c = this.contract();
     if (!c || !c.data_inicio || !c.data_pagamento || !c.valor_mensal) {
       return [];
     }
 
+    const transactions = this.transactions();
     const payments: PaymentSchedule[] = [];
     const paymentDay = Number(c.data_pagamento);
     const today = new Date();
@@ -111,31 +127,57 @@ export class ContractDetailsPageComponent {
     const endDate = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
     const monthlyValue = Number(c.valor_mensal);
 
-    console.log(`[DEBUG] Gerando próximos pagamentos para o contrato ${c.contrato}: Dia ${paymentDay}, Valor R$ ${monthlyValue}`);
-
     let currentDate = new Date(startDate);
-    
-    while (currentDate <= endDate) {
-      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-      const actualDay = Math.min(paymentDay, lastDayOfMonth);
-      currentDate.setDate(actualDay);
+    currentDate.setDate(1); // Começar do dia 1 para iterar meses corretamente
 
-      if (currentDate >= today) {
-        const daysUntil = Math.ceil((currentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-        
-        payments.push({
-          monthLabel,
-          date: new Date(currentDate),
-          valor: monthlyValue,
-          daysUntil,
-          isPast: false
-        });
+    while (currentDate <= endDate) {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1;
+      const reference = `${year}-${month.toString().padStart(2, '0')}`;
+      
+      const lastDayOfMonth = new Date(year, month, 0).getDate();
+      const actualDay = Math.min(paymentDay, lastDayOfMonth);
+      
+      const installmentDate = new Date(year, month - 1, actualDay);
+      const isPast = installmentDate < today;
+      const monthLabel = installmentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+
+      // Tenta encontrar transações vinculadas a esta parcela
+      // 1. Pela referência explícita (parcela_referencia)
+      // 2. Ou pela lógica de proximidade (mesmo mês e ano da liquidação)
+      const matches = transactions.filter(t => 
+        t.type === 'LIQUIDATION' && 
+        (t.parcela_referencia === reference || 
+         (new Date(t.date).getFullYear() === year && new Date(t.date).getMonth() + 1 === month))
+      );
+
+      let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
+      if (matches.length > 0) {
+        status = 'PAID';
+      } else if (isPast) {
+        status = 'OVERDUE';
       }
+
+      payments.push({
+        monthLabel,
+        reference,
+        date: installmentDate,
+        valor: monthlyValue,
+        daysUntil: Math.ceil((installmentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
+        isPast,
+        status,
+        linkedTransactions: matches
+      });
+
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
 
-    return payments.slice(0, 6);
+    return payments;
+  });
+
+  // Alias para manter compatibilidade com template se necessário (mas vou mudar o template)
+  upcomingPayments = computed(() => {
+    return this.paymentSchedule().filter(p => p.status !== 'PAID').slice(0, 6);
   });
 
   // ── Lógica de Negócio: Prorrogação ─────────────────────────────────────
@@ -618,6 +660,110 @@ export class ContractDetailsPageComponent {
       console.log('[ContractDetails] Dados SIGEF atualizados com sucesso');
     } catch (err: any) {
       console.error('[ContractDetails] Erro na sincronização batch:', err);
+    } finally {
+      this.sigefSyncing.set(false);
+    }
+  }
+
+  // ── Vincular OB ──────────────────────────────────────────────────────────
+
+  openLinkObModal(installment: PaymentSchedule) {
+    this.selectedInstallment.set(installment);
+    this.isLinkObModalOpen.set(true);
+  }
+
+  closeLinkObModal() {
+    this.isLinkObModalOpen.set(false);
+    this.selectedInstallment.set(null);
+  }
+
+  async linkTransactionToInstallment(transactionId: string) {
+    const installment = this.selectedInstallment();
+    if (!installment) return;
+
+    // Achar a transação selecionada
+    const transaction = this.transactions().find(t => t.id === transactionId);
+    if (!transaction) return;
+
+    try {
+      this.sigefSyncing.set(true); // Reusa o spinner para indicar processamento
+
+      // Se for uma transação do SIGEF (id começa com 'sigef-' ou 'cache-'), 
+      // precisamos primeiro persistir no banco 'transacoes' se não existir, 
+      // ou apenas enviar o update com a referência.
+      
+      const isSigef = transaction.id.startsWith('sigef-') || transaction.id.startsWith('cache-');
+      
+      let finalId = transaction.id;
+
+      if (isSigef) {
+        // Tenta encontrar por sigef_id primeiro (mais seguro)
+        const { data: existing } = await this.supabaseService.client
+          .from('transacoes')
+          .select('id')
+          .eq('sigef_id', transaction.id)
+          .maybeSingle();
+
+        if (existing) {
+          finalId = existing.id;
+        } else {
+          // Criar novo registro baseado no SIGEF
+          const { data: created, error: createError } = await this.supabaseService.client
+            .from('transacoes')
+            .insert({
+              contract_id: this.contractId(),
+              description: transaction.description,
+              commitment_id: transaction.commitment_id,
+              date: new Date(transaction.date).toISOString().split('T')[0],
+              type: transaction.type,
+              amount: transaction.amount,
+              department: transaction.department,
+              budget_description: transaction.budget_description,
+              parcela_referencia: installment.reference,
+              sigef_id: transaction.id
+            })
+            .select()
+            .single();
+          
+          if (createError) throw createError;
+          finalId = created.id;
+        }
+      }
+
+      // Atualizar o campo parcela_referencia
+      const { error } = await this.supabaseService.client
+        .from('transacoes')
+        .update({ parcela_referencia: installment.reference })
+        .eq('id', finalId);
+
+      if (error) throw error;
+
+      // Recarregar dados
+      await this.loadTransactions(this.contractId());
+      this.closeLinkObModal();
+      
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro ao vincular OB:', err);
+      alert('Erro ao vincular Ordem Bancária: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      this.sigefSyncing.set(false);
+    }
+  }
+
+  async unlinkTransaction(transactionId: string) {
+    if (!confirm('Deseja remover o vínculo desta OB com a parcela?')) return;
+    
+    try {
+      this.sigefSyncing.set(true);
+      const { error } = await this.supabaseService.client
+        .from('transacoes')
+        .update({ parcela_referencia: null })
+        .eq('id', transactionId);
+
+      if (error) throw error;
+      await this.loadTransactions(this.contractId());
+    } catch (err: any) {
+      alert('Erro ao desvincular: ' + err.message);
     } finally {
       this.sigefSyncing.set(false);
     }

@@ -140,7 +140,7 @@ export class SigefCacheService {
         .select('*')
         .eq('cdunidadegestora', ug)
         .eq('nunotaempenho', neNumber)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         return null;
@@ -248,7 +248,7 @@ export class SigefCacheService {
         .select('*')
         .eq('nuordembancaria', obNumber)
         .eq('cdunidadegestora', ug)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         return null;

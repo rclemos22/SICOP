@@ -17,6 +17,8 @@ export interface Transaction {
   budget_description: string;
   nunotaempenho?: string;
   dotacao_id?: string;
+  parcela_referencia?: string; // Formato: YYYY-MM
+  sigef_id?: string;
 }
 
 // Helpers for UI logic (Icons, Colors, Labels) based on Type

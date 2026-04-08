@@ -287,25 +287,37 @@ export class SigefService implements OnDestroy {
     await this.ensureAuthenticated(true);
   }
 
-  private async callApi(url: string, options: RequestInit = {}, retries: number = 3, backoff: number = 2000): Promise<Response> {
+  private async callApi(url: string, options: RequestInit = {}, retries: number = 4, backoff: number = 2500): Promise<Response> {
     try {
       const response = await fetch(url, options);
       
+      // Auto-reautenticação em caso de expiração
       if (response.status === 401 || response.status === 403) {
         await this.handleUnauthorized();
         const newOptions = { ...options, headers: this.getHeaders() };
         return await fetch(url, newOptions);
       }
+
+      // Erros transientes de Gateway/Server (comuns em APIs governamentais instáveis)
+      if ([500, 502, 503, 504].includes(response.status) && retries > 0) {
+        console.warn(`[SIGEF] Erro de Gateway/Servidor (${response.status}). Retentando em ${backoff}ms... (${retries} tentativas restantes)`);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return this.callApi(url, options, retries - 1, backoff * 1.5);
+      }
       
       return response;
     } catch (err: any) {
-      const isNetworkError = err.message?.includes('network') || 
-                             err.message?.includes('socket') || 
-                             err.message?.includes('disconnected') ||
-                             err.message?.includes('ETIMEDOUT');
+      // Erros de rede, sockets e TLS que nem chegam a retornar status HTTP
+      const errLower = (err.message || '').toLowerCase();
+      const isNetworkError = errLower.includes('network') || 
+                             errLower.includes('socket') || 
+                             errLower.includes('disconnected') ||
+                             errLower.includes('timeout') ||
+                             errLower.includes('etimedout') ||
+                             errLower.includes('failed to fetch');
       
       if (isNetworkError && retries > 0) {
-        console.warn(`[SIGEF] Erro de rede detectado (${err.message}). Retentando em ${backoff}ms... (${retries} tentativas restantes)`);
+        console.warn(`[SIGEF] Erro de conexão detectado (${err.message}). Retentando em ${backoff}ms... (${retries} tentativas restantes)`);
         await new Promise(resolve => setTimeout(resolve, backoff));
         return this.callApi(url, options, retries - 1, backoff * 1.5);
       }
@@ -398,20 +410,25 @@ export class SigefService implements OnDestroy {
     let page = 1;
     
     while (true) {
-      // Usamos o numeroNE no search para a API filtrar registros relevantes
-      const result = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora);
-      
-      const filtered = result.data.filter(ne => 
-        (ne.nunotaempenho === numeroNE || ne.nuneoriginal === numeroNE) && 
-        ne.cdunidadegestora === cdunidadegestora
-      );
-      
-      movements.push(...filtered);
-      
-      if (!result.next) break;
-      page++;
-      // Delay de cortesia entre páginas
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        // Usamos o numeroNE no search para a API filtrar registros relevantes
+        const result = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora);
+        
+        const filtered = result.data.filter(ne => 
+          (ne.nunotaempenho === numeroNE || ne.nuneoriginal === numeroNE) && 
+          ne.cdunidadegestora === cdunidadegestora
+        );
+        
+        movements.push(...filtered);
+        
+        if (!result.next) break;
+        page++;
+        // Delay de cortesia entre páginas
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (err) {
+        console.warn(`[SIGEF] Falha ao carregar página ${page} de movimentos para ${numeroNE}. Retornando dados parciais.`, err);
+        break;
+      }
     }
     
     console.log(`[SIGEF] Total de movimentações encontradas: ${movements.length}`);
@@ -492,8 +509,8 @@ export class SigefService implements OnDestroy {
    * Busca todas as ordens bancárias confirmadas vinculadas a uma lista de notas de empenho (original + reforços).
    * Busca a partir do ano da NE até o ano atual, pois pagamentos podem ser efetuados em anos posteriores.
    */
-  async getOrdemBancariaMovements(ano: string, numeroNEs: string[], cdunidadegestora: string): Promise<OrdemBancaria[]> {
-    console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements ===', { ano, numeroNEs, ug: cdunidadegestora });
+  async getOrdemBancariaMovements(ano: string, numeroNEs: string[], cdunidadegestora: string, minDate?: string): Promise<OrdemBancaria[]> {
+    console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements ===', { ano, numeroNEs, ug: cdunidadegestora, minDate });
     const allOBs: OrdemBancaria[] = [];
     const MAX_PAGES = 500;
     const anoNE = parseInt(ano, 10);
@@ -507,7 +524,9 @@ export class SigefService implements OnDestroy {
 
     // Iterar sobre todas as NEs encontradas para este contrato/UG
     for (const neNumber of numeroNEs) {
-      console.log(`[SIGEF OB] Buscando OBs para NE: ${neNumber} na UG: ${cdunidadegestora}`);
+      if (!neNumber) continue;
+      const targetNE = neNumber.trim().toUpperCase();
+      console.log(`[SIGEF OB] Buscando OBs para NE: ${targetNE} na UG: ${cdunidadegestora}`);
       
       for (const anoPesquisa of anosAPesquisar) {
         let page = 1;
@@ -517,21 +536,33 @@ export class SigefService implements OnDestroy {
 
         while (page <= MAX_PAGES) {
           try {
-            const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, neNumber, cdunidadegestora);
+            const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, targetNE, cdunidadegestora);
             
             if (result.data.length > 0) {
-              // Filtrar no frontend para garantir que a OB realmente pertence à NE solicitada (se a API retornar busca aproximada)
-              const filteredMatches = result.data.filter(ob => 
-                !neNumber || 
-                ob.nunotaempenho?.includes(neNumber) || 
-                ob.deobservacao?.includes(neNumber) || 
-                ob.definalidade?.includes(neNumber) ||
-                ob.nudocumento?.includes(neNumber)
-              );
+              // FILTRO RESTRITO: 
+              // 1. A OB deve estar formalmente vinculada à NE (link direto nunotaempenho)
+              // 2. A data da OB não pode ser anterior à data mínima permitida (data da NE)
+              const filteredMatches = result.data.filter(ob => {
+                const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
+                const obDate = ob.dtlancamento || ob.dtpagamento || '';
+
+                // Match exato do ID da NE
+                const isMatch = obNe === targetNE;
+                
+                // Validação cronológica (OB não pode vir antes do empenho)
+                // Usamos comparação de string pois o formato SIGEF é YYYY-MM-DD
+                const isDateValid = !minDate || (obDate >= minDate);
+
+                if (isMatch && !isDateValid) {
+                  console.warn(`[SIGEF OB] Ignorando OB ${ob.nuordembancaria} pois data ${obDate} é anterior à data do empenho ${minDate}`);
+                }
+
+                return isMatch && isDateValid;
+              });
               
               if (filteredMatches.length > 0) {
                 allOBs.push(...filteredMatches);
-                console.log(`[SIGEF OB] NE ${neNumber} (${anoPesquisa}) - Pág ${page}: Encontradas ${filteredMatches.length} OBs válidas`);
+                console.log(`[SIGEF OB] NE ${targetNE} (${anoPesquisa}) - Pág ${page}: Encontradas ${filteredMatches.length} OBs válidas`);
               }
             }
 
@@ -542,7 +573,7 @@ export class SigefService implements OnDestroy {
             // Delay de cortesia para a API (1200ms entre requisições para evitar bloqueio TLS/Network)
             await new Promise(resolve => setTimeout(resolve, 1200));
           } catch (err) {
-            console.error(`[SIGEF OB] Erro na página ${page} para NE ${neNumber}:`, err);
+            console.error(`[SIGEF OB] Erro na página ${page} para NE ${targetNE}:`, err);
             break;
           }
         }
@@ -551,7 +582,7 @@ export class SigefService implements OnDestroy {
       }
     }
 
-    // Remover duplicatas
+    // Remover duplicatas por segurança
     const uniqueOBs = Array.from(new Map(allOBs.map(ob => [ob.nuordembancaria + '-' + ob.cdunidadegestora, ob])).values());
     console.log(`[SIGEF OB] Busca concluída para o contrato. Total único: ${uniqueOBs.length} OBs`);
     return uniqueOBs;
