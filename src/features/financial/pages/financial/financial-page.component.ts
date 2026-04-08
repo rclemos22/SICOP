@@ -64,8 +64,8 @@ export class FinancialPageComponent {
       // Advanced Filter: Type
       if (type && t.type !== type) return false;
 
-      // Advanced Filter: Contract (ID match)
-      if (contract && !t.contract_id.toLowerCase().includes(contract)) return false;
+      // Advanced Filter: Contract (Number match)
+      if (contract && !t.contract_number?.toLowerCase().includes(contract)) return false;
 
       // Advanced Filter: Commitment (ID match)
       if (commitment && !t.commitment_id.toLowerCase().includes(commitment)) return false;
@@ -107,7 +107,7 @@ export class FinancialPageComponent {
       if (query) {
         const matches =
           t.description.toLowerCase().includes(query) ||
-          t.contract_id.toLowerCase().includes(query) ||
+          t.contract_number?.toLowerCase().includes(query) ||
           t.commitment_id.toLowerCase().includes(query) ||
           t.budget_description.toLowerCase().includes(query);
 

@@ -265,7 +265,7 @@ export class ContractDetailsPageComponent {
     const trans = this.transactions();
 
     const totalPaid = trans
-      .filter(t => t.type === 'LIQUIDATION')
+      .filter(t => t.type === 'LIQUIDATION' && !t.parcela_referencia)
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalCommitted = trans

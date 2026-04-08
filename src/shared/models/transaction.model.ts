@@ -19,6 +19,7 @@ export interface Transaction {
   dotacao_id?: string;
   parcela_referencia?: string; // Formato: YYYY-MM
   sigef_id?: string;
+  contract_number?: string;
 }
 
 // Helpers for UI logic (Icons, Colors, Labels) based on Type
