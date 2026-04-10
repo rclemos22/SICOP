@@ -7,7 +7,7 @@ import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria, SIGEF_PAID_STATUSES } from '../../../../core/services/sigef-cache.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 
-import { getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
+import { getUnidadeLabel, getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
 import {
   Contract, ContractStatus, Aditivo
 } from '../../../../shared/models/contract.model';
@@ -90,11 +90,47 @@ export class ContractDetailsPageComponent {
   editingDotacao = signal<Dotacao | null>(null);
   selectedInstallment = signal<PaymentSchedule | null>(null);
 
-  // Filtra transações de liquidação (pagamentos) que podem ser vinculadas
+  // Filtra transações de liquidação (pagamentos) para vinculação
   availableObs = computed(() => {
     const allTrans = this.transactions();
+    const current = this.selectedInstallment();
+    
     // Apenas liquidações
-    return allTrans.filter(t => t.type === 'LIQUIDATION');
+    const filtered = allTrans.filter(t => {
+      // Deve ser do tipo LIQUIDATION
+      if (t.type !== 'LIQUIDATION') return false;
+      
+      // Se não tem vínculo, está disponível
+      if (!t.parcela_referencia) return true;
+      
+      // Se tem vínculo, só está disponível se for para a parcela que estamos editando agora
+      if (current && t.parcela_referencia === current.reference) return true;
+      
+      return false;
+    });
+
+    // Ordenação inteligente: 
+    // 1. Mesmo mês/ano da parcela selecionada primeiro
+    // 2. Por data decrescente
+    if (current) {
+      const currentYear = current.date.getFullYear();
+      const currentMonth = current.date.getMonth();
+
+      return [...filtered].sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        
+        const isAMatch = dateA.getFullYear() === currentYear && dateA.getMonth() === currentMonth;
+        const isBMatch = dateB.getFullYear() === currentYear && dateB.getMonth() === currentMonth;
+
+        if (isAMatch && !isBMatch) return -1;
+        if (!isAMatch && isBMatch) return 1;
+        
+        return dateB.getTime() - dateA.getTime();
+      });
+    }
+
+    return filtered;
   });
 
   // ── Computed Contract ───────────────────────────────────────────────────
@@ -143,12 +179,14 @@ export class ContractDetailsPageComponent {
       const monthLabel = installmentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 
       // Tenta encontrar transações vinculadas a esta parcela
-      // 1. Pela referência explícita (parcela_referencia)
-      // 2. Ou pela lógica de proximidade (mesmo mês e ano da liquidação)
+      // 1. Pela referência explícita (parcela_referencia) - Prioridade Total
+      // 2. Ou pela lógica de proximidade (mesmo mês e ano) APENAS se a transação não estiver vinculada a nenhuma outra parcela
       const matches = transactions.filter(t => 
         t.type === 'LIQUIDATION' && 
-        (t.parcela_referencia === reference || 
-         (new Date(t.date).getFullYear() === year && new Date(t.date).getMonth() + 1 === month))
+        (
+          t.parcela_referencia === reference || 
+          (!t.parcela_referencia && new Date(t.date).getFullYear() === year && new Date(t.date).getMonth() + 1 === month)
+        )
       );
 
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
@@ -407,7 +445,9 @@ export class ContractDetailsPageComponent {
               department: ug,
               budget_description: budget.dotacao,
               nunotaempenho: m.nunotaempenho,
-              dotacao_id: budget.id
+              dotacao_id: budget.id,
+              unidade_gestora_label: getUnidadeLabel(ug),
+              contract_type: budget.contract_type
             } as Transaction);
           });
 
@@ -423,18 +463,26 @@ export class ContractDetailsPageComponent {
               const obNumero = p.nuordembancaria || p.nudocumento || 'S/N';
               
               const obId = `cache-ob-${obNumero}-${p.dtpagamento || p.dtlancamento || pIdx}-${pIdx}`;
+              const paymentDate = p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date());
+              const paymentMonth = p.dtpagamento 
+                ? p.dtpagamento.substring(0, 7) 
+                : (p.dtlancamento ? p.dtlancamento.substring(0, 7) : undefined);
+              
               transactionsMap.set(obId, {
                 id: obId,
                 contract_id: budget.contract_id,
                 description: `PAGAMENTO OB ${obNumero} (${p.cdsituacaoordembancaria || 'EFETUADO'})`.toUpperCase(),
                 commitment_id: p.nunotaempenho || undefined,
-                date: p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date()),
+                date: paymentDate,
                 type: TransactionType.LIQUIDATION,
                 amount: valorOB,
                 department: ug,
                 budget_description: budget.dotacao,
                 nunotaempenho: p.nunotaempenho || undefined,
-                dotacao_id: budget.id
+                dotacao_id: budget.id,
+                unidade_gestora_label: getUnidadeLabel(ug),
+                payment_month: paymentMonth,
+                contract_type: budget.contract_type
               } as Transaction);
             }
           });

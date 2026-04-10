@@ -15,6 +15,7 @@ export interface Dotacao {
   total_pago?: number;
   saldo_disponivel?: number;
   nunotaempenho?: string;
+  contract_type?: 'serviço' | 'material';
 }
 
 export interface DotacaoPayload {

@@ -26,6 +26,48 @@
       <button (click)="retry()" class="px-6 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors font-bold shadow-lg shadow-red-500/20">Tentar Novamente</button>
     </div>
   } @else {
+    <!-- Alert Area: Overdue Payments -->
+    @if (overdueInstallments().length > 0) {
+      <div class="mb-8 overflow-hidden bg-white dark:bg-gray-800 border-l-4 border-red-500 shadow-sm">
+        <div class="p-4 bg-red-50/30 dark:bg-red-900/10 flex items-center justify-between border-b border-red-100 dark:border-red-900/20">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-red-500">warning</span>
+            <h3 class="text-sm font-black text-red-600 dark:text-red-400 uppercase tracking-wider">Atenção: Pagamentos em Atraso</h3>
+          </div>
+          <span class="px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-[10px] font-black border border-red-200 dark:border-red-800">
+            {{ overdueInstallments().length }} {{ overdueInstallments().length === 1 ? 'PENDÊNCIA' : 'PENDÊNCIAS' }}
+          </span>
+        </div>
+        <div class="p-2 max-h-[220px] overflow-y-auto custom-scrollbar">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            @for (alert of overdueInstallments(); track alert.contractId + alert.reference) {
+              <div 
+                (click)="viewContract.emit(alert.contractId)"
+                class="flex items-center p-3 bg-gray-50/50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-900/50 hover:bg-red-50/20 transition-all cursor-pointer group"
+                title="Clique para ir ao contrato"
+              >
+                <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400 mr-3 group-hover:scale-110 transition-transform">
+                  <span class="material-symbols-outlined text-[20px]">money_off</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between gap-2 overflow-hidden">
+                    <p class="text-[11px] font-black text-gray-900 dark:text-white truncate">{{ alert.contractName }}</p>
+                    <span class="text-[9px] font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 whitespace-nowrap">{{ alert.reference }}</span>
+                  </div>
+                  <p class="text-[10px] text-gray-500 truncate mt-0.5">{{ alert.supplier }}</p>
+                  <p class="text-[9px] font-bold text-gray-400 uppercase mt-1">{{ alert.monthLabel }}</p>
+                </div>
+                <div class="ml-3 text-right">
+                   <p class="text-[11px] font-black text-gray-700 dark:text-gray-300">{{ alert.amount | currency:'BRL' }}</p>
+                   <span class="text-[8px] font-black text-red-500 uppercase">Vencido</span>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
     <!-- Main Metrics Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <!-- Total Contratado (Previsão) -->
@@ -103,23 +145,21 @@
     </div>
 
     <!-- Middle Section: Charts -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
       
-      <!-- Budget Distribution (Donut Chart) -->
-      <div class="bg-white dark:bg-gray-800 p-8 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center">
-        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-6 w-full">Execução Orçamentária</h3>
-        <div #chart class="relative flex justify-center items-center h-[220px] w-full">
+      <!-- Monthly Execution by Contract Type (Bar Chart) -->
+      <div class="bg-white dark:bg-gray-800 p-6 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center lg:col-span-2">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 w-full">Execução por Tipo (Últ. 12 meses)</h3>
+        <div #monthlyExecutionChart class="relative flex justify-center items-center h-[240px] w-full">
            <!-- D3 Chart will render here -->
         </div>
-        <div class="grid grid-cols-2 gap-4 w-full mt-8">
-          <div class="p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
-            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Empenhado</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().totalUsed | currency:'BRL' }}</p>
-          </div>
-          <div class="p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
-            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Disponível</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ budgetMetrics().available | currency:'BRL' }}</p>
-          </div>
+        <div class="flex flex-wrap justify-center gap-4 mt-4">
+           <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
+             <span class="w-3 h-3 rounded bg-blue-500 mr-1.5"></span> Serviço
+           </span>
+           <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
+             <span class="w-3 h-3 rounded bg-amber-500 mr-1.5"></span> Material
+           </span>
         </div>
       </div>
 
@@ -136,8 +176,24 @@
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
              <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span> Finalizando
            </span>
+            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
+              <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5"></span> Rescindidos
+            </span>
+         </div>
+      </div>
+
+      <!-- Contract Type (Serviço vs Material) -->
+      <div class="bg-white dark:bg-gray-800 p-8 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-6 w-full">Tipo de Contrato</h3>
+        <div #contractTypeChart class="relative flex justify-center items-center h-[220px] w-full">
+           <!-- D3 Chart will render here -->
+        </div>
+        <div class="flex flex-wrap justify-center gap-3 mt-8">
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
-             <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5"></span> Rescindidos
+             <span class="w-2 h-2 rounded-full bg-blue-500 mr-1.5"></span> Serviço
+           </span>
+           <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
+             <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span> Material
            </span>
         </div>
       </div>

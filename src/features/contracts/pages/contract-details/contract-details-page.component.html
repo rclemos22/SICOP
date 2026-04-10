@@ -787,6 +787,8 @@
                           <th class="px-2 py-3 text-left text-[10px] font-bold text-gray-400 uppercase">Evento / Situação</th>
                           <th class="w-[110px] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Empenho</th>
                           <th class="w-[90px] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Parcela</th>
+                          <th class="w-[80px] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">UG</th>
+                          <th class="w-[90px] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Mês Ref.</th>
                           <th class="w-[90px] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Tipo</th>
                           <th class="w-[120px] px-2 py-3 text-right text-[10px] font-bold text-gray-400 uppercase">Valor</th>
                         </tr>
@@ -811,6 +813,24 @@
                               @if (t.parcela_referencia) {
                                 <span class="text-[10px] font-bold text-sco-blue bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded border border-blue-100">
                                   {{ t.parcela_referencia }}
+                                </span>
+                              } @else {
+                                <span class="text-[10px] text-gray-300">---</span>
+                              }
+                            </td>
+                            <td class="px-2 py-3 text-center whitespace-nowrap">
+                              @if (t.unidade_gestora_label) {
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border" [class]="getBadgeClass(t.department || '')">
+                                  {{ t.unidade_gestora_label }}
+                                </span>
+                              } @else {
+                                <span class="text-[10px] text-gray-300">---</span>
+                              }
+                            </td>
+                            <td class="px-2 py-3 text-center whitespace-nowrap">
+                              @if (t.payment_month) {
+                                <span class="text-[10px] font-mono text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded">
+                                  {{ t.payment_month | slice:5:7 }}/{{ t.payment_month | slice:0:4 }}
                                 </span>
                               } @else {
                                 <span class="text-[10px] text-gray-300">---</span>
@@ -875,67 +895,145 @@
 
     <!-- Modal: Vincular Ordem Bancária -->
     @if (isLinkObModalOpen()) {
-      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div class="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+          
           <!-- Header -->
-          <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50">
-            <div class="flex-1">
-              <h3 class="text-lg font-bold text-gray-900 dark:text-white">Vincular Ordem Bancária</h3>
-              <p class="text-xs text-gray-500">Parcela: <span class="font-bold text-sco-blue">{{ selectedInstallment()?.monthLabel }}</span> ({{ selectedInstallment()?.reference }})</p>
+          <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900">
+            <div class="flex items-center gap-4">
+              <div class="h-12 w-12 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-sco-blue text-[28px]">link</span>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Vincular Pagamento</h3>
+                <p class="text-sm text-gray-500 flex items-center gap-1.5 mt-0.5">
+                  Referência: <span class="font-bold text-sco-blue">{{ selectedInstallment()?.monthLabel }}</span>
+                  <span class="h-1 w-1 rounded-full bg-gray-300"></span>
+                  Parcela: <span class="font-bold text-gray-700 dark:text-gray-300">{{ selectedInstallment()?.reference }}</span>
+                </p>
+              </div>
             </div>
-            <button (click)="closeLinkObModal()" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors">
+            <button (click)="closeLinkObModal()" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>
 
-          <!-- Content -->
-          <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
-            <div class="space-y-4">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                Selecione abaixo o pagamento (OB) correspondente a esta parcela. 
-              </p>
+          <!-- Content Area -->
+          <div class="p-8 overflow-y-auto custom-scrollbar flex-1 bg-gray-50/50 dark:bg-gray-900/50">
+            <div class="space-y-6">
+              
+              <!-- Instructions -->
+              <div class="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 p-4 rounded-2xl">
+                <p class="text-xs font-medium text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                  <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                  Selecione abaixo as Ordens Bancárias (OBs) importadas do SIGEF que correspondem ao pagamento desta parcela do contrato.
+                </p>
+              </div>
 
-              <div class="space-y-2">
-                @for (transaction of availableObs(); track transaction.id) {
-                  <button 
-                    (click)="linkTransactionToInstallment(transaction.id)"
-                    class="w-full text-left p-4 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-sco-blue hover:bg-blue-50/50 transition-all flex items-center justify-between group"
-                  >
-                    <div class="flex items-center gap-3">
-                      <div class="bg-blue-100 text-sco-blue p-2 rounded-lg group-hover:bg-sco-blue group-hover:text-white transition-colors">
-                        <span class="material-symbols-outlined">payments</span>
-                      </div>
-                      <div>
-                        <p class="text-sm font-bold text-gray-900 dark:text-white">{{ transaction.description }}</p>
-                        <div class="flex items-center gap-3 text-[10px] text-gray-500 uppercase font-bold tracking-tight">
-                          <span>{{ transaction.date | date:'dd/MM/yyyy' }}</span>
-                          @if (transaction.parcela_referencia) {
-                            <span class="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded">Vínculo: {{ transaction.parcela_referencia }}</span>
-                          }
+              <!-- List section -->
+              <div class="space-y-3">
+                <h4 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Lançamentos Disponíveis</h4>
+                
+                <div class="grid gap-3">
+                  @for (transaction of availableObs(); track transaction.id) {
+                    @let isCurrentLink = transaction.parcela_referencia === selectedInstallment()?.reference;
+                    <button 
+                      (click)="linkTransactionToInstallment(transaction.id)"
+                      [disabled]="isCurrentLink"
+                      class="relative w-full text-left p-4 rounded-2xl border transition-all duration-300 group overflow-hidden"
+                      [class]="isCurrentLink 
+                        ? 'bg-blue-50 border-sco-blue dark:bg-blue-900/20 dark:border-sco-blue' 
+                        : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700 dark:hover:border-blue-800'"
+                    >
+                      <!-- Selected Indicator -->
+                      @if (isCurrentLink) {
+                        <div class="absolute top-0 right-0 h-8 w-8 bg-sco-blue flex items-center justify-center rounded-bl-2xl">
+                          <span class="material-symbols-outlined text-white text-[18px]">check</span>
+                        </div>
+                      }
+
+                      <div class="flex items-center gap-4">
+                        <!-- Icon Circle -->
+                        <div 
+                          class="h-10 w-10 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                          [class]="isCurrentLink ? 'bg-sco-blue text-white' : 'bg-gray-50 dark:bg-gray-700 text-gray-400 group-hover:bg-blue-50 group-hover:text-sco-blue'"
+                        >
+                          <span class="material-symbols-outlined text-[20px]">payments</span>
+                        </div>
+
+                        <!-- Main Info -->
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 mb-0.5">
+                            <h5 class="text-sm font-bold text-gray-900 dark:text-white truncate" [class.text-sco-blue]="isCurrentLink">
+                              {{ transaction.description }}
+                            </h5>
+                            @let transDate = (transaction.date | date:'yyyy-MM');
+                            @if (transDate === selectedInstallment()?.reference && !isCurrentLink) {
+                              <span class="px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-bold uppercase rounded-md border border-green-200 animate-pulse">
+                                Sugestão
+                              </span>
+                            }
+                          </div>
+                          
+                          <div class="flex flex-wrap items-center gap-y-1 gap-x-3 mt-1">
+                            <div class="flex items-center gap-1 text-[11px] text-gray-500 font-medium">
+                              <span class="material-symbols-outlined text-[14px]">calendar_today</span>
+                              {{ transaction.date | date:'dd/MM/yyyy' }}
+                            </div>
+                            @if (transaction.nunotaempenho) {
+                              <div class="flex items-center gap-1 text-[11px] text-gray-500 font-medium font-mono">
+                                <span class="material-symbols-outlined text-[14px]">receipt</span>
+                                {{ transaction.nunotaempenho }}
+                              </div>
+                            }
+                            @if (isCurrentLink) {
+                              <span class="text-[10px] font-bold text-sco-blue uppercase flex items-center gap-1">
+                                <span class="h-1 w-1 rounded-full bg-sco-blue"></span>
+                                Já vinculado
+                              </span>
+                            }
+                          </div>
+                        </div>
+
+                        <!-- Value Area -->
+                        <div class="text-right shrink-0">
+                          <p class="text-lg font-bold" [class]="isCurrentLink ? 'text-sco-blue' : 'text-gray-900 dark:text-white'">
+                            {{ transaction.amount | currency:'BRL':'symbol':'1.2-2' }}
+                          </p>
                         </div>
                       </div>
+                    </button>
+                  } @empty {
+                    <div class="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-100 dark:border-gray-700">
+                      <div class="h-16 w-16 bg-gray-50 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="material-symbols-outlined text-3xl text-gray-300">search_off</span>
+                      </div>
+                      <h5 class="text-sm font-bold text-gray-900 dark:text-gray-200">Nenhum pagamento disponível</h5>
+                      <p class="text-xs text-gray-400 mt-1 max-w-[240px] mx-auto">
+                        Não existem Ordens Bancárias pendentes de vínculo para este contrato no momento.
+                      </p>
                     </div>
-                    <div class="text-right">
-                      <p class="text-sm font-bold text-gray-900 dark:text-white">{{ transaction.amount | currency:'BRL' }}</p>
-                    </div>
-                  </button>
-                } @empty {
-                  <div class="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200">
-                    <span class="material-symbols-outlined text-4xl mb-2 opacity-30 text-gray-400">search_off</span>
-                    <p class="text-sm text-gray-500">Nenhum pagamento encontrado para este contrato.</p>
-                  </div>
-                }
+                  }
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Footer -->
-          <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/50">
+          <!-- Footer Buttons -->
+          <div class="px-8 py-6 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900">
+            <button 
+              (click)="refreshSigefData(); closeLinkObModal()"
+              class="flex items-center gap-2 text-xs font-bold text-green-600 hover:text-green-700 transition-colors uppercase tracking-tight"
+            >
+              <span class="material-symbols-outlined text-[18px]">sync</span>
+              Sincronizar SIGEF agora
+            </button>
+            
             <button 
               (click)="closeLinkObModal()"
-              class="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all"
+              class="px-8 py-2.5 text-sm font-bold text-white bg-sco-blue hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-95"
             >
-              Cancelar
+              Concluído
             </button>
           </div>
         </div>

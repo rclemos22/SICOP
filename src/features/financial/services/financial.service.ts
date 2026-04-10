@@ -117,7 +117,8 @@ export class FinancialService {
             budget_description: budget.dotacao || '',
             nunotaempenho: m.nunotaempenho,
             dotacao_id: budget.id,
-            contract_number: budget.numero_contrato
+            contract_number: budget.numero_contrato,
+            contract_type: budget.contract_type
           });
         });
 
@@ -135,7 +136,8 @@ export class FinancialService {
             budget_description: budget.dotacao || '',
             nunotaempenho: ob.nunotaempenho,
             dotacao_id: budget.id,
-            contract_number: budget.numero_contrato
+            contract_number: budget.numero_contrato,
+            contract_type: budget.contract_type
           });
         });
       } catch (err) {
@@ -183,7 +185,10 @@ export class FinancialService {
       budget_description: raw.budget_description || '',
       parcela_referencia: raw.parcela_referencia,
       sigef_id: raw.sigef_id,
-      contract_number: raw.contratos?.contrato || 'N/A'
+      contract_number: raw.contratos?.contrato || 'N/A',
+      payment_month: raw.payment_month,
+      unidade_gestora_label: raw.unidade_gestora_label,
+      contract_type: raw.contract_type
     };
   }
 }

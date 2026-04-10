@@ -20,6 +20,9 @@ export interface Transaction {
   parcela_referencia?: string; // Formato: YYYY-MM
   sigef_id?: string;
   contract_number?: string;
+  payment_month?: string; // Mês de referência do pagamento (YYYY-MM) baseado na data de pagamento da OB
+  unidade_gestora_label?: string; // Label formatado da unidade gestora (ex: "DPEMA", "FADEP")
+  contract_type?: 'serviço' | 'material'; // Tipo do contrato vinculado à transação
 }
 
 // Helpers for UI logic (Icons, Colors, Labels) based on Type

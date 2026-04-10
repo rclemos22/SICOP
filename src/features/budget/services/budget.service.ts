@@ -107,6 +107,7 @@ export class BudgetService {
       total_pago: Number(raw.total_pago) || 0,
       saldo_disponivel: Number(raw.saldo_disponivel) || 0,
       nunotaempenho: raw.nunotaempenho || null,
+      contract_type: raw.contract_type || null,
     };
   }
 

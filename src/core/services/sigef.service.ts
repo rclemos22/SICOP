@@ -113,12 +113,45 @@ export class SigefService implements OnDestroy {
   private bearerToken: string | null = null;
   private refreshToken: string | null = null;
   private tokenExpiry: number | null = null;
-  private refreshInterval: any = null;
+  private refreshInterval: any;
   private authPromise: Promise<void> | null = null;
 
+  private readonly ACCESS_TOKEN_KEY = 'sigef_access_token';
+  private readonly REFRESH_TOKEN_KEY = 'sigef_refresh_token';
+  private readonly EXIRY_KEY = 'sigef_token_expiry';
+
   constructor() {
+    this.loadPersistedTokens();
     this.ensureAuthenticated().catch(err => console.error('[SIGEF] Falha inicial:', err));
     this.startTokenMonitor();
+  }
+
+  private loadPersistedTokens(): void {
+    try {
+      this.bearerToken = localStorage.getItem(this.ACCESS_TOKEN_KEY);
+      this.refreshToken = localStorage.getItem(this.REFRESH_TOKEN_KEY);
+      const expiry = localStorage.getItem(this.EXIRY_KEY);
+      if (expiry) {
+        this.tokenExpiry = parseInt(expiry, 10);
+        this.updateExpiresAt();
+      }
+      if (this.bearerToken && !this.isTokenExpired()) {
+        this._authenticated.set(true);
+        this._apiStatus.set('connected');
+      }
+    } catch (e) {
+      console.warn('[SIGEF] Erro ao carregar tokens do localStorage', e);
+    }
+  }
+
+  private persistTokens(): void {
+    try {
+      if (this.bearerToken) localStorage.setItem(this.ACCESS_TOKEN_KEY, this.bearerToken);
+      if (this.refreshToken) localStorage.setItem(this.REFRESH_TOKEN_KEY, this.refreshToken);
+      if (this.tokenExpiry) localStorage.setItem(this.EXIRY_KEY, this.tokenExpiry.toString());
+    } catch (e) {
+      console.warn('[SIGEF] Erro ao salvar tokens no localStorage', e);
+    }
   }
 
   ngOnDestroy() {
@@ -127,8 +160,9 @@ export class SigefService implements OnDestroy {
 
   private startTokenMonitor(): void {
     this.refreshInterval = setInterval(() => {
-      if (this.bearerToken && this.tokenExpiry) {
-        const timeLeft = this.tokenExpiry - Date.now();
+      const expiry = this.tokenExpiry;
+      if (this.bearerToken && expiry) {
+        const timeLeft = expiry - Date.now();
         // Se faltar menos de 5 minutos, renova
         if (timeLeft < 300000) {
           this.ensureAuthenticated();
@@ -156,8 +190,9 @@ export class SigefService implements OnDestroy {
    */
   private isTokenExpired(): boolean {
     if (!this.bearerToken || !this.tokenExpiry) return true;
+    const expiry = this.tokenExpiry;
     // Buffer de 5 minutos para garantir que o token não expire durante uma operação longa
-    return Date.now() >= (this.tokenExpiry - 300000);
+    return Date.now() >= (expiry - 300000);
   }
 
   /**
@@ -216,8 +251,15 @@ export class SigefService implements OnDestroy {
 
       const data = await response.json();
       this.bearerToken = data.access;
+      // Se a API retornar um novo refresh token (rotação), atualizamos
+      if (data.refresh) {
+        this.refreshToken = data.refresh;
+      }
+      
       const expiresIn = data.expires_in || 3600;
       this.tokenExpiry = Date.now() + (expiresIn * 1000);
+      
+      this.persistTokens();
       this._authenticated.set(true);
       this._apiStatus.set('connected');
       this.updateExpiresAt();
@@ -229,6 +271,8 @@ export class SigefService implements OnDestroy {
       }
       this._authenticated.set(false);
       this.refreshToken = null;
+      localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+      localStorage.removeItem(this.ACCESS_TOKEN_KEY);
       throw err;
     }
   }
@@ -281,10 +325,12 @@ export class SigefService implements OnDestroy {
   }
 
   private async handleUnauthorized(): Promise<void> {
-    console.warn('[SIGEF] 401/403 detectado, forçando reautenticação...');
+    console.warn('[SIGEF] 401/403 detectado, tentando renovar o token antes de novo login...');
     this.bearerToken = null;
+    localStorage.removeItem(this.ACCESS_TOKEN_KEY);
     this._authenticated.set(false);
-    await this.ensureAuthenticated(true);
+    // Tentamos o ensureAuthenticated SEM o force=true primeiro, para que ele tente o refresh
+    await this.ensureAuthenticated(false);
   }
 
   private async callApi(url: string, options: RequestInit = {}, retries: number = 4, backoff: number = 2500): Promise<Response> {
@@ -669,13 +715,15 @@ export class SigefService implements OnDestroy {
       this.bearerToken = data.access;
       this.refreshToken = data.refresh || null;
       this.tokenExpiry = data.exp ? Date.now() + (data.exp * 1000) - 60000 : Date.now() + (3600 * 1000) - 60000;
+      
+      this.persistTokens();
       this._authenticated.set(true);
       this._apiStatus.set('connected');
       this.updateExpiresAt();
       return data.access;
     } catch (err: any) {
       if (retries > 0 && (err.message?.includes('ETIMEDOUT') || err.message?.includes('fetch'))) {
-        console.warn(`[SIGEF AUTH] Timeout ou erro de rede no login. Retentando em 3s... (${retries} restantes)`);
+        console.warn(`[SIGEF] Timeout ou erro de rede no login. Retentando em 3s... (${retries} restantes)`);
         await new Promise(r => setTimeout(r, 3000));
         return this.authenticate(username, password, retries - 1);
       }
@@ -683,6 +731,8 @@ export class SigefService implements OnDestroy {
       this._error.set(err.message || 'Erro na autenticação');
       this._authenticated.set(false);
       this._apiStatus.set('disconnected');
+      localStorage.removeItem(this.ACCESS_TOKEN_KEY);
+      localStorage.removeItem(this.REFRESH_TOKEN_KEY);
       throw err;
     } finally {
       this._loading.set(false);
