@@ -34,6 +34,12 @@ export class DashboardPageComponent implements OnInit {
   // D3 Container for Monthly Execution Chart
   monthlyExecutionChartContainer = viewChild<ElementRef>('monthlyExecutionChart');
 
+  // D3 Container for Payment Comparison Chart
+  paymentComparisonChartContainer = viewChild<ElementRef>('paymentComparisonChart');
+
+  // D3 Container for Contract Comparison Chart
+  contractComparisonChartContainer = viewChild<ElementRef>('contractComparisonChart');
+
   // Outputs for Navigation
   navigate = output<'contracts' | 'financial' | 'budget'>();
   viewContract = output<string>();
@@ -108,7 +114,10 @@ export class DashboardPageComponent implements OnInit {
       
       this.lastSyncTimestamp.set(new Date());
       // Recarregar os caches locais após a sincronização
-      await this.loadAllData();
+      await Promise.all([
+        this.financialService.loadAllTransactions(),
+        this.contractService.loadContracts()
+      ]);
     } catch (err) {
       console.error('[DASHBOARD] Falha na sincronização global:', err);
     }
@@ -182,6 +191,114 @@ export class DashboardPageComponent implements OnInit {
     }));
   });
 
+  // Payment Comparison: Expected (valor_mensal) vs Actual Paid
+  paymentComparisonByMonth = computed(() => {
+    const contracts = this.filteredContracts();
+    const transactions = this.financialService.transactions();
+    const selectedYear = this.appContext.anoExercicio();
+    
+    const monthlyData: Record<string, { expected: number; paid: number }> = {};
+
+    // Initialize months of current year
+    for (let month = 1; month <= 12; month++) {
+      const monthKey = `${selectedYear}-${String(month).padStart(2, '0')}`;
+      monthlyData[monthKey] = { expected: 0, paid: 0 };
+    }
+
+    contracts.forEach(c => {
+      if (!c.valor_mensal || !c.data_inicio) return;
+
+      const startDate = new Date(c.data_inicio);
+      const endDate = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
+
+      let currentDate = new Date(startDate);
+      currentDate.setDate(1);
+
+      while (currentDate <= endDate && currentDate.getFullYear() <= selectedYear) {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+        
+        if (year === selectedYear && month <= 12) {
+          const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+          if (monthlyData[monthKey]) {
+            monthlyData[monthKey].expected += c.valor_mensal;
+          }
+        }
+        
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+    });
+
+    transactions.forEach(t => {
+      if (t.type !== TransactionType.LIQUIDATION) return;
+      
+      const date = new Date(t.date);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      
+      if (year === selectedYear && month <= 12) {
+        const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+        if (monthlyData[monthKey]) {
+          monthlyData[monthKey].paid += t.amount;
+        }
+      }
+    });
+
+    const sortedMonths = Object.keys(monthlyData).sort();
+    return sortedMonths.map(month => ({
+      month,
+      expected: monthlyData[month].expected,
+      paid: monthlyData[month].paid
+    }));
+  });
+
+  // Payment Comparison by Contract: Expected (valor_mensal sum for year) vs Actual Paid (current year)
+  paymentComparisonByContract = computed(() => {
+    const contracts = this.filteredContracts();
+    const transactions = this.financialService.transactions();
+    const selectedYear = this.appContext.anoExercicio();
+    
+    // Process each contract
+    const data = contracts.map(c => {
+      // 1. Calculate Expected for current year
+      let expectedTotal = 0;
+      if (c.valor_mensal && c.data_inicio) {
+        const startDate = new Date(c.data_inicio);
+        const endDate = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
+        
+        let currentDate = new Date(startDate);
+        currentDate.setDate(1);
+
+        while (currentDate <= endDate && currentDate.getFullYear() <= selectedYear) {
+          if (currentDate.getFullYear() === selectedYear) {
+            expectedTotal += c.valor_mensal;
+          }
+          currentDate.setMonth(currentDate.getMonth() + 1);
+        }
+      }
+
+      // 2. Calculate Paid for current year
+      const paidTotal = transactions
+        .filter(t => t.contract_id === c.id && t.type === TransactionType.LIQUIDATION)
+        .filter(t => new Date(t.date).getFullYear() === selectedYear)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      return {
+        contract: c.contrato,
+        contratada: c.contratada,
+        expected: expectedTotal,
+        paid: paidTotal,
+        diff: expectedTotal - paidTotal
+      };
+    });
+
+    // Sort by expected value descending and take top 10
+    return data
+      .filter(d => d.expected > 0 || d.paid > 0)
+      .sort((a, b) => b.expected - a.expected)
+      .slice(0, 10);
+  });
+
   // Total value of active contracts
   totalContractValue = computed(() => {
     return this.filteredContracts()
@@ -213,19 +330,23 @@ export class DashboardPageComponent implements OnInit {
       .sort((a, b) => (a.dias_restantes || 0) - (b.dias_restantes || 0));
   });
 
-  // Overdue Installments Alert Logic
+  // Overdue Installments Alert Logic (apenas ano corrente)
+  // Regra: pagamento do mês X é efetuado no mês X+1
+  // Ex: pagamento de janeiro (01) → vence em fevereiro (02)
+  // Se estamos em mês posterior ao mês de vencimento+1, está atrasado
   overdueInstallments = computed(() => {
     const contracts = this.contractService.contracts().filter(c => 
       c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO
     );
     const allTransactions = this.financialService.transactions();
     const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
     today.setHours(0, 0, 0, 0);
 
     const alerts: any[] = [];
 
     contracts.forEach(c => {
-      // Só processa se tiver valor mensal e dia de pagamento definido
       if (!c.valor_mensal || !c.data_pagamento || !c.data_inicio) return;
 
       const startDate = new Date(c.data_inicio);
@@ -235,24 +356,35 @@ export class DashboardPageComponent implements OnInit {
       let currentDate = new Date(startDate);
       currentDate.setDate(1);
 
-      // Iterar pelos meses desde o início do contrato até hoje
-      while (currentDate <= endDate && currentDate <= today) {
+      while (currentDate <= endDate) {
         const year = currentDate.getFullYear();
+        if (year !== currentYear) {
+          currentDate.setMonth(currentDate.getMonth() + 1);
+          continue;
+        }
+
         const month = currentDate.getMonth() + 1;
         const reference = `${year}-${month.toString().padStart(2, '0')}`;
         
-        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        // Mês de vencimento = mês da parcela + 1
+        const dueMonth = month + 1;
+        const dueYear = dueMonth > 12 ? year + 1 : year;
+        const dueMonthAdjusted = dueMonth > 12 ? 1 : dueMonth;
+        
+        const lastDayOfMonth = new Date(dueYear, dueMonthAdjusted - 1, 0).getDate();
         const actualDay = Math.min(paymentDay, lastDayOfMonth);
-        const installmentDate = new Date(year, month - 1, actualDay);
+        const installmentDate = new Date(dueYear, dueMonthAdjusted - 1, actualDay);
 
-        // Se a data prevista de pagamento já passou
-        if (installmentDate < today) {
-           // Verificar se existe pagamento (LIQUIDATION) para este contrato e referência
+        // Verifica se está atrasado: mês atual > mês de vencimento
+        // Ex: parcela 01→vence em 02, se estamos em 03 ou posterior, está atrasado
+        const isOverdue = currentYear > dueYear || (currentYear === dueYear && currentMonth > dueMonthAdjusted);
+
+        if (isOverdue) {
+           // Verifica se tem transação VINCOLADA a esta parcela (não apenas no mesmo mês)
            const isPaid = allTransactions.some(t => 
              t.contract_id === c.id && 
              t.type === TransactionType.LIQUIDATION && 
-             (t.parcela_referencia === reference || 
-              (new Date(t.date).getFullYear() === year && new Date(t.date).getMonth() + 1 === month))
+             t.parcela_referencia === reference
            );
 
            if (!isPaid) {
@@ -261,7 +393,7 @@ export class DashboardPageComponent implements OnInit {
                contractName: c.contrato,
                supplier: c.contratada,
                reference: reference,
-               monthLabel: installmentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+               monthLabel: new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
                dueDate: installmentDate,
                amount: c.valor_mensal
              });
@@ -271,7 +403,6 @@ export class DashboardPageComponent implements OnInit {
       }
     });
 
-    // Ordenar por data de vencimento (mais atrasadas primeiro)
     return alerts.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   });
 
@@ -332,6 +463,24 @@ export class DashboardPageComponent implements OnInit {
       const container = this.monthlyExecutionChartContainer()?.nativeElement;
       if (container) {
         this.renderMonthlyExecutionChart(container, data);
+      }
+    });
+
+    // Reactively render payment comparison chart
+    effect(() => {
+      const data = this.paymentComparisonByMonth();
+      const container = this.paymentComparisonChartContainer()?.nativeElement;
+      if (container) {
+        this.renderPaymentComparisonChart(container, data);
+      }
+    });
+
+    // Reactively render contract comparison chart
+    effect(() => {
+      const data = this.paymentComparisonByContract();
+      const container = this.contractComparisonChartContainer()?.nativeElement;
+      if (container) {
+        this.renderContractComparisonChart(container, data);
       }
     });
   }
@@ -572,14 +721,22 @@ export class DashboardPageComponent implements OnInit {
     if (data.length === 0) {
       d3.select(container)
         .append('div')
-        .attr('class', 'flex items-center justify-center h-full text-gray-400 text-sm')
-        .text('Sem dados de execução');
+        .attr('class', 'flex flex-col items-center justify-center h-full text-gray-400 text-sm')
+        .html('<span class="material-symbols-outlined text-3xl mb-2">bar_chart</span><span>Sem dados de execução</span>');
       return;
     }
 
-    const margin = { top: 20, right: 20, bottom: 40, left: 60 };
-    const width = 380 - margin.left - margin.right;
-    const height = 220 - margin.top - margin.bottom;
+    // Calculate variations
+    const dataWithVariation = data.map((d, i) => {
+      const total = d.servico + d.material;
+      const prevTotal = i > 0 ? data[i - 1].servico + data[i - 1].material : 0;
+      const variation = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : 0;
+      return { ...d, total, variation };
+    });
+
+    const margin = { top: 30, right: 20, bottom: 45, left: 55 };
+    const width = 420 - margin.left - margin.right;
+    const height = 200 - margin.top - margin.bottom;
 
     const svg = d3.select(container)
       .append('svg')
@@ -588,24 +745,37 @@ export class DashboardPageComponent implements OnInit {
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
+    // Gradient definitions
+    const defs = svg.append('defs');
+    
+    const gradientBlue = defs.append('linearGradient')
+      .attr('id', 'gradientServico')
+      .attr('x1', '0%').attr('y1', '0%')
+      .attr('x2', '0%').attr('y2', '100%');
+    gradientBlue.append('stop').attr('offset', '0%').attr('stop-color', '#60A5FA');
+    gradientBlue.append('stop').attr('offset', '100%').attr('stop-color', '#3B82F6');
+    
+    const gradientAmber = defs.append('linearGradient')
+      .attr('id', 'gradientMaterial')
+      .attr('x1', '0%').attr('y1', '0%')
+      .attr('x2', '0%').attr('y2', '100%');
+    gradientAmber.append('stop').attr('offset', '0%').attr('stop-color', '#FBBF24');
+    gradientAmber.append('stop').attr('offset', '100%').attr('stop-color', '#F59E0B');
+
     const x0 = d3.scaleBand()
-      .domain(data.map(d => d.month))
+      .domain(dataWithVariation.map(d => d.month))
       .rangeRound([0, width])
-      .paddingInner(0.2);
+      .paddingInner(0.25);
 
     const x1 = d3.scaleBand()
       .domain(['servico', 'material'])
       .rangeRound([0, x0.bandwidth()])
-      .padding(0.05);
+      .padding(0.1);
 
-    const maxValue = d3.max(data, d => Math.max(d.servico, d.material)) || 0;
+    const maxValue = d3.max(dataWithVariation, d => Math.max(d.servico, d.material)) || 0;
     const y = d3.scaleLinear()
-      .domain([0, maxValue * 1.1])
+      .domain([0, maxValue * 1.15])
       .range([height, 0]);
-
-    const color = d3.scaleOrdinal()
-      .domain(['servico', 'material'])
-      .range(['#3B82F6', '#F59E0B']);
 
     const monthLabels: Record<string, string> = {
       '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr',
@@ -613,20 +783,34 @@ export class DashboardPageComponent implements OnInit {
       '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez'
     };
 
+    // Grid lines
+    svg.append('g')
+      .attr('class', 'grid')
+      .call(d3.axisLeft(y).ticks(4).tickSize(-width).tickFormat(() => ''))
+      .selectAll('line')
+      .style('stroke', '#E5E7EB')
+      .style('stroke-dasharray', '3,3');
+    svg.selectAll('.grid .domain').remove();
+
+    // X Axis
     svg.append('g')
       .attr('class', 'x-axis')
       .attr('transform', `translate(0,${height})`)
       .call(d3.axisBottom(x0).tickFormat(d => {
         const parts = d.split('-');
-        return monthLabels[parts[1]] || d;
+        const label = monthLabels[parts[1]] || d;
+        const year = parts[0].slice(2);
+        return `${label}/${year}`;
       }))
       .selectAll('text')
-      .style('font-size', '10px')
-      .style('fill', '#6B7280');
+      .style('font-size', '9px')
+      .style('fill', '#6B7280')
+      .style('font-weight', '500');
 
+    // Y Axis
     svg.append('g')
       .attr('class', 'y-axis')
-      .call(d3.axisLeft(y).ticks(5).tickFormat(d => {
+      .call(d3.axisLeft(y).ticks(4).tickFormat(d => {
         const val = Number(d);
         if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
         if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
@@ -638,11 +822,12 @@ export class DashboardPageComponent implements OnInit {
 
     const tooltip = d3.select(container)
       .append('div')
-      .attr('class', 'absolute z-10 hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg pointer-events-none')
+      .attr('class', 'absolute z-20 hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl pointer-events-none')
       .style('opacity', 0);
 
+    // Bars
     const monthGroups = svg.selectAll('.month-group')
-      .data(data)
+      .data(dataWithVariation)
       .join('g')
       .attr('class', 'month-group')
       .attr('transform', d => `translate(${x0(d.month)},0)`);
@@ -657,26 +842,298 @@ export class DashboardPageComponent implements OnInit {
       .attr('y', d => y(d.value))
       .attr('width', x1.bandwidth())
       .attr('height', d => height - y(d.value))
-      .attr('fill', d => color(d.key) as string)
-      .attr('rx', 2)
+      .attr('fill', d => d.key === 'servico' ? 'url(#gradientServico)' : 'url(#gradientMaterial)')
+      .attr('rx', 3)
       .style('cursor', 'pointer')
       .on('mouseover', function(event, d) {
-        d3.select(this).style('opacity', 0.8);
+        d3.select(this).style('opacity', 0.85);
         tooltip
-          .html(`<span class="font-bold">${d.key === 'servico' ? 'Serviço' : 'Material'}</span><br/>R$ ${d.value.toLocaleString('pt-BR')}`)
+          .html(`<div class="font-bold mb-1">${d.key === 'servico' ? 'Serviço' : 'Material'}</div><div class="text-gray-300">R$ ${d.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>`)
           .style('opacity', 1)
           .classed('hidden', false);
       })
       .on('mousemove', function(event) {
         const [x, y] = d3.pointer(event, container);
-        tooltip
-          .style('left', `${x + 15}px`)
-          .style('top', `${y - 10}px`);
+        tooltip.style('left', `${x + 10}px`).style('top', `${y - 10}px`);
       })
       .on('mouseout', function() {
         d3.select(this).style('opacity', 1);
         tooltip.style('opacity', 0).classed('hidden', true);
       });
+
+    // Variation indicators (arrows between months)
+    if (dataWithVariation.length > 1) {
+      dataWithVariation.slice(1).forEach((d, i) => {
+        const prev = dataWithVariation[i];
+        const xPos = x0(d.month)! + x0.bandwidth() / 2;
+        
+        const arrowGroup = svg.append('g')
+          .attr('transform', `translate(${xPos}, -8)`)
+          .style('cursor', 'pointer');
+
+        const isPositive = d.variation >= 0;
+        const color = isPositive ? '#22C55E' : '#EF4444';
+        
+        arrowGroup.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', '0.35em')
+          .style('font-size', '14px')
+          .style('fill', color)
+          .text(isPositive ? '▲' : '▼');
+
+        arrowGroup.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('y', 14)
+          .style('font-size', '8px')
+          .style('fill', color)
+          .style('font-weight', '600')
+          .text(`${Math.abs(d.variation).toFixed(0)}%`);
+      });
+    }
+
+    // Current month indicator
+    const lastMonth = dataWithVariation[dataWithVariation.length - 1];
+    if (lastMonth) {
+      const totalStr = lastMonth.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
+      svg.append('text')
+        .attr('x', width / 2)
+        .attr('y', -10)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '11px')
+        .style('fill', '#374151')
+        .style('font-weight', '600')
+        .text(`Total: ${totalStr}`);
+    }
+  }
+
+  private renderPaymentComparisonChart(container: HTMLElement, data: { month: string; expected: number; paid: number }[]) {
+    d3.select(container).selectAll('*').remove();
+
+    const hasData = data.some(d => d.expected > 0 || d.paid > 0);
+    if (!hasData) {
+      d3.select(container)
+        .append('div')
+        .attr('class', 'flex flex-col items-center justify-center h-full text-gray-400 text-sm')
+        .html('<span class="material-symbols-outlined text-3xl mb-2">compare_arrows</span><span>Sem dados de comparação</span>');
+      return;
+    }
+
+    const margin = { top: 30, right: 20, bottom: 45, left: 60 };
+    const width = 500 - margin.left - margin.right;
+    const height = 220 - margin.top - margin.bottom;
+
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const monthLabels: Record<string, string> = {
+      '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr',
+      '05': 'Mai', '06': 'Jun', '07': 'Jul', '08': 'Ago',
+      '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez'
+    };
+
+    const x0 = d3.scaleBand()
+      .domain(data.map(d => d.month))
+      .rangeRound([0, width])
+      .paddingInner(0.25);
+
+    const x1 = d3.scaleBand()
+      .domain(['expected', 'paid'])
+      .rangeRound([0, x0.bandwidth()])
+      .padding(0.1);
+
+    const maxValue = d3.max(data, d => Math.max(d.expected, d.paid)) || 0;
+    const y = d3.scaleLinear()
+      .domain([0, maxValue * 1.15])
+      .range([height, 0]);
+
+    svg.append('g')
+      .attr('class', 'grid')
+      .call(d3.axisLeft(y).ticks(4).tickSize(-width).tickFormat(() => ''))
+      .selectAll('line')
+      .style('stroke', '#E5E7EB')
+      .style('stroke-dasharray', '3,3');
+    svg.selectAll('.grid .domain').remove();
+
+    svg.append('g')
+      .attr('class', 'x-axis')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x0).tickFormat(d => {
+        const parts = d.split('-');
+        return monthLabels[parts[1]] || d;
+      }))
+      .selectAll('text')
+      .style('font-size', '9px')
+      .style('fill', '#6B7280')
+      .style('font-weight', '500');
+
+    svg.append('g')
+      .attr('class', 'y-axis')
+      .call(d3.axisLeft(y).ticks(4).tickFormat(d => {
+        const val = Number(d);
+        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+        if (val >= 1000) return `${(val / 1000).toFixed(0)}K`;
+        return val.toString();
+      }))
+      .selectAll('text')
+      .style('font-size', '10px')
+      .style('fill', '#6B7280');
+
+    const tooltip = d3.select(container)
+      .append('div')
+      .attr('class', 'absolute z-20 hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl pointer-events-none')
+      .style('opacity', 0);
+
+    const monthGroups = svg.selectAll('.month-group')
+      .data(data)
+      .join('g')
+      .attr('class', 'month-group')
+      .attr('transform', d => `translate(${x0(d.month)},0)`);
+
+    const colors = { expected: '#60A5FA', paid: '#22C55E' };
+
+    monthGroups.selectAll('rect')
+      .data(d => [
+        { key: 'expected', value: d.expected },
+        { key: 'paid', value: d.paid }
+      ])
+      .join('rect')
+      .attr('x', d => x1(d.key) || 0)
+      .attr('y', d => y(d.value))
+      .attr('width', x1.bandwidth())
+      .attr('height', d => height - y(d.value))
+      .attr('fill', d => colors[d.key as keyof typeof colors])
+      .attr('rx', 3)
+      .style('cursor', 'pointer')
+      .on('mouseover', function(event, d) {
+        d3.select(this).style('opacity', 0.85);
+        const label = d.key === 'expected' ? 'Previsto' : 'Pago';
+        tooltip
+          .html(`<div class="font-bold mb-1">${label}</div><div class="text-gray-300">R$ ${d.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>`)
+          .style('opacity', 1)
+          .classed('hidden', false);
+      })
+      .on('mousemove', function(event) {
+        const [x, y] = d3.pointer(event, container);
+        tooltip.style('left', `${x + 10}px`).style('top', `${y - 10}px`);
+      })
+      .on('mouseout', function() {
+        d3.select(this).style('opacity', 1);
+        tooltip.style('opacity', 0).classed('hidden', true);
+      });
+  }
+
+  private renderContractComparisonChart(container: HTMLElement, data: any[]) {
+    d3.select(container).selectAll('*').remove();
+
+    if (!data.length) {
+      d3.select(container)
+        .append('div')
+        .attr('class', 'flex flex-col items-center justify-center h-full text-slate-400 text-sm')
+        .html('<span class="material-symbols-outlined text-3xl mb-2">analytics</span><span>Sem dados para comparação</span>');
+      return;
+    }
+
+    const margin = { top: 20, right: 20, bottom: 60, left: 70 };
+    const width = d3.select(container).node()?.getBoundingClientRect().width || 600;
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = 300 - margin.top - margin.bottom;
+
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', chartWidth + margin.left + margin.right)
+      .attr('height', chartHeight + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const x0 = d3.scaleBand()
+      .domain(data.map(d => d.contract))
+      .rangeRound([0, chartWidth])
+      .paddingInner(0.2);
+
+    const x1 = d3.scaleBand()
+      .domain(['expected', 'paid'])
+      .rangeRound([0, x0.bandwidth()])
+      .padding(0.05);
+
+    const maxValue = d3.max(data, d => Math.max(d.expected, d.paid)) || 0;
+    const y = d3.scaleLinear()
+      .domain([0, maxValue * 1.1])
+      .range([chartHeight, 0]);
+
+    // Axis
+    svg.append('g')
+      .attr('transform', `translate(0,${chartHeight})`)
+      .call(d3.axisBottom(x0))
+      .selectAll('text')
+      .attr('transform', 'translate(-10,0)rotate(-25)')
+      .style('text-anchor', 'end')
+      .style('font-size', '9px')
+      .style('fill', '#64748b');
+
+    svg.append('g')
+      .call(d3.axisLeft(y).ticks(5).tickFormat(d => {
+        const val = Number(d);
+        if (val >= 1000000) return `R$ ${(val/1000000).toFixed(1)}M`;
+        if (val >= 1000) return `R$ ${(val/1000).toFixed(0)}K`;
+        return `R$ ${val}`;
+      }))
+      .selectAll('text')
+      .style('font-size', '10px')
+      .style('fill', '#64748b');
+
+    // Tooltip
+    const tooltip = d3.select(container)
+      .append('div')
+      .attr('class', 'absolute z-20 hidden bg-slate-900 text-white text-[10px] rounded px-2 py-1 shadow-lg pointer-events-none');
+
+    // Groups
+    const contractGroups = svg.selectAll('.contract-group')
+      .data(data)
+      .join('g')
+      .attr('class', 'contract-group')
+      .attr('transform', d => `translate(${x0(d.contract)},0)`);
+
+    const colors = { expected: '#cbd5e1', paid: '#3b82f6' };
+
+    contractGroups.selectAll('rect')
+      .data(d => [
+        { key: 'expected', value: d.expected, label: 'Previsto Anual', contract: d.contract },
+        { key: 'paid', value: d.paid, label: 'Pago Efetivo', contract: d.contract }
+      ])
+      .join('rect')
+      .attr('x', d => x1(d.key) || 0)
+      .attr('y', d => y(d.value))
+      .attr('width', x1.bandwidth())
+      .attr('height', d => chartHeight - y(d.value))
+      .attr('fill', d => colors[d.key as keyof typeof colors])
+      .attr('rx', 2)
+      .on('mouseover', function(event, d) {
+        d3.select(this).attr('opacity', 0.8);
+        tooltip
+          .html(`<strong>${d.contract}</strong><br>${d.label}: R$ ${d.value.toLocaleString('pt-BR')}`)
+          .classed('hidden', false);
+      })
+      .on('mousemove', (event) => {
+        const [x, y] = d3.pointer(event, container);
+        tooltip.style('left', (x + 10) + 'px').style('top', (y - 20) + 'px');
+      })
+      .on('mouseout', function() {
+        d3.select(this).attr('opacity', 1);
+        tooltip.classed('hidden', true);
+      });
+  }
+
+  getLinkedObsForInstallment(contractId: string, reference: string) {
+    const transactions = this.financialService.transactions();
+    return transactions.filter(t => 
+      t.contract_id === contractId &&
+      t.type === TransactionType.LIQUIDATION &&
+      t.parcela_referencia === reference
+    );
   }
 
   // --- Actions ---

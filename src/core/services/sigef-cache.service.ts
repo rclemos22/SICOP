@@ -359,6 +359,24 @@ export class SigefCacheService {
     }
   }
 
+  /**
+   * Busca global por ordens bancárias no cache, independente da NE/Contrato.
+   */
+  async searchOrdensBancariasGlobais(search: string): Promise<SigefOrdemBancaria[]> {
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('sigef_ordens_bancarias')
+        .select('*')
+        .or(`nuordembancaria.ilike.%${search}%,nunotaempenho.ilike.%${search}%,deobservacao.ilike.%${search}%`)
+        .limit(20);
+
+      if (error || !data) return [];
+      return data.map(this.mapToOrdemBancaria);
+    } catch (err) {
+      return [];
+    }
+  }
+
   // ============================================
   // Funções de cálculo
   // ============================================

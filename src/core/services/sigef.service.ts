@@ -540,8 +540,11 @@ export class SigefService implements OnDestroy {
       };
     } catch (err: any) {
       // Em caso de erro de rede ou outro, retornar vazio em vez de quebrar
-      if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-        console.warn('[SIGEF OB] Erro de rede, retornando vazio');
+      const networkErrors = ['Failed to fetch', 'NetworkError', 'socket disconnected', 'TLS', 'ECONNRESET'];
+      const isNetworkError = networkErrors.some(e => err.message?.includes(e));
+      
+      if (isNetworkError) {
+        console.warn('[SIGEF OB] Erro de rede, retornando vazio:', err.message);
         return { data: [], count: 0, next: null, previous: null };
       }
       this._error.set(err.message || 'Erro ao buscar ordem bancária');

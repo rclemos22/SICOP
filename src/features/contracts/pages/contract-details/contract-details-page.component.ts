@@ -89,16 +89,41 @@ export class ContractDetailsPageComponent {
   editingAditivo = signal<Aditivo | null>(null);
   editingDotacao = signal<Dotacao | null>(null);
   selectedInstallment = signal<PaymentSchedule | null>(null);
+  
+  selectedObIds = signal<Set<string>>(new Set());
+  searchObTerm = signal<string>('');
+  
+  /** OBs encontradas via busca profunda (fora do contexto inicial do contrato) */
+  extraObs = signal<Transaction[]>([]);
+  isDeepSearching = signal<boolean>(false);
 
   // Filtra transações de liquidação (pagamentos) para vinculação
   availableObs = computed(() => {
-    const allTrans = this.transactions();
+    const allTrans = [...this.transactions(), ...this.extraObs()];
     const current = this.selectedInstallment();
+    const searchTerm = this.searchObTerm().toLowerCase().trim();
     
+    // Remover duplicatas de IDs (caso uma extraOb já exista na lista base)
+    const seen = new Set<string>();
+    const uniqueTrans = allTrans.filter(t => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
     // Apenas liquidações
-    const filtered = allTrans.filter(t => {
+    const filtered = uniqueTrans.filter(t => {
       // Deve ser do tipo LIQUIDATION
       if (t.type !== 'LIQUIDATION') return false;
+      
+      // Filtro de busca (se houver)
+      if (searchTerm) {
+        const matchesSearch = 
+          t.description.toLowerCase().includes(searchTerm) || 
+          t.commitment_id?.toLowerCase().includes(searchTerm) ||
+          t.id.toLowerCase().includes(searchTerm);
+        if (!matchesSearch) return false;
+      }
       
       // Se não tem vínculo, está disponível
       if (!t.parcela_referencia) return true;
@@ -168,38 +193,44 @@ export class ContractDetailsPageComponent {
 
     while (currentDate <= endDate) {
       const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
+      const month = currentDate.getMonth() + 1; // 1-indexed
       const reference = `${year}-${month.toString().padStart(2, '0')}`;
       
-      const lastDayOfMonth = new Date(year, month, 0).getDate();
-      const actualDay = Math.min(paymentDay, lastDayOfMonth);
+      // A data de vencimento é no MÊS SEGUINTE (ex: ref Jan (mês 1) vence em Fev (mês 2))
+      // Usamos new Date(year, month, actualDay) -> note que 'month' (1-indexed) como segundo argumento do construtor Date de 0-indexed aponta para o próximo mês.
+      // Ex: Jan (month=1) -> new Date(year, 1, 10) -> 10 de Fevereiro.
+      const dueDateMonth = month; // Se ref é Jan (0), dueDate é Fev (1). Se ref é Dez (11), dueDate é Jan do ano seguinte (12).
+      const lastDayOfDueMonth = new Date(year, dueDateMonth + 1, 0).getDate();
+      const actualDay = Math.min(paymentDay, lastDayOfDueMonth);
       
-      const installmentDate = new Date(year, month - 1, actualDay);
+      const installmentDate = new Date(year, dueDateMonth, actualDay);
       const isPast = installmentDate < today;
-      const monthLabel = installmentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+      const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 
       // Tenta encontrar transações vinculadas a esta parcela
-      // 1. Pela referência explícita (parcela_referencia) - Prioridade Total
-      // 2. Ou pela lógica de proximidade (mesmo mês e ano) APENAS se a transação não estiver vinculada a nenhuma outra parcela
       const matches = transactions.filter(t => 
-        t.type === 'LIQUIDATION' && 
-        (
-          t.parcela_referencia === reference || 
-          (!t.parcela_referencia && new Date(t.date).getFullYear() === year && new Date(t.date).getMonth() + 1 === month)
-        )
+        t.type === 'LIQUIDATION' && t.parcela_referencia === reference
       );
 
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
-      if (matches.length > 0) {
+      
+      // Só marca como PAID se houver transação confirmada (ou manual sem sigef_id)
+      const hasConfirmedPayment = matches.some(t => {
+        if (!t.sigef_id) return true;
+        const desc = t.description.toLowerCase();
+        return SIGEF_PAID_STATUSES.some(s => desc.includes(s.toLowerCase()));
+      });
+
+      if (hasConfirmedPayment) {
         status = 'PAID';
       } else if (isPast) {
         status = 'OVERDUE';
       }
 
       payments.push({
-        monthLabel,
+        monthLabel, // Exibe o mês de REFERÊNCIA (Jan 2026)
         reference,
-        date: installmentDate,
+        date: installmentDate, // A data do objeto será o VENCIMENTO (10/02/2026)
         valor: monthlyValue,
         daysUntil: Math.ceil((installmentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
         isPast,
@@ -210,7 +241,7 @@ export class ContractDetailsPageComponent {
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
 
-    return payments;
+    return payments.filter(p => p.date.getFullYear() === this.appContext.anoExercicio());
   });
 
   // Alias para manter compatibilidade com template se necessário (mas vou mudar o template)
@@ -351,16 +382,20 @@ export class ContractDetailsPageComponent {
          this.budgetsError.set(result.error);
          this.budgets.set([]);
       } else {
-         this.budgetsLoading.set(true);
-          // Primeiro tenta usar cache, sem forçar API
-          const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(result.data!, false);
-         this.budgets.set(enrichedBudgets);
-         
-         // Atualiza o signal separado do SIGEF
-         if (sigefTransactions.length > 0) {
-           this.sigefTransactions.set(sigefTransactions);
-         } else {
-           this.sigefTransactions.set([]);
+         // Primeiro tenta usar cache, sem forçar API
+         try {
+           const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(result.data!, false);
+           this.budgets.set(enrichedBudgets);
+           
+           // Atualiza o signal separado do SIGEF
+           if (sigefTransactions.length > 0) {
+             this.sigefTransactions.set(sigefTransactions);
+           } else {
+             this.sigefTransactions.set([]);
+           }
+         } catch (enrichErr) {
+           console.error('[ContractDetails] Error enriching budgets:', enrichErr);
+           this.budgets.set(result.data!);
          }
          
          this.budgetsLoading.set(false);
@@ -396,12 +431,12 @@ export class ContractDetailsPageComponent {
           let movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
           let obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
           
-          // 2. Se não tem cache ou forceApiRefresh, busca da API e salva no cache
-          if (forceApiRefresh || movimentosCache.length === 0 || obsCache.length === 0) {
-            console.log('[DEBUG] Buscando da API para NE:', neValue);
+          // 2. Só consome a API se forceApiRefresh for true (clique no botão)
+          if (forceApiRefresh) {
+            console.log('[DEBUG] Sincronização FORÇADA para NE:', neValue);
             
-            // Buscar NE e movimentos da API
-            const neResumo = await this.sigefSyncService.getNotaEmpenhoWithCache(anoNE, neValue, ug);
+            // Buscar NE e movimentos da API e salvar no cache
+            await this.sigefSyncService.getNotaEmpenhoWithCache(anoNE, neValue, ug, true);
             
             // Recarregar do cache após sync
             movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
@@ -454,37 +489,36 @@ export class ContractDetailsPageComponent {
           // 5. Criar transações de pagamento (OBs compatíveis com o serviço de cálculo)
           obsCache.forEach((p, pIdx) => {
             const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
+            const isConfirmed = SIGEF_PAID_STATUSES.some(status => situacao.includes(status));
             
-            // Verifica se a situação da OB contém algum dos status de pagamento confirmados
-            const isRelevant = SIGEF_PAID_STATUSES.some(status => situacao.includes(status));
+            // Incluímos todas as OBs para permitir vínculo antecipado (conforme solicitado pelo usuário)
+            // Mas o cálculo de vlPago (abaixo) continuará rigoroso se usarmos filtered list lá.
             
-            if (isRelevant) {
-              const valorOB = p.vltotal || 0;
-              const obNumero = p.nuordembancaria || p.nudocumento || 'S/N';
-              
-              const obId = `cache-ob-${obNumero}-${p.dtpagamento || p.dtlancamento || pIdx}-${pIdx}`;
-              const paymentDate = p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date());
-              const paymentMonth = p.dtpagamento 
-                ? p.dtpagamento.substring(0, 7) 
-                : (p.dtlancamento ? p.dtlancamento.substring(0, 7) : undefined);
-              
-              transactionsMap.set(obId, {
-                id: obId,
-                contract_id: budget.contract_id,
-                description: `PAGAMENTO OB ${obNumero} (${p.cdsituacaoordembancaria || 'EFETUADO'})`.toUpperCase(),
-                commitment_id: p.nunotaempenho || undefined,
-                date: paymentDate,
-                type: TransactionType.LIQUIDATION,
-                amount: valorOB,
-                department: ug,
-                budget_description: budget.dotacao,
-                nunotaempenho: p.nunotaempenho || undefined,
-                dotacao_id: budget.id,
-                unidade_gestora_label: getUnidadeLabel(ug),
-                payment_month: paymentMonth,
-                contract_type: budget.contract_type
-              } as Transaction);
-            }
+            const valorOB = p.vltotal || 0;
+            const obNumero = p.nuordembancaria || p.nudocumento || 'S/N';
+            
+            const obId = `cache-ob-${obNumero}-${p.dtpagamento || p.dtlancamento || pIdx}-${pIdx}`;
+            const paymentDate = p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date());
+            const paymentMonth = p.dtpagamento 
+              ? p.dtpagamento.substring(0, 7) 
+              : (p.dtlancamento ? p.dtlancamento.substring(0, 7) : undefined);
+            
+            transactionsMap.set(obId, {
+              id: obId,
+              contract_id: budget.contract_id,
+              description: `PAGAMENTO OB ${obNumero} (${p.cdsituacaoordembancaria || 'PROCESSO'})`.toUpperCase(),
+              commitment_id: p.nunotaempenho || undefined,
+              date: paymentDate,
+              type: TransactionType.LIQUIDATION,
+              amount: valorOB,
+              department: ug,
+              budget_description: budget.dotacao,
+              nunotaempenho: p.nunotaempenho || undefined,
+              dotacao_id: budget.id,
+              unidade_gestora_label: getUnidadeLabel(ug),
+              payment_month: paymentMonth,
+              contract_type: budget.contract_type
+            } as Transaction);
           });
           
           // 6. Atualizar valores da dotação com dados do cache
@@ -717,12 +751,165 @@ export class ContractDetailsPageComponent {
 
   openLinkObModal(installment: PaymentSchedule) {
     this.selectedInstallment.set(installment);
+    
+    // Inicializar seleção com transações já vinculadas a esta parcela
+    const linkedIds = installment.linkedTransactions.map(t => t.id);
+    this.selectedObIds.set(new Set(linkedIds));
+    this.searchObTerm.set('');
+    this.extraObs.set([]); // Limpar buscas anteriores
+    
     this.isLinkObModalOpen.set(true);
   }
 
   closeLinkObModal() {
     this.isLinkObModalOpen.set(false);
     this.selectedInstallment.set(null);
+    this.clearObSelection();
+  }
+
+  toggleObSelection(transactionId: string) {
+    const current = new Set(this.selectedObIds());
+    if (current.has(transactionId)) {
+      current.delete(transactionId);
+    } else {
+      current.add(transactionId);
+    }
+    this.selectedObIds.set(current);
+  }
+
+  isObSelected(transactionId: string): boolean {
+    return this.selectedObIds().has(transactionId);
+  }
+
+  clearObSelection() {
+    this.selectedObIds.set(new Set());
+  }
+
+  getSelectedObs() {
+    const selectedIds = this.selectedObIds();
+    const allAvailable = [...this.transactions(), ...this.extraObs()];
+    return allAvailable.filter(t => selectedIds.has(t.id));
+  }
+
+  /**
+   * Realiza uma busca profunda no banco de dados global e, opcionalmente, no SIGEF
+   */
+  async performDeepSearch() {
+    const term = this.searchObTerm().trim();
+    if (term.length < 3) return;
+
+    this.isDeepSearching.set(true);
+    try {
+      // 1. Buscar no Cache Global (todas as OBs de todos os contratos)
+      const foundInCache = await this.sigefCacheService.searchOrdensBancariasGlobais(term);
+      
+      const newExtraObs: Transaction[] = foundInCache.map((ob, idx) => {
+        const obNumero = ob.nuordembancaria || ob.nudocumento || 'S/N';
+        const obId = `cache-ob-deep-${obNumero}-${idx}`;
+        const paymentDate = ob.dtpagamento ? new Date(ob.dtpagamento) : (ob.dtlancamento ? new Date(ob.dtlancamento) : new Date());
+        
+        return {
+          id: obId,
+          description: `PAGAMENTO OB ${obNumero} (${ob.cdsituacaoordembancaria || 'PROCESSO'})`.toUpperCase(),
+          commitment_id: ob.nunotaempenho || undefined,
+          date: paymentDate,
+          type: TransactionType.LIQUIDATION,
+          amount: ob.vltotal || 0,
+          nunotaempenho: ob.nunotaempenho || undefined,
+          // Dados mínimos necessários para o vínculo
+          contract_id: this.contractId(),
+          unidade_gestora_label: getUnidadeLabel(ob.cdunidadegestora.toString())
+        } as Transaction;
+      });
+
+      // 2. Se o termo se parece com um número de OB (ex: 2024OB...) e não achamos nada de relevante, 
+      // poderíamos tentar a API. Mas vamos começar pelo cache global.
+      
+      // Combinar com as que já temos
+      const currentExtras = this.extraObs();
+      const combined = [...currentExtras];
+      
+      newExtraObs.forEach(neo => {
+        if (!combined.some(c => c.commitment_id === neo.commitment_id && c.amount === neo.amount && c.date.getTime() === neo.date.getTime())) {
+          combined.push(neo);
+        }
+      });
+      
+      this.extraObs.set(combined);
+
+    } catch (err) {
+      console.error('[Financial] Erro na busca profunda:', err);
+    } finally {
+      this.isDeepSearching.set(false);
+    }
+  }
+
+  async linkSelectedTransactionsToInstallment() {
+    const installment = this.selectedInstallment();
+    if (!installment) return;
+    
+    const selectedObs = this.getSelectedObs();
+    if (selectedObs.length === 0) {
+      alert('Selecione pelo menos uma OB para vincular.');
+      return;
+    }
+
+    try {
+      this.sigefSyncing.set(true);
+
+      for (const transaction of selectedObs) {
+        const isSigef = transaction.id.startsWith('sigef-') || transaction.id.startsWith('cache-');
+        let finalId = transaction.id;
+
+        if (isSigef) {
+          const { data: existing } = await this.supabaseService.client
+            .from('transacoes')
+            .select('id')
+            .eq('sigef_id', transaction.id)
+            .maybeSingle();
+
+          if (existing) {
+            finalId = existing.id;
+          } else {
+            const { data: created, error: createError } = await this.supabaseService.client
+              .from('transacoes')
+              .insert({
+                contract_id: this.contractId(),
+                description: transaction.description,
+                commitment_id: transaction.commitment_id,
+                date: new Date(transaction.date).toISOString().split('T')[0],
+                type: transaction.type,
+                amount: transaction.amount,
+                department: transaction.department,
+                budget_description: transaction.budget_description,
+                parcela_referencia: installment.reference,
+                sigef_id: transaction.id
+              })
+              .select()
+              .single();
+            
+            if (createError) throw createError;
+            finalId = created.id;
+          }
+        }
+
+        const { error } = await this.supabaseService.client
+          .from('transacoes')
+          .update({ parcela_referencia: installment.reference })
+          .eq('id', finalId);
+
+        if (error) throw error;
+      }
+
+      await this.loadTransactions(this.contractId());
+      this.closeLinkObModal();
+      
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro ao vincular OBs:', err);
+      alert('Erro ao vincular Ordens Bancárias: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      this.sigefSyncing.set(false);
+    }
   }
 
   async linkTransactionToInstallment(transactionId: string) {

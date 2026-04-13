@@ -203,4 +203,45 @@
     }
     
   </main>
+
+  <!-- Global SIGEF Sync Overlay (Lock) -->
+  @if (sigefSyncService.isLocked()) {
+    <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm transition-all animate-in fade-in duration-300">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-sco-blue/20 flex flex-col items-center text-center">
+        <!-- Spinner Animado Premium -->
+        <div class="relative w-20 h-20 mb-6">
+          <div class="absolute inset-0 border-4 border-sco-blue/10 rounded-full"></div>
+          <div class="absolute inset-0 border-4 border-t-sco-blue rounded-full animate-spin"></div>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="material-symbols-outlined text-sco-blue text-3xl">sync</span>
+          </div>
+        </div>
+
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Sincronizando com SIGEF</h3>
+        <p class="text-gray-500 dark:text-gray-400 mb-6">
+          Estamos atualizando as informações financeiras (NEs e OBs) diretamente da API oficial.
+          Por favor, aguarde a conclusão para garantir a integridade dos dados.
+        </p>
+
+        <!-- Barra de Progresso Real-time -->
+        <div class="w-full bg-gray-100 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden mb-3">
+          <div 
+            class="bg-sco-blue h-full transition-all duration-500 ease-out"
+            [style.width.%]="sigefSyncService.progress()"
+          ></div>
+        </div>
+        
+        <div class="flex justify-between w-full text-xs font-medium text-gray-400 dark:text-gray-500">
+          <span>{{ sigefSyncService.progress() }}% Concluído</span>
+          <span>Processando fila de consultas...</span>
+        </div>
+
+        <!-- Alerta de Bloqueio -->
+        <div class="mt-8 flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-lg text-sm border border-yellow-200 dark:border-yellow-800">
+          <span class="material-symbols-outlined text-[18px]">lock</span>
+          <span>Navegação temporariamente suspensa</span>
+        </div>
+      </div>
+    </div>
+  }
 </div>

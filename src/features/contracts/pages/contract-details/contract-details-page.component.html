@@ -321,28 +321,19 @@
 
                           <div class="flex justify-between items-end">
                             <div class="flex flex-col gap-1 w-full">
-                              @if (p.status === 'PAID' && p.linkedTransactions.length > 0) {
-                                <div class="space-y-1 mt-1">
-                                  @for (trans of p.linkedTransactions; track trans.id) {
-                                    <div class="flex items-center justify-between group/link bg-blue-50/50 dark:bg-blue-900/10 p-1.5 rounded border border-blue-100 dark:border-blue-900/30">
-                                      <div class="flex items-center gap-1 text-[10px] font-bold text-sco-blue dark:text-blue-400">
-                                        <span class="material-symbols-outlined text-[14px]">payments</span>
-                                        <span class="truncate max-w-[120px]" [title]="trans.description">
-                                          OB: {{ trans.description.replace('PAGAMENTO OB ', '').replace('PAGAMENTO - OB ', '') }}
-                                        </span>
-                                      </div>
-                                      <div class="flex items-center gap-1">
-                                        <span class="text-[10px] font-bold text-gray-700 dark:text-gray-300">{{ trans.amount | currency:'BRL':'symbol':'1.0-0' }}</span>
-                                        <button 
-                                          (click)="unlinkTransaction(trans.id)"
-                                          class="text-gray-400 hover:text-red-500 opacity-0 group-hover/link:opacity-100 transition-opacity"
-                                          title="Desvincular OB"
-                                        >
-                                          <span class="material-symbols-outlined text-[12px]">link_off</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  }
+                              @if (p.linkedTransactions.length > 0) {
+                                <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/10 p-2 rounded-lg border border-blue-100 dark:border-blue-900/30 mt-1 cursor-pointer" (click)="openLinkObModal(p)">
+                                  <div class="flex items-center gap-1.5 text-[10px] font-bold text-sco-blue dark:text-blue-400">
+                                    <span class="material-symbols-outlined text-[16px]">payments</span>
+                                    <span>{{ p.linkedTransactions.length }} {{ p.linkedTransactions.length === 1 ? 'OB vinculada' : 'OBs vinculadas' }}</span>
+                                  </div>
+                                  <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] font-bold text-gray-700 dark:text-gray-300">
+                                      {{ p.linkedTransactions.length > 0 ? (p.linkedTransactions[0].amount | currency:'BRL':'symbol':'1.0-0') : '' }}
+                                      {{ p.linkedTransactions.length > 1 ? '...' : '' }}
+                                    </span>
+                                    <span class="material-symbols-outlined text-[14px] text-gray-400">chevron_right</span>
+                                  </div>
                                 </div>
                               } @else {
                                 <div class="flex items-center gap-1 text-[11px] text-gray-400">
@@ -584,11 +575,11 @@
                      </button>
                    </div>
 
-                   <button (click)="openDotacaoModal()" class="bg-sco-blue hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors text-sm shadow-sm">
-                     <span class="material-symbols-outlined text-[18px]">add</span>
-                     Nova Dotação
-                   </button>
-                </div>
+                    <button (click)="openDotacaoModal()" class="bg-sco-blue hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors text-sm shadow-sm">
+                      <span class="material-symbols-outlined text-[18px]">add</span>
+                      Nova Dotação
+                    </button>
+                 </div>
 
                  @if (budgets().length > 0) {
                    @if (budgetsViewMode() === 'cards') {
@@ -930,21 +921,82 @@
                 </p>
               </div>
 
+              <!-- Search Bar -->
+              <div class="flex flex-col gap-3">
+                <div class="flex gap-2">
+                  <div class="relative group flex-1">
+                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-sco-blue transition-colors">search</span>
+                    <input 
+                      type="text" 
+                      [value]="searchObTerm()"
+                      (input)="searchObTerm.set($any($event.target).value)"
+                      (keyup.enter)="performDeepSearch()"
+                      placeholder="Pesquisar por descrição, NE ou OB..."
+                      class="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-sco-blue/20 focus:border-sco-blue transition-all shadow-sm"
+                    >
+                  </div>
+                  <button 
+                    (click)="performDeepSearch()"
+                    [disabled]="!searchObTerm().trim() || isDeepSearching()"
+                    class="px-6 py-2 bg-sco-blue hover:bg-blue-700 disabled:bg-gray-300 disabled:dark:bg-gray-700 disabled:text-gray-500 text-white rounded-2xl transition-all flex items-center justify-center gap-2 text-xs font-bold shadow-md shadow-blue-500/10 active:scale-95"
+                    title="Pesquisar em todo o banco de dados (Cache Global)"
+                  >
+                    @if (isDeepSearching()) {
+                      <span class="animate-spin material-symbols-outlined text-[18px]">progress_activity</span>
+                    } @else {
+                      <span class="material-symbols-outlined text-[18px]">travel_explore</span>
+                    }
+                    <span class="hidden sm:inline">Busca Profunda</span>
+                  </button>
+                </div>
+                
+                @if (isDeepSearching()) {
+                  <div class="flex items-center gap-2 px-1 animate-pulse">
+                    <div class="h-1.5 w-1.5 rounded-full bg-sco-blue"></div>
+                    <span class="text-[10px] font-bold text-sco-blue uppercase tracking-wider">Pesquisando no cache global...</span>
+                  </div>
+                }
+              </div>
+
+
               <!-- List section -->
               <div class="space-y-3">
                 <h4 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Lançamentos Disponíveis</h4>
                 
+                <div class="flex items-center justify-between mb-3 px-1">
+                  <span class="text-[10px] text-gray-500">{{ selectedObIds().size }} selecionada(s)</span>
+                  @if (selectedObIds().size > 0) {
+                    <button (click)="clearObSelection()" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium">
+                      Limpar seleção
+                    </button>
+                  }
+                </div>
+                
                 <div class="grid gap-3">
                   @for (transaction of availableObs(); track transaction.id) {
                     @let isCurrentLink = transaction.parcela_referencia === selectedInstallment()?.reference;
-                    <button 
-                      (click)="linkTransactionToInstallment(transaction.id)"
-                      [disabled]="isCurrentLink"
-                      class="relative w-full text-left p-4 rounded-2xl border transition-all duration-300 group overflow-hidden"
+                    @let isSelected = isObSelected(transaction.id);
+                    <div 
+                      class="relative w-full p-4 rounded-2xl border transition-all duration-300 group overflow-hidden cursor-pointer"
+                      (click)="!isCurrentLink && toggleObSelection(transaction.id)"
                       [class]="isCurrentLink 
                         ? 'bg-blue-50 border-sco-blue dark:bg-blue-900/20 dark:border-sco-blue' 
-                        : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700 dark:hover:border-blue-800'"
+                        : isSelected
+                          ? 'bg-blue-50 border-sco-blue dark:bg-blue-900/20 dark:border-sco-blue ring-2 ring-sco-blue ring-inset'
+                          : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700 dark:hover:border-blue-800'"
                     >
+                      <!-- Checkbox -->
+                      @if (!isCurrentLink) {
+                        <div class="absolute top-4 left-4 z-10">
+                          <input 
+                            type="checkbox" 
+                            [checked]="isSelected"
+                            class="w-5 h-5 rounded border-2 border-gray-300 text-sco-blue focus:ring-sco-blue focus:ring-offset-0 cursor-pointer"
+                            (click)="$event.stopPropagation(); toggleObSelection(transaction.id)"
+                          />
+                        </div>
+                      }
+
                       <!-- Selected Indicator -->
                       @if (isCurrentLink) {
                         <div class="absolute top-0 right-0 h-8 w-8 bg-sco-blue flex items-center justify-center rounded-bl-2xl">
@@ -952,13 +1004,20 @@
                         </div>
                       }
 
-                      <div class="flex items-center gap-4">
+                      <div class="flex items-center gap-4" [class.pl-6]="!isCurrentLink">
                         <!-- Icon Circle -->
                         <div 
-                          class="h-10 w-10 rounded-xl flex items-center justify-center transition-colors shadow-sm"
-                          [class]="isCurrentLink ? 'bg-sco-blue text-white' : 'bg-gray-50 dark:bg-gray-700 text-gray-400 group-hover:bg-blue-50 group-hover:text-sco-blue'"
+                          class="h-10 w-10 rounded-xl flex items-center justify-center transition-colors shadow-sm relative"
+                          [class]="isCurrentLink || isSelected ? 'bg-sco-blue text-white' : 'bg-gray-50 dark:bg-gray-700 text-gray-400 group-hover:bg-blue-50 group-hover:text-sco-blue'"
                         >
                           <span class="material-symbols-outlined text-[20px]">payments</span>
+                          
+                          <!-- Global Marker -->
+                          @if (transaction.id.startsWith('cache-ob-deep-')) {
+                            <div class="absolute -top-1 -left-1 h-4 w-4 bg-purple-500 rounded-full flex items-center justify-center border-2 border-white dark:border-gray-800" title="Encontrado via Busca Profunda">
+                              <span class="material-symbols-outlined text-[10px] text-white">public</span>
+                            </div>
+                          }
                         </div>
 
                         <!-- Main Info -->
@@ -986,6 +1045,11 @@
                                 {{ transaction.nunotaempenho }}
                               </div>
                             }
+                            @if (transaction.id.startsWith('cache-ob-deep-')) {
+                              <span class="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-[9px] font-bold uppercase rounded border border-purple-100 dark:border-purple-800/30">
+                                Busca Global
+                              </span>
+                            }
                             @if (isCurrentLink) {
                               <span class="text-[10px] font-bold text-sco-blue uppercase flex items-center gap-1">
                                 <span class="h-1 w-1 rounded-full bg-sco-blue"></span>
@@ -1002,16 +1066,34 @@
                           </p>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   } @empty {
                     <div class="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-100 dark:border-gray-700">
                       <div class="h-16 w-16 bg-gray-50 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span class="material-symbols-outlined text-3xl text-gray-300">search_off</span>
+                        <span class="material-symbols-outlined text-3xl text-gray-300">
+                          {{ searchObTerm() ? 'search_off' : 'receipt_long' }}
+                        </span>
                       </div>
-                      <h5 class="text-sm font-bold text-gray-900 dark:text-gray-200">Nenhum pagamento disponível</h5>
-                      <p class="text-xs text-gray-400 mt-1 max-w-[240px] mx-auto">
-                        Não existem Ordens Bancárias pendentes de vínculo para este contrato no momento.
+                      <h5 class="text-sm font-bold text-gray-900 dark:text-gray-200">
+                        {{ searchObTerm() ? 'Nenhum resultado encontrado' : 'Nenhum pagamento disponível' }}
+                      </h5>
+                      <p class="text-xs text-gray-400 mt-1 max-w-[280px] mx-auto px-4">
+                        @if (searchObTerm()) {
+                          Não encontramos OBs vinculadas a este contrato com o termo "{{ searchObTerm() }}". Tente a <b>Busca Profunda</b> para pesquisar em todo o cache do sistema.
+                        } @else {
+                          Não existem Ordens Bancárias pendentes de vínculo para este contrato no momento.
+                        }
                       </p>
+                      
+                      @if (searchObTerm() && !isDeepSearching()) {
+                        <button 
+                          (click)="performDeepSearch()"
+                          class="mt-6 px-6 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-sco-blue dark:hover:border-sco-blue hover:text-sco-blue text-gray-600 dark:text-gray-400 rounded-xl transition-all text-xs font-bold flex items-center gap-2 mx-auto"
+                        >
+                          <span class="material-symbols-outlined text-[18px]">travel_explore</span>
+                          Tentar Busca Profunda
+                        </button>
+                      }
                     </div>
                   }
                 </div>
@@ -1029,12 +1111,22 @@
               Sincronizar SIGEF agora
             </button>
             
-            <button 
-              (click)="closeLinkObModal()"
-              class="px-8 py-2.5 text-sm font-bold text-white bg-sco-blue hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-95"
-            >
-              Concluído
-            </button>
+            <div class="flex items-center gap-3">
+              @if (selectedObIds().size > 0) {
+                <button 
+                  (click)="linkSelectedTransactionsToInstallment()"
+                  class="px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+                >
+                  Vincular {{ selectedObIds().size }} OB{{ selectedObIds().size > 1 ? 's' : '' }}
+                </button>
+              }
+              <button 
+                (click)="closeLinkObModal()"
+                class="px-8 py-2.5 text-sm font-bold text-white bg-sco-blue hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-95"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       </div>

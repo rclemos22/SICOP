@@ -59,13 +59,28 @@ export class BudgetService {
    */
   async getBudgetsByContractId(contractId: string): Promise<Result<Dotacao[]>> {
     try {
+      // Busca da view vw_saldo_dotacoes para obter os campos calculados (empenhado, pago, saldo)
       const { data, error } = await this.supabaseService.client
         .from('vw_saldo_dotacoes')
         .select('*')
         .eq('contract_id', contractId);
 
       if (error) throw error;
-      return ok((data || []).map((raw: any) => this.mapRawToDotacao(raw)));
+      
+      if (!data || data.length === 0) {
+        console.warn('[BudgetService] Nenhuma dotação encontrada para contract_id:', contractId);
+        return ok([]);
+      }
+
+      // Remove duplicatas baseado no ID
+      const uniqueMap = new Map();
+      data.forEach((item: any) => {
+        if (!uniqueMap.has(item.id)) {
+          uniqueMap.set(item.id, item);
+        }
+      });
+      
+      return ok(Array.from(uniqueMap.values()).map((raw: any) => this.mapRawToDotacao(raw)));
     } catch (err: any) {
       this.errorHandler.handle(err, 'BudgetService.getBudgetsByContractId');
       return fail(err.message || 'Erro ao buscar dotações do contrato');
@@ -113,6 +128,20 @@ export class BudgetService {
 
   async updateDotacao(id: string, payload: Partial<DotacaoPayload>): Promise<Result<null>> {
     try {
+      // Garante que o contract_id não seja removido inadvertidamente
+      if (!payload.contract_id) {
+        // Busca o registro atual para preservar o contract_id
+        const { data: existing } = await this.supabaseService.client
+          .from('dotacoes')
+          .select('contract_id')
+          .eq('id', id)
+          .single();
+        
+        if (existing && existing.contract_id) {
+          payload.contract_id = existing.contract_id;
+        }
+      }
+
       const { error } = await this.supabaseService.client
         .from('dotacoes')
         .update(payload)
