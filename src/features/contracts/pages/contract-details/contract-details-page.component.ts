@@ -31,6 +31,7 @@ interface PaymentSchedule {
   isPast: boolean;
   status: 'PAID' | 'OPEN' | 'OVERDUE';
   linkedTransactions: Transaction[];
+  totalPago: number;
 }
 
 @Component({
@@ -96,6 +97,9 @@ export class ContractDetailsPageComponent {
   /** OBs encontradas via busca profunda (fora do contexto inicial do contrato) */
   extraObs = signal<Transaction[]>([]);
   isDeepSearching = signal<boolean>(false);
+  
+  /** Estado de sincronização SIGEF forçada */
+  isForceSyncing = signal<boolean>(false);
 
   // Filtra transações de liquidação (pagamentos) para vinculação
   availableObs = computed(() => {
@@ -103,11 +107,13 @@ export class ContractDetailsPageComponent {
     const current = this.selectedInstallment();
     const searchTerm = this.searchObTerm().toLowerCase().trim();
     
-    // Remover duplicatas de IDs (caso uma extraOb já exista na lista base)
+    // Remover duplicatas Reais (caso uma extraOb já exista na lista base ou vice-versa)
     const seen = new Set<string>();
     const uniqueTrans = allTrans.filter(t => {
-      if (seen.has(t.id)) return false;
-      seen.add(t.id);
+      // Usar o document_number (que é o nudocumento) para garantir unicidade real
+      const uniqueKey = t.document_number || t.id;
+      if (seen.has(uniqueKey)) return false;
+      seen.add(uniqueKey);
       return true;
     });
 
@@ -235,7 +241,8 @@ export class ContractDetailsPageComponent {
         daysUntil: Math.ceil((installmentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
         isPast,
         status,
-        linkedTransactions: matches
+        linkedTransactions: matches,
+        totalPago: matches.reduce((acc, t) => acc + (t.amount || 0), 0)
       });
 
       currentDate.setMonth(currentDate.getMonth() + 1);
@@ -491,13 +498,11 @@ export class ContractDetailsPageComponent {
             const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
             const isConfirmed = SIGEF_PAID_STATUSES.some(status => situacao.includes(status));
             
-            // Incluímos todas as OBs para permitir vínculo antecipado (conforme solicitado pelo usuário)
-            // Mas o cálculo de vlPago (abaixo) continuará rigoroso se usarmos filtered list lá.
-            
             const valorOB = p.vltotal || 0;
-            const obNumero = p.nuordembancaria || p.nudocumento || 'S/N';
+            const obNumero = p.nuordembancaria || 'S/N';
+            const docNumero = p.nudocumento || obNumero;
             
-            const obId = `cache-ob-${obNumero}-${p.dtpagamento || p.dtlancamento || pIdx}-${pIdx}`;
+            const obId = `cache-ob-${docNumero}-${pIdx}`;
             const paymentDate = p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date());
             const paymentMonth = p.dtpagamento 
               ? p.dtpagamento.substring(0, 7) 
@@ -508,6 +513,8 @@ export class ContractDetailsPageComponent {
               contract_id: budget.contract_id,
               description: `PAGAMENTO OB ${obNumero} (${p.cdsituacaoordembancaria || 'PROCESSO'})`.toUpperCase(),
               commitment_id: p.nunotaempenho || undefined,
+              document_number: docNumero,
+              ob_number: obNumero,
               date: paymentDate,
               type: TransactionType.LIQUIDATION,
               amount: valorOB,
@@ -804,14 +811,17 @@ export class ContractDetailsPageComponent {
       const foundInCache = await this.sigefCacheService.searchOrdensBancariasGlobais(term);
       
       const newExtraObs: Transaction[] = foundInCache.map((ob, idx) => {
-        const obNumero = ob.nuordembancaria || ob.nudocumento || 'S/N';
-        const obId = `cache-ob-deep-${obNumero}-${idx}`;
+        const obNumero = ob.nuordembancaria || 'S/N';
+        const docNumero = ob.nudocumento || obNumero;
+        const obId = `cache-ob-deep-${docNumero}-${idx}`;
         const paymentDate = ob.dtpagamento ? new Date(ob.dtpagamento) : (ob.dtlancamento ? new Date(ob.dtlancamento) : new Date());
         
         return {
           id: obId,
           description: `PAGAMENTO OB ${obNumero} (${ob.cdsituacaoordembancaria || 'PROCESSO'})`.toUpperCase(),
           commitment_id: ob.nunotaempenho || undefined,
+          document_number: docNumero,
+          ob_number: obNumero,
           date: paymentDate,
           type: TransactionType.LIQUIDATION,
           amount: ob.vltotal || 0,
@@ -830,7 +840,8 @@ export class ContractDetailsPageComponent {
       const combined = [...currentExtras];
       
       newExtraObs.forEach(neo => {
-        if (!combined.some(c => c.commitment_id === neo.commitment_id && c.amount === neo.amount && c.date.getTime() === neo.date.getTime())) {
+        // Deduplicação na lista de extras: considera número do documento e valor
+        if (!combined.some(c => c.document_number === neo.document_number && c.amount === neo.amount)) {
           combined.push(neo);
         }
       });
@@ -883,6 +894,8 @@ export class ContractDetailsPageComponent {
                 department: transaction.department,
                 budget_description: transaction.budget_description,
                 parcela_referencia: installment.reference,
+                document_number: transaction.document_number,
+                ob_number: transaction.ob_number,
                 sigef_id: transaction.id
               })
               .select()
@@ -1001,6 +1014,43 @@ export class ContractDetailsPageComponent {
       alert('Erro ao desvincular: ' + err.message);
     } finally {
       this.sigefSyncing.set(false);
+    }
+  }
+  
+  /**
+   * Força a sincronização SIGEF para todas as notas de engajamento do contrato
+   */
+  async forceSyncSigef() {
+    const budgetsData = this.budgets();
+    if (budgetsData.length === 0) {
+      alert('Nenhuma dotação encontrada para forçar sincronização.');
+      return;
+    }
+    
+    this.isForceSyncing.set(true);
+    try {
+      for (const budget of budgetsData) {
+        if (budget.nunotaempenho) {
+          const neValue = budget.nunotaempenho.trim();
+          const anoNE = neValue.substring(0, 4);
+          const ug = budget.unid_gestora;
+          
+          console.log('[ForceSync] Sincronizando NE:', neValue, 'UG:', ug);
+          await this.sigefSyncService.getNotaEmpenhoWithCache(anoNE, neValue, ug, true);
+          
+          // Delay entre NEs
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      // Recarregar os dados após sincronização
+      await this.loadBudgets(this.contractId());
+      alert('Sincronização SIGEF concluída com sucesso!');
+    } catch (err: any) {
+      console.error('[ForceSync] Erro:', err);
+      alert('Erro ao sincronizar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      this.isForceSyncing.set(false);
     }
   }
 }

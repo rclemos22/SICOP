@@ -22,6 +22,8 @@ export interface Transaction {
   contract_number?: string;
   payment_month?: string; // Mês de referência do pagamento (YYYY-MM) baseado na data de pagamento da OB
   unidade_gestora_label?: string; // Label formatado da unidade gestora (ex: "DPEMA", "FADEP")
+  document_number?: string; // Número do Documento do SIGEF (ex: 2026PP...)
+  ob_number?: string; // Número da Ordem Bancária (ex: 847)
   contract_type?: 'serviço' | 'material'; // Tipo do contrato vinculado à transação
 }
 

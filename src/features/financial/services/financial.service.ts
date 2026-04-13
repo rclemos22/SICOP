@@ -124,10 +124,13 @@ export class FinancialService {
 
         // Adiciona Ordens Bancárias (pagamentos)
         obsCache.forEach((ob) => {
+          const obNumero = ob.nuordembancaria || 'S/N';
+          const docNumero = ob.nudocumento || obNumero;
+          
           transactions.push({
-            id: `sigef-ob-${ob.nuordembancaria}-${ob.cdunidadegestora}`,
+            id: `sigef-ob-${docNumero}`,
             contract_id: budget.contract_id || '',
-            description: `Pagamento - OB ${ob.nuordembancaria}`,
+            description: `PAGAMENTO OB ${obNumero}`,
             commitment_id: ob.nunotaempenho || '',
             date: ob.dtpagamento ? new Date(ob.dtpagamento) : (ob.dtlancamento ? new Date(ob.dtlancamento) : new Date()),
             type: TransactionType.LIQUIDATION,
@@ -137,7 +140,9 @@ export class FinancialService {
             nunotaempenho: ob.nunotaempenho,
             dotacao_id: budget.id,
             contract_number: budget.numero_contrato,
-            contract_type: budget.contract_type
+            contract_type: budget.contract_type,
+            ob_number: obNumero,
+            document_number: docNumero
           });
         });
       } catch (err) {
@@ -188,7 +193,9 @@ export class FinancialService {
       contract_number: raw.contratos?.contrato || 'N/A',
       payment_month: raw.payment_month,
       unidade_gestora_label: raw.unidade_gestora_label,
-      contract_type: raw.contract_type
+      contract_type: raw.contract_type,
+      document_number: raw.document_number,
+      ob_number: raw.ob_number
     };
   }
 }

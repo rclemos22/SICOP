@@ -328,9 +328,8 @@
                                     <span>{{ p.linkedTransactions.length }} {{ p.linkedTransactions.length === 1 ? 'OB vinculada' : 'OBs vinculadas' }}</span>
                                   </div>
                                   <div class="flex items-center gap-1.5">
-                                    <span class="text-[10px] font-bold text-gray-700 dark:text-gray-300">
-                                      {{ p.linkedTransactions.length > 0 ? (p.linkedTransactions[0].amount | currency:'BRL':'symbol':'1.0-0') : '' }}
-                                      {{ p.linkedTransactions.length > 1 ? '...' : '' }}
+                                    <span class="text-[10px] font-bold" [class.text-green-600]="p.totalPago >= p.valor" [class.text-gray-700]="p.totalPago < p.valor">
+                                      {{ p.totalPago | currency:'BRL':'symbol':'1.0-0' }}
                                     </span>
                                     <span class="material-symbols-outlined text-[14px] text-gray-400">chevron_right</span>
                                   </div>
@@ -579,6 +578,21 @@
                       <span class="material-symbols-outlined text-[18px]">add</span>
                       Nova Dotação
                     </button>
+                    
+                    <button 
+                      (click)="forceSyncSigef()" 
+                      [disabled]="isForceSyncing()"
+                      class="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all shadow-sm"
+                      [class]="isForceSyncing() ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 cursor-wait' : 'bg-yellow-500 hover:bg-yellow-600 text-white'"
+                    >
+                      @if (isForceSyncing()) {
+                        <span class="animate-spin material-symbols-outlined text-[18px]">sync</span>
+                        <span>Sincronizando...</span>
+                      } @else {
+                        <span class="material-symbols-outlined text-[18px]">sync</span>
+                        <span>Atualizar SIGEF</span>
+                      }
+                    </button>
                  </div>
 
                  @if (budgets().length > 0) {
@@ -791,8 +805,16 @@
                               {{ t.date | date:'dd/MM/yy' }}
                             </td>
                             <td class="px-2 py-3 overflow-hidden">
-                              <div class="text-[11px] font-medium text-gray-900 dark:text-white truncate" [title]="t.description">
-                                {{ t.description }}
+                              <div class="flex flex-col gap-0.5 min-w-0">
+                                <div class="text-[11px] font-medium text-gray-900 dark:text-white truncate" [title]="t.description">
+                                  {{ t.description }}
+                                </div>
+                                @if (t.ob_number) {
+                                  <div class="flex items-center gap-1 text-[9px] text-sco-blue dark:text-blue-400 font-bold">
+                                    <span class="material-symbols-outlined text-[12px]">payments</span>
+                                    {{ t.ob_number }}
+                                  </div>
+                                }
                               </div>
                             </td>
                             <td class="px-2 py-3 text-center whitespace-nowrap">
@@ -1039,6 +1061,12 @@
                               <span class="material-symbols-outlined text-[14px]">calendar_today</span>
                               {{ transaction.date | date:'dd/MM/yyyy' }}
                             </div>
+                            @if (transaction.ob_number) {
+                              <div class="flex items-center gap-1 text-[11px] text-sco-blue dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800">
+                                <span class="material-symbols-outlined text-[14px]">payments</span>
+                                OB: {{ transaction.ob_number }}
+                              </div>
+                            }
                             @if (transaction.nunotaempenho) {
                               <div class="flex items-center gap-1 text-[11px] text-gray-500 font-medium font-mono">
                                 <span class="material-symbols-outlined text-[14px]">receipt</span>
