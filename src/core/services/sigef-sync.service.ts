@@ -107,6 +107,33 @@ export class SigefSyncService {
   /**
    * Obtém resumo de NE usando cache quando disponível, mas garantindo sincronização de movimentos e OBs
    */
+  /**
+   * Executa função com retry automático em caso de erro de rede
+   */
+  private async withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3, baseDelay: number = 2000): Promise<T> {
+    let lastError: any;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastError = err;
+        const isNetworkError = err?.message?.includes('Failed to fetch') || 
+                            err?.message?.includes('NetworkError') ||
+                            err?.message?.includes('TLS') ||
+                            err?.message?.includes('disconnected');
+        
+        if (isNetworkError && attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1); // Backoff exponencial
+          console.log(`[SIGEF SYNC] Erro de rede. Tentativa ${attempt}/${maxRetries}. Retry em ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          throw err;
+        }
+      }
+    }
+    throw lastError;
+  }
+
   async getNotaEmpenhoWithCache(ano: string, neNumber: string, ug: string, forceSync: boolean = false): Promise<NeResumo | null> {
     const ugNum = parseInt(ug, 10);
     
@@ -117,26 +144,26 @@ export class SigefSyncService {
     if (forceSync) {
       console.log('[SIGEF SYNC] Sincronização FORÇADA iniciada para NE:', neNumber);
       try {
-        // Buscar dados básicos da NE
-        const ne = await this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ug);
+        // Buscar dados básicos da NE com retry
+        const ne = await this.withRetry(() => this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ug));
         if (ne) {
           await this.cacheService.saveNotaEmpenho(this.mapApiNeToCache(ne, ugNum));
           neCached = await this.cacheService.getNotaEmpenho(ugNum, neNumber);
         }
 
-        // Buscar movimentos (empenhos/anulações)
-        const movements = await this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ug);
+        // Buscar movimentos (empenhos/anulações) com retry
+        const movements = await this.withRetry(() => this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ug));
         if (movements.length > 0) {
           await this.cacheService.saveNeMovimentos(movements.map(m => this.mapApiMovementToCache(m, ugNum)));
         }
 
-        // Determinar a data mínima para filtrar OBs (pagamento não pode preceder empenho)
+        // Determinar a data mínima para filtrar OBs (pagamento não pode preceder empego)
         const allDates = movements.map(m => m.dtlancamento).filter(Boolean) as string[];
         const minDate = allDates.length > 0 ? allDates.sort()[0] : undefined;
         const nesVinculadas = [...new Set([neNumber, ...movements.map(m => m.nunotaempenho).filter(Boolean)])] as string[];
         
         console.log('[SIGEF SYNC] Buscando OBs atualizadas via API...');
-        const obs = await this.sigefService.getOrdemBancariaMovements(ano, nesVinculadas, ug, minDate);
+        const obs = await this.withRetry(() => this.sigefService.getOrdemBancariaMovements(ano, nesVinculadas, ug, minDate));
         if (obs.length > 0) {
           await this.cacheService.saveOrdensBancarias(obs.map(ob => this.mapApiObToCache(ob, ugNum)));
         }
