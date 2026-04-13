@@ -262,18 +262,27 @@ export class SigefCacheService {
 
   async getOrdensBancariasPorNe(ug: number, neNumber: string): Promise<SigefOrdemBancaria[]> {
     try {
+      // Normalizar NE para busca (remover barra)
+      const normalizedNe = neNumber.replace(/[/\-]/g, '');
+      
+      // Buscar todas as OBs para esta UG e filtrar por correspondência parcial
       const { data, error } = await this.supabaseService.client
         .from('sigef_ordens_bancarias')
         .select('*')
         .eq('cdunidadegestora', ug)
-        .eq('nunotaempenho', neNumber)
         .order('dtlancamento', { ascending: true });
 
       if (error || !data) {
         return [];
       }
 
-      return data.map(this.mapToOrdemBancaria);
+      // Filtrar por correspondência no número da NE (parcial ou exata)
+      const filtered = data.filter(ob => {
+        const obNe = (ob.nunotaempenho || '').replace(/[/\-]/g, '');
+        return obNe.includes(normalizedNe) || normalizedNe.includes(obNe);
+      });
+
+      return filtered.map(this.mapToOrdemBancaria);
     } catch (err) {
       return [];
     }
@@ -315,7 +324,7 @@ export class SigefCacheService {
 
     await this.supabaseService.client
       .from('sigef_ordens_bancarias')
-      .upsert(payload, { onConflict: 'nuordembancaria,cdunidadegestora' });
+      .upsert(payload, { onConflict: 'nuordembancaria,cdunidadegestora,nudocumento' });
   }
 
   async saveOrdensBancarias(obs: SigefOrdemBancaria[]): Promise<void> {
@@ -355,7 +364,7 @@ export class SigefCacheService {
     if (payload.length > 0) {
       await this.supabaseService.client
         .from('sigef_ordens_bancarias')
-        .upsert(payload, { onConflict: 'nuordembancaria,cdunidadegestora' });
+        .upsert(payload, { onConflict: 'nuordembancaria,cdunidadegestora,nudocumento' });
     }
   }
 

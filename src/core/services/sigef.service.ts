@@ -588,17 +588,23 @@ export class SigefService implements OnDestroy {
             const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, targetNE, cdunidadegestora);
             
             if (result.data.length > 0) {
-              // FILTRO RESTRITO: 
+// FILTRO RESTRITO: 
               // 1. A OB deve estar formalmente vinculada à NE (link direto nunotaempenho)
               // 2. A data da OB não pode ser anterior à data mínima permitida (data da NE)
               const filteredMatches = result.data.filter(ob => {
                 const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
                 const obDate = ob.dtlancamento || ob.dtpagamento || '';
 
-                // Match exato do ID da NE
-                const isMatch = obNe === targetNE;
+                // Normalizar NEs para remover barras e caracteres extras para comparação
+                // Ex: "202400021/2024" ou "2024NE021" → "202400021"
+                const normalizeNe = (ne: string) => ne.replace(/[/\-]/g, '').replace(/^(\d{4})(NE)?/, '$1');
+                const targetNeNormalized = normalizeNe(targetNE);
+                const obNeNormalized = normalizeNe(obNe);
                 
-                // Validação cronológica (OB não pode vir antes do empenho)
+                // Match por correspondência parcial do número da NE
+                const isMatch = obNeNormalized === targetNeNormalized || obNe.includes(targetNE) || targetNE.includes(obNe);
+                
+                // Validação cronológica (OB não pode vir antes do empego)
                 // Usamos comparação de string pois o formato SIGEF é YYYY-MM-DD
                 const isDateValid = !minDate || (obDate >= minDate);
 
