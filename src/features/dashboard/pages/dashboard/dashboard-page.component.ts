@@ -145,9 +145,9 @@ export class DashboardPageComponent implements OnInit {
   contractsByStatus = computed(() => {
     const contracts = this.filteredContracts();
     return {
-      vigentes: contracts.filter(c => c.status === ContractStatus.VIGENTE).length,
-      finalizando: contracts.filter(c => c.status === ContractStatus.FINALIZANDO).length,
-      rescindidos: contracts.filter(c => c.status === ContractStatus.RESCINDIDO).length,
+      vigentes: contracts.filter(c => c.status_efetivo === ContractStatus.VIGENTE).length,
+      finalizando: contracts.filter(c => c.status_efetivo === ContractStatus.FINALIZANDO).length,
+      rescindidos: contracts.filter(c => c.status_efetivo === ContractStatus.RESCINDIDO).length,
       total: contracts.length
     };
   });
@@ -306,15 +306,15 @@ export class DashboardPageComponent implements OnInit {
       .reduce((acc, c) => acc + (c.valor_anual || 0), 0);
   });
 
-  // Total Committed (Empenhado Real do SIGEF)
+  // Total Committed (Empenhado Real do SIGEF - todas as dotações)
   totalCommittedValue = computed(() => {
-    return this.budgetService.dotacoes()
+    return this.budgetService.allDotacoes()
       .reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
   });
 
-  // Total Paid (Pago Real do SIGEF)
+  // Total Paid (Pago Real do SIGEF - todas as dotações)
   totalPaidValue = computed(() => {
-    return this.budgetService.dotacoes()
+    return this.budgetService.allDotacoes()
       .reduce((acc, b) => acc + (b.total_pago || 0), 0);
   });
 

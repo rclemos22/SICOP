@@ -33,6 +33,14 @@ export class BudgetService {
   });
 
   /**
+   * Retorna TODAS as dotações sem filtro de ano.
+   * Usado para calcular totais gerais no dashboard.
+   */
+  readonly allDotacoes = computed(() => {
+    return this._allBudgets();
+  });
+
+  /**
    * Cabelo global: busca todas as dotações da view vw_saldo_dotacoes sem filtros iniciais.
    */
   async loadDotacoes(): Promise<void> {
