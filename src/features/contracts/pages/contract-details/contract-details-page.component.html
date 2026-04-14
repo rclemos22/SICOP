@@ -999,13 +999,13 @@
                     @let isCurrentLink = transaction.parcela_referencia === selectedInstallment()?.reference;
                     @let isSelected = isObSelected(transaction.id);
                     <div 
-                      class="relative w-full p-4 rounded-2xl border transition-all duration-300 group overflow-hidden cursor-pointer"
-                      (click)="!isCurrentLink && toggleObSelection(transaction.id)"
+                      class="relative w-full p-4 rounded-2xl border transition-all duration-300 group overflow-hidden"
                       [class]="isCurrentLink 
                         ? 'bg-blue-50 border-sco-blue dark:bg-blue-900/20 dark:border-sco-blue' 
                         : isSelected
-                          ? 'bg-blue-50 border-sco-blue dark:bg-blue-900/20 dark:border-sco-blue ring-2 ring-sco-blue ring-inset'
-                          : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700 dark:hover:border-blue-800'"
+                          ? 'bg-blue-50 border-sco-blue dark:bg-blue-900/20 dark:border-sco-blue ring-2 ring-sco-blue ring-inset cursor-pointer'
+                          : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700 dark:hover:border-blue-800 cursor-pointer'"
+                      (click)="!isCurrentLink && toggleObSelection(transaction.id)"
                     >
                       <!-- Checkbox -->
                       @if (!isCurrentLink) {
@@ -1088,10 +1088,21 @@
                         </div>
 
                         <!-- Value Area -->
-                        <div class="text-right shrink-0">
+                        <div class="text-right shrink-0 flex flex-col items-end gap-2">
                           <p class="text-lg font-bold" [class]="isCurrentLink ? 'text-sco-blue' : 'text-gray-900 dark:text-white'">
                             {{ transaction.amount | currency:'BRL':'symbol':'1.2-2' }}
                           </p>
+                          
+                          @if (isCurrentLink) {
+                            <button 
+                              (click)="$event.stopPropagation(); unlinkTransaction(transaction.id)"
+                              class="flex items-center gap-1.5 px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors border border-red-100"
+                              title="Remover vínculo com esta parcela"
+                            >
+                              <span class="material-symbols-outlined text-[16px]">link_off</span>
+                              <span class="text-[10px] font-bold uppercase">Desvincular</span>
+                            </button>
+                          }
                         </div>
                       </div>
                     </div>

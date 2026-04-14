@@ -18,6 +18,7 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 - **Fornecedores**: Cadastro e gestão de fornecedores
 - **Nota de Empenho**: Consulta de notas por número e unidade gestora
 - **Ordem Bancária**: Consulta de OBs por número e unidade gestora
+- **Sincronização SIGEF**: Persiste transações do SIGEF no banco local para preservar vínculos de parcelas
 
 ## Campos do Contrato
 

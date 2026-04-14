@@ -596,15 +596,12 @@ export class SigefService implements OnDestroy {
                 const obDate = ob.dtlancamento || ob.dtpagamento || '';
 
                 // Match exato do ID da NE
+                // Match exato do ID da NE
                 const isMatch = obNe === targetNE;
                 
-                // Validação cronológica (OB não pode vir antes do empego)
-                // Usamos comparação de string pois o formato SIGEF é YYYY-MM-DD
-                const isDateValid = !minDate || (obDate >= minDate);
-
-                if (isMatch && !isDateValid) {
-                  console.warn(`[SIGEF OB] Ignorando OB ${ob.nuordembancaria} pois data ${obDate} é anterior à data do empenho ${minDate}`);
-                }
+                // Regra de Negócio Atualizada: Confiamos no vínculo do SIGEF.
+                // Não filtramos mais por data mínima para evitar perda de dados em restos a pagar ou inconsistências de sistema.
+                const isDateValid = true;
 
                 return isMatch && isDateValid;
               });
@@ -619,8 +616,8 @@ export class SigefService implements OnDestroy {
             if (!result.next || result.data.length === 0) break;
             page++;
             
-            // Delay de cortesia para a API (1200ms entre requisições para evitar bloqueio TLS/Network)
-            await new Promise(resolve => setTimeout(resolve, 1200));
+            // Delay de cortesia para a API (800ms entre requisições para evitar bloqueio TLS/Network)
+            await new Promise(resolve => setTimeout(resolve, 800));
           } catch (err) {
             console.error(`[SIGEF OB] Erro na página ${page} para NE ${targetNE}:`, err);
             break;
@@ -632,7 +629,7 @@ export class SigefService implements OnDestroy {
     }
 
     // Remover duplicatas por segurança
-    const uniqueOBs = Array.from(new Map(allOBs.map(ob => [ob.nuordembancaria + '-' + ob.cdunidadegestora, ob])).values());
+    const uniqueOBs = Array.from(new Map(allOBs.map(ob => [ob.nuordembancaria + '-' + ob.cdunidadegestora + '-' + (ob.nudocumento || ''), ob])).values());
     console.log(`[SIGEF OB] Busca concluída para o contrato. Total único: ${uniqueOBs.length} OBs`);
     return uniqueOBs;
   }

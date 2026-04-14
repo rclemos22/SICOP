@@ -306,11 +306,9 @@ export class ContractDetailsPageComponent {
   budgetsError = signal<string | null>(null);
 
   dbTransactions = signal<Transaction[]>([]);
-  sigefTransactions = signal<Transaction[]>([]);
   
   transactions = computed(() => {
-    const combined = [...this.dbTransactions(), ...this.sigefTransactions()];
-    return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return [...this.dbTransactions()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   });
 
   transactionsLoading = signal<boolean>(false);
@@ -341,7 +339,7 @@ export class ContractDetailsPageComponent {
     const trans = this.transactions();
 
     const totalPaid = trans
-      .filter(t => t.type === 'LIQUIDATION' && !t.parcela_referencia)
+      .filter(t => t.type === 'LIQUIDATION')
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalCommitted = trans
@@ -391,20 +389,12 @@ export class ContractDetailsPageComponent {
       } else {
          // Primeiro tenta usar cache, sem forçar API
          try {
-           const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(result.data!, false);
-           this.budgets.set(enrichedBudgets);
-           
-           // Atualiza o signal separado do SIGEF
-           if (sigefTransactions.length > 0) {
-             this.sigefTransactions.set(sigefTransactions);
-           } else {
-             this.sigefTransactions.set([]);
-           }
+            const enrichedBudgets = await this.enrichBudgetsWithSigef(result.data!, false);
+            this.budgets.set(enrichedBudgets);
          } catch (enrichErr) {
-           console.error('[ContractDetails] Error enriching budgets:', enrichErr);
-           this.budgets.set(result.data!);
+            console.error('[ContractDetails] Error enriching budgets:', enrichErr);
+            this.budgets.set(result.data!);
          }
-         
          this.budgetsLoading.set(false);
       }
     } catch (err: any) {
@@ -418,9 +408,8 @@ export class ContractDetailsPageComponent {
    * Enriquece as dotações com valores do SIGEF (PRIMEIRO do cache, depois API se necessário)
    * O botão "Atualizar" força consulta à API
    */
-  private async enrichBudgetsWithSigef(budgets: Dotacao[], forceApiRefresh: boolean = false): Promise<{ enrichedBudgets: Dotacao[], sigefTransactions: Transaction[] }> {
+  private async enrichBudgetsWithSigef(budgets: Dotacao[], forceApiRefresh: boolean = false): Promise<Dotacao[]> {
     const enrichedBudgets = [...budgets];
-    const transactionsMap = new Map<string, Transaction>();
 
     for (let i = 0; i < enrichedBudgets.length; i++) {
       const budget = enrichedBudgets[i];
@@ -457,78 +446,7 @@ export class ContractDetailsPageComponent {
           const vlEmpenhado = this.sigefCacheService.calcularValorEmpenhado(movimentosCache);
           const vlPago = this.sigefCacheService.calcularValorPago(obsCache);
           
-          const EVENTO_LABELS: Record<number, string> = {
-            400010: 'Empenho Inicial',
-            400011: 'Reforço de Empenho',
-            400012: 'Anulação de Empenho'
-          };
-          
-          // 4. Criar transações de engajamento (movimentos)
-          movimentosCache.forEach((m, idx) => {
-            const valor = m.vlnotaempenho || 0;
-            let type = TransactionType.COMMITMENT;
-            let description = EVENTO_LABELS[m.cdevento] || 'Evento ' + m.cdevento;
-
-            if (m.cdevento === 400010 || m.cdevento === 400011) {
-              type = m.cdevento === 400010 ? TransactionType.COMMITMENT : TransactionType.REINFORCEMENT;
-            } else if (m.cdevento === 400012) {
-              type = TransactionType.CANCELLATION;
-            }
-
-            const txId = `cache-empenho-${m.nunotaempenho}-${m.cdevento}-${m.dtlancamento}-${idx}`;
-            transactionsMap.set(txId, {
-              id: txId,
-              contract_id: budget.contract_id,
-              description: description,
-              commitment_id: m.nunotaempenho,
-              date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
-              type: type,
-              amount: valor,
-              department: ug,
-              budget_description: budget.dotacao,
-              nunotaempenho: m.nunotaempenho,
-              dotacao_id: budget.id,
-              unidade_gestora_label: getUnidadeLabel(ug),
-              contract_type: budget.contract_type
-            } as Transaction);
-          });
-
-          // 5. Criar transações de pagamento (OBs compatíveis com o serviço de cálculo)
-          obsCache.forEach((p, pIdx) => {
-            const situacao = p.cdsituacaoordembancaria?.toLowerCase() || '';
-            const isConfirmed = SIGEF_PAID_STATUSES.some(status => situacao.includes(status));
-            
-            const valorOB = p.vltotal || 0;
-            const obNumero = p.nuordembancaria || 'S/N';
-            const docNumero = p.nudocumento || obNumero;
-            
-            const obId = `cache-ob-${docNumero}-${pIdx}`;
-            const paymentDate = p.dtpagamento ? new Date(p.dtpagamento) : (p.dtlancamento ? new Date(p.dtlancamento) : new Date());
-            const paymentMonth = p.dtpagamento 
-              ? p.dtpagamento.substring(0, 7) 
-              : (p.dtlancamento ? p.dtlancamento.substring(0, 7) : undefined);
-            
-            transactionsMap.set(obId, {
-              id: obId,
-              contract_id: budget.contract_id,
-              description: `PAGAMENTO OB ${obNumero} (${p.cdsituacaoordembancaria || 'PROCESSO'})`.toUpperCase(),
-              commitment_id: p.nunotaempenho || undefined,
-              document_number: docNumero,
-              ob_number: obNumero,
-              date: paymentDate,
-              type: TransactionType.LIQUIDATION,
-              amount: valorOB,
-              department: ug,
-              budget_description: budget.dotacao,
-              nunotaempenho: p.nunotaempenho || undefined,
-              dotacao_id: budget.id,
-              unidade_gestora_label: getUnidadeLabel(ug),
-              payment_month: paymentMonth,
-              contract_type: budget.contract_type
-            } as Transaction);
-          });
-          
-          // 6. Atualizar valores da dotação com dados do cache
+          // 5. Cálculos para a dotação a partir do cache
           const saldoDotacao = (budget.valor_dotacao || 0) - vlEmpenhado;
           
           enrichedBudgets[i] = {
@@ -546,7 +464,7 @@ export class ContractDetailsPageComponent {
       }
     }
 
-    return { enrichedBudgets, sigefTransactions: Array.from(transactionsMap.values()) };
+    return enrichedBudgets;
   }
 
   private async loadTransactions(contractId: string): Promise<void> {
@@ -724,8 +642,8 @@ export class ContractDetailsPageComponent {
         };
       });
 
-      // 2. Executar a sincronização em lote (fila controlada)
-      await this.sigefSyncService.syncBatch(tasks);
+      // 2. Executar a sincronização em lote (fila controlada com persistência automática no banco)
+      await this.sigefSyncService.syncBatch(tasks, this.contract()?.id);
       
       // 3. Atualizar carimbos de data de sincronização local para cada dotação
       const lastSyncMap = new Map(this.sigefLastSync());
@@ -737,12 +655,14 @@ export class ContractDetailsPageComponent {
       // 4. Recarregar contratos para atualizar os cálculos financeiros (Totais Empenhado/Pago) baseados no novo cache
       await this.contractService.loadContracts();
       
-      // 5. Recarregar e enriquecer as dotações para atualizar as tabelas de transações
+      // 5. Recarregar transações do BANCO (agora incluindo os novos dados do SIGEF persistidos)
+      await this.loadTransactions(this.contractId());
+      
+      // 6. Recarregar e enriquecer as dotações para atualizar os valores de Empenhado/Pago nos cards
       const budgetsResult = await this.budgetService.getBudgetsByContractId(this.contractId());
       if (budgetsResult.data) {
-        const { enrichedBudgets, sigefTransactions } = await this.enrichBudgetsWithSigef(budgetsResult.data, true);
+        const enrichedBudgets = await this.enrichBudgetsWithSigef(budgetsResult.data, true);
         this.budgets.set(enrichedBudgets);
-        this.sigefTransactions.set(sigefTransactions);
       }
       
       this.lastSyncDate.set(new Date());
@@ -810,22 +730,27 @@ export class ContractDetailsPageComponent {
       // 1. Buscar no Cache Global (todas as OBs de todos os contratos)
       const foundInCache = await this.sigefCacheService.searchOrdensBancariasGlobais(term);
       
-      const newExtraObs: Transaction[] = foundInCache.map((ob, idx) => {
+      const newExtraObs: Transaction[] = foundInCache.map((ob) => {
         const obNumero = ob.nuordembancaria || 'S/N';
         const docNumero = ob.nudocumento || obNumero;
-        const obId = `cache-ob-deep-${docNumero}-${idx}`;
+        // ID estável: usa nuordembancaria + nudocumento (igual ao padrão do enriquecimento do cache)
+        const obId = `cache-ob-${obNumero}-${docNumero}`;
         const paymentDate = ob.dtpagamento ? new Date(ob.dtpagamento) : (ob.dtlancamento ? new Date(ob.dtlancamento) : new Date());
+
+        // Inclui nudocumento na descrição para distinguir OBs com mesmo número
+        const description = docNumero !== obNumero
+          ? `PAGAMENTO OB ${obNumero} (${ob.cdsituacaoordembancaria || 'PROCESSO'}) - DOC ${docNumero}`.toUpperCase()
+          : `PAGAMENTO OB ${obNumero} (${ob.cdsituacaoordembancaria || 'PROCESSO'})`.toUpperCase();
         
         return {
           id: obId,
-          description: `PAGAMENTO OB ${obNumero} (${ob.cdsituacaoordembancaria || 'PROCESSO'})`.toUpperCase(),
+          description,
           commitment_id: ob.nunotaempenho || undefined,
           document_number: docNumero,
           ob_number: obNumero,
           date: paymentDate,
           type: TransactionType.LIQUIDATION,
           amount: ob.vltotal || 0,
-          nunotaempenho: ob.nunotaempenho || undefined,
           // Dados mínimos necessários para o vínculo
           contract_id: this.contractId(),
           unidade_gestora_label: getUnidadeLabel(ob.cdunidadegestora.toString())
@@ -915,6 +840,11 @@ export class ContractDetailsPageComponent {
       }
 
       await this.loadTransactions(this.contractId());
+      
+      const currentBudgets = this.budgets();
+      const enrichedBudgets = await this.enrichBudgetsWithSigef(currentBudgets, false);
+      this.budgets.set(enrichedBudgets);
+      
       this.closeLinkObModal();
       
     } catch (err: any) {
@@ -988,6 +918,11 @@ export class ContractDetailsPageComponent {
 
       // Recarregar dados
       await this.loadTransactions(this.contractId());
+      
+      const currentBudgets = this.budgets();
+      const enrichedBudgets = await this.enrichBudgetsWithSigef(currentBudgets, false);
+      this.budgets.set(enrichedBudgets);
+      
       this.closeLinkObModal();
       
     } catch (err: any) {
@@ -1003,15 +938,33 @@ export class ContractDetailsPageComponent {
     
     try {
       this.sigefSyncing.set(true);
-      const { error } = await this.supabaseService.client
+
+      // Tenta remover vínculo pelo id ou pelo sigef_id
+      const query = this.supabaseService.client
         .from('transacoes')
-        .update({ parcela_referencia: null })
-        .eq('id', transactionId);
+        .update({ parcela_referencia: null });
+
+      if (transactionId.includes('-') && transactionId.length > 30) {
+        // Provável UUID
+        query.eq('id', transactionId);
+      } else {
+        // Provável sigef_id
+        query.eq('sigef_id', transactionId);
+      }
+
+      const { error } = await query;
 
       if (error) throw error;
+
+      // Recarrega TUDO para garantir que os cards superiores (view SQL) se atualizem
       await this.loadTransactions(this.contractId());
+      const currentBudgets = this.budgets();
+      const enrichedBudgets = await this.enrichBudgetsWithSigef(currentBudgets, false);
+      this.budgets.set(enrichedBudgets);
+      
     } catch (err: any) {
-      alert('Erro ao desvincular: ' + err.message);
+      console.error('[ContractDetails] Erro ao desvincular:', err);
+      alert('Erro ao desvincular: ' + (err.message || 'Erro desconhecido'));
     } finally {
       this.sigefSyncing.set(false);
     }
@@ -1020,6 +973,9 @@ export class ContractDetailsPageComponent {
   /**
    * Força a sincronização SIGEF para todas as notas de engajamento do contrato
    */
+  /**
+   * Força a sincronização SIGEF para todas as notas de empenho do contrato
+   */
   async forceSyncSigef() {
     const budgetsData = this.budgets();
     if (budgetsData.length === 0) {
@@ -1027,28 +983,38 @@ export class ContractDetailsPageComponent {
       return;
     }
     
+    // Lista de NEs para sincronizar
+    const tasks = budgetsData
+      .filter(b => !!b.nunotaempenho)
+      .map(b => {
+        const neValue = b.nunotaempenho!.trim();
+        return {
+          ne: neValue,
+          ug: b.unid_gestora || '080901',
+          ano: neValue.substring(0, 4)
+        };
+      });
+
+    if (tasks.length === 0) {
+      alert('Nenhuma Nota de Empenho válida para sincronizar.');
+      return;
+    }
+
     this.isForceSyncing.set(true);
     try {
-      for (const budget of budgetsData) {
-        if (budget.nunotaempenho) {
-          const neValue = budget.nunotaempenho.trim();
-          const anoNE = neValue.substring(0, 4);
-          const ug = budget.unid_gestora;
-          
-          console.log('[ForceSync] Sincronizando NE:', neValue, 'UG:', ug);
-          await this.sigefSyncService.getNotaEmpenhoWithCache(anoNE, neValue, ug, true);
-          
-          // Delay entre NEs
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
+      console.log(`[ForceSync] Iniciando sincronização em lote de ${tasks.length} NEs para contrato ${this.contractId()}`);
       
-      // Recarregar os dados após sincronização
+      // Utiliza o serviço unificado que gerencia status, retentativas e persistência
+      await this.sigefSyncService.syncBatch(tasks, this.contractId());
+      
+      // Recarregar os dados locais para refletir a persistência
       await this.loadBudgets(this.contractId());
-      alert('Sincronização SIGEF concluída com sucesso!');
+      await this.loadTransactions(this.contractId());
+      
+      alert('Sincronização e atualização do banco de dados concluídas com sucesso!');
     } catch (err: any) {
       console.error('[ForceSync] Erro:', err);
-      alert('Erro ao sincronizar: ' + (err.message || 'Erro desconhecido'));
+      alert('Erro na sincronização: ' + (err.message || 'Erro desconhecido'));
     } finally {
       this.isForceSyncing.set(false);
     }

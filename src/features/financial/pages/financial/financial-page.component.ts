@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/models/transaction.model';
 
 import { FinancialService } from '../../services/financial.service';
+import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 
 @Component({
   selector: 'app-financial-page',
@@ -20,6 +21,7 @@ import { FinancialService } from '../../services/financial.service';
 })
 export class FinancialPageComponent {
   public financialService = inject(FinancialService);
+  public sigefSyncService = inject(SigefSyncService);
 
   // Signals
   searchQuery = signal('');
@@ -74,22 +76,10 @@ export class FinancialPageComponent {
       if (startDate) {
         // Create date at midnight local time to compare strictly by day
         const start = new Date(startDate);
-        // Assuming t.date is a Date object. 
-        // We set t.date to midnight for comparison or simply compare timestamps
-        // Simple string comparison for dates YYYY-MM-DD often works if consistent, 
-        // but let's compare timestamps.
-
-        // Fix: Adjust input date to consider timezone offset if needed, or simple comparison:
-        // Let's assume input '2025-01-01' is meant to include transactions on that day.
-        // t.date usually has time 00:00:00 se oriundo de formatação baseline.
         const tDate = new Date(t.date);
         tDate.setHours(0, 0, 0, 0);
         const sDate = new Date(start);
         sDate.setHours(0, 0, 0, 0);
-
-        // Need to account for timezone in input vs local creation?
-        // Let's use simple string logic for robust day comparison in local time
-        // or just ensure we compare >= start
         if (tDate < sDate) return false;
       }
 
@@ -99,7 +89,6 @@ export class FinancialPageComponent {
         tDate.setHours(0, 0, 0, 0);
         const eDate = new Date(end);
         eDate.setHours(0, 0, 0, 0);
-
         if (tDate > eDate) return false;
       }
 
@@ -139,5 +128,22 @@ export class FinancialPageComponent {
     this.filterContract.set('');
     this.filterCommitment.set('');
     this.searchQuery.set('');
+  }
+
+  /**
+   * Dispara a sincronização global de todos os contratos cadastrados no sistema
+   */
+  async syncGlobal() {
+    try {
+      console.log('[FinancialPage] Iniciando sincronização global do SIGEF...');
+      await this.sigefSyncService.syncAllContractsFinance();
+      
+      // Recarrega os lançamentos locais após terminar a sincronização global
+      await this.financialService.loadAllTransactions();
+      
+      console.log('[FinancialPage] Sincronização global concluída.');
+    } catch (err: any) {
+      console.error('[FinancialPage] Erro na sincronização global:', err);
+    }
   }
 }

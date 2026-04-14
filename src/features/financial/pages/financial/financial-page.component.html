@@ -70,6 +70,21 @@
 
       <div class="flex-1"></div> <!-- Spacer -->
 
+      <!-- Global Sync Button -->
+      <button 
+        (click)="syncGlobal()"
+        [disabled]="sigefSyncService.isGlobalSyncing()"
+        class="flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-xl transition-all shadow-sm border"
+        [class]="sigefSyncService.isGlobalSyncing()
+          ? 'bg-blue-50 border-blue-200 text-sco-blue dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'"
+      >
+        <span class="material-symbols-outlined text-[20px]" [class.animate-spin]="sigefSyncService.isGlobalSyncing()">
+          {{ sigefSyncService.isGlobalSyncing() ? 'sync' : 'cloud_sync' }}
+        </span>
+        {{ sigefSyncService.isGlobalSyncing() ? 'Sincronizando...' : 'Sincronizar SIGEF' }}
+      </button>
+
       <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm">
         <span class="material-symbols-outlined text-[20px]">download</span>
         Exportar

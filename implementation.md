@@ -336,3 +336,31 @@ npm run build
 - Adiciona coluna tipo_id na tabela aditivos
 - Cria Foreign Key entre aditivos e tipo_aditivo
 - Popula tipo_id baseado no campo tipo existente
+
+## Funcionalidades Recentes
+
+### Sincronização de Transações SIGEF
+
+O sistema agora persiste transações do SIGEF no banco de dados local, permitindo:
+
+1. **Aglomeração de OBs**: OBs da mesma NE com a mesma observação (ex: Pagamento Líquido + Impostos) são combinadas em uma única transação
+2. **Preservação de Vínculos**: Parcelas vinculadas manualmente são mantidas após sincronização
+3. **Limpeza de Legados**: Transações individuais antigas são removidas automaticamente
+
+```typescript
+// Sincroniza transações para um contrato específico
+await financialService.syncSigefTransactions(contractId);
+
+// Sincroniza todos os contratos do sistema
+await financialService.syncAllSystemContracts();
+```
+
+### IDs de Transação
+
+- Movimentos: `cache-mov-{ne}-{evento}-{idx}`
+- OBs individuais: `cache-ob-{ob}-{doc}`
+- OBs agrupadas: `cache-aggr-{ne}-{firstDoc}`
+
+### Atualização de Total Pago após Vincular OB
+
+Ao vincular uma OB a uma parcela, o sistema agora recalcula automaticamente os valores do SIGEF para atualizar o `total_pago` nos cards de dotações.
