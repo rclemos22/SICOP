@@ -145,6 +145,7 @@ export class DotacaoFormComponent implements OnInit {
 
   contractId = input.required<string>();
   numeroContrato = input.required<string>();
+  contractType = input<string>();
   editingDotacao = input<Dotacao | null>(null);
   save = output<any>();
   cancel = output<void>();
@@ -249,11 +250,15 @@ export class DotacaoFormComponent implements OnInit {
       // Parse currency before saving
       formData.valor_dotacao = CurrencyUtils.parseBRL(formData.valor_dotacao);
       
-      const dotacaoToSave = {
+      const dotacaoToSave: any = {
         contract_id: this.contractId(),
         numero_contrato: this.numeroContrato(),
         ...formData
       };
+      
+      if (this.contractType()) {
+        dotacaoToSave.contract_type = this.contractType();
+      }
       
       try {
         let result;

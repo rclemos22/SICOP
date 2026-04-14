@@ -898,6 +898,7 @@
             <app-dotacao-form
                [contractId]="contractId()"
                [numeroContrato]="c?.contrato || ''"
+               [contractType]="c?.tipo"
                [editingDotacao]="editingDotacao()"
                (save)="onDotacaoSaved($event)"
                (cancel)="closeDotacaoModal()"

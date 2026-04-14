@@ -364,3 +364,7 @@ await financialService.syncAllSystemContracts();
 ### Atualização de Total Pago após Vincular OB
 
 Ao vincular uma OB a uma parcela, o sistema agora recalcula automaticamente os valores do SIGEF para atualizar o `total_pago` nos cards de dotações.
+
+### Alerta de Saldo de Empenho Baixo
+
+Novo card no dashboard que alerta quando o saldo de empenho (total_empenhado) é igual ou menor que 150% do valor estimado mensal do contrato. Este alerta ajuda a identificar dotações que podem precisar de reforço.

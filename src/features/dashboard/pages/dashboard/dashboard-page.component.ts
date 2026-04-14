@@ -330,6 +330,35 @@ export class DashboardPageComponent implements OnInit {
       .sort((a, b) => (a.dias_restantes || 0) - (b.dias_restantes || 0));
   });
 
+  // Alert: Saldo de Empenho <= Valor Mensal do Contrato
+  lowBudgetAlerts = computed(() => {
+    const budgets = this.budgetService.dotacoes();
+    const selectedYear = this.appContext.anoExercicio();
+    
+    return budgets
+      .filter(b => b.nunotaempenho && b.total_empenhado !== null)
+      .filter(b => {
+        const totalEmpenhado = b.total_empenhado || 0;
+        const valorMensal = b.valor_dotacao || 0;
+        return totalEmpenhado <= valorMensal * 1.5;
+      })
+      .map(b => {
+        const totalEmpenhado = b.total_empenhado || 0;
+        const valorMensal = b.valor_dotacao || 0;
+        return {
+          contractId: b.contract_id,
+          contractNumber: b.numero_contrato,
+          dotacao: b.dotacao,
+          nunotaempenho: b.nunotaempenho,
+          totalEmpenhado,
+          valorMensal,
+          percentage: valorMensal > 0 ? (totalEmpenhado / valorMensal) * 100 : 0
+        };
+      })
+      .sort((a, b) => a.percentage - b.percentage)
+      .slice(0, 10);
+  });
+
   // Overdue Installments Alert Logic (apenas ano corrente)
   // Regra: pagamento do mês X é efetuado no mês X+1
   // Ex: pagamento de janeiro (01) → vence em fevereiro (02)
