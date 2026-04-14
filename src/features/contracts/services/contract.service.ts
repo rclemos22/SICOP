@@ -242,9 +242,10 @@ export class ContractService {
 
     // Usar utilitário do model para garantir consistência no status
     // Importante: Pick de status para satisfazer a interface
-    const statusEfetivo = (raw.status === 'RESCINDIDO') 
-      ? ContractStatus.RESCINDIDO 
-      : (diasRestantes < 0) ? ContractStatus.ENCERRADO : (diasRestantes <= 90) ? ContractStatus.FINALIZANDO : ContractStatus.VIGENTE;
+    const statusEfetivo = (raw.status === 'RESCINDIDO') ? ContractStatus.RESCINDIDO 
+      : (raw.status === 'ENCERRADO') ? ContractStatus.ENCERRADO
+      : (raw.status === 'VIGENTE' && diasRestantes <= 90) ? ContractStatus.FINALIZANDO
+      : ContractStatus.VIGENTE;
 
     return {
       id: raw.id,
@@ -260,6 +261,7 @@ export class ContractService {
       data_pagamento: raw.data_pagamento != null ? Number(raw.data_pagamento) : undefined,
       valor_anual: this.parseNumeric(raw.valor_anual),
       status: (raw.status as ContractStatus) || ContractStatus.VIGENTE,
+      tipo: raw.tipo as 'serviço' | 'material' | undefined,
       setor_id: raw.setor_id ?? raw.setor ?? undefined,
       setor_nome: raw.setor_nome ?? undefined,
       unid_gestora: raw.unid_gestora ?? undefined,

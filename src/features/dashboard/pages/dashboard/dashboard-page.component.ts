@@ -148,6 +148,7 @@ export class DashboardPageComponent implements OnInit {
       vigentes: contracts.filter(c => c.status_efetivo === ContractStatus.VIGENTE).length,
       finalizando: contracts.filter(c => c.status_efetivo === ContractStatus.FINALIZANDO).length,
       rescindidos: contracts.filter(c => c.status_efetivo === ContractStatus.RESCINDIDO).length,
+      encerrados: contracts.filter(c => c.status_efetivo === ContractStatus.ENCERRADO).length,
       total: contracts.length
     };
   });
@@ -177,7 +178,8 @@ export class DashboardPageComponent implements OnInit {
         monthlyData[monthKey] = { servico: 0, material: 0 };
       }
       
-      const type = t.contract_type || 'material';
+      const contract = this.contractService.contracts().find(c => c.id === t.contract_id);
+      const type = (contract?.tipo as 'serviço' | 'material') || 'material';
       monthlyData[monthKey][type] += t.amount;
     });
 
@@ -615,7 +617,7 @@ export class DashboardPageComponent implements OnInit {
       .text(`Executado`);
   }
 
-  private renderStatusChart(container: HTMLElement, data: { vigentes: number; finalizando: number; rescindidos: number; total: number }) {
+  private renderStatusChart(container: HTMLElement, data: { vigentes: number; finalizando: number; rescindidos: number; encerrados: number; total: number }) {
     d3.select(container).selectAll('*').remove();
 
     if (data.total === 0) {
@@ -629,7 +631,8 @@ export class DashboardPageComponent implements OnInit {
     const chartData = [
       { label: 'Vigentes', value: data.vigentes, color: '#22C55E' },
       { label: 'Finalizando', value: data.finalizando, color: '#F59E0B' },
-      { label: 'Rescindidos', value: data.rescindidos, color: '#EF4444' }
+      { label: 'Rescindidos', value: data.rescindidos, color: '#EF4444' },
+      { label: 'Encerrados', value: data.encerrados, color: '#9CA3AF' }
     ].filter(d => d.value > 0);
 
     const width = 180;

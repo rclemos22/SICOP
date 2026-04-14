@@ -252,9 +252,7 @@ export class FinancialService {
             department: budget.dotacao,
             budget_description: budget.dotacao,
             document_number: neValue,
-            ob_number: 'N/A',
-            unidade_gestora_label: budget.unid_gestora || ug,
-            contract_type: budget.contract_type
+            ob_number: 'N/A'
           });
         });
 
@@ -325,9 +323,6 @@ export class FinancialService {
             budget_description: budget.dotacao,
             document_number: allDocs,
             ob_number: allObs,
-            payment_month: paymentMonth,
-            unidade_gestora_label: budget.unid_gestora || ug,
-            contract_type: budget.contract_type,
             ...(linkedParcela ? { parcela_referencia: linkedParcela } : {})
           });
 
