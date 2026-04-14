@@ -595,14 +595,8 @@ export class SigefService implements OnDestroy {
                 const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
                 const obDate = ob.dtlancamento || ob.dtpagamento || '';
 
-                // Normalizar NEs para remover barras e caracteres extras para comparação
-                // Ex: "202400021/2024" ou "2024NE021" → "202400021"
-                const normalizeNe = (ne: string) => ne.replace(/[/\-]/g, '').replace(/^(\d{4})(NE)?/, '$1');
-                const targetNeNormalized = normalizeNe(targetNE);
-                const obNeNormalized = normalizeNe(obNe);
-                
-                // Match por correspondência parcial do número da NE
-                const isMatch = obNeNormalized === targetNeNormalized || obNe.includes(targetNE) || targetNE.includes(obNe);
+                // Match exato do ID da NE
+                const isMatch = obNe === targetNE;
                 
                 // Validação cronológica (OB não pode vir antes do empego)
                 // Usamos comparação de string pois o formato SIGEF é YYYY-MM-DD

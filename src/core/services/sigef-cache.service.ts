@@ -262,27 +262,18 @@ export class SigefCacheService {
 
   async getOrdensBancariasPorNe(ug: number, neNumber: string): Promise<SigefOrdemBancaria[]> {
     try {
-      // Normalizar NE para busca (remover barra)
-      const normalizedNe = neNumber.replace(/[/\-]/g, '');
-      
-      // Buscar todas as OBs para esta UG e filtrar por correspondência parcial
       const { data, error } = await this.supabaseService.client
         .from('sigef_ordens_bancarias')
         .select('*')
         .eq('cdunidadegestora', ug)
+        .eq('nunotaempenho', neNumber)
         .order('dtlancamento', { ascending: true });
 
       if (error || !data) {
         return [];
       }
 
-      // Filtrar por correspondência no número da NE (parcial ou exata)
-      const filtered = data.filter(ob => {
-        const obNe = (ob.nunotaempenho || '').replace(/[/\-]/g, '');
-        return obNe.includes(normalizedNe) || normalizedNe.includes(obNe);
-      });
-
-      return filtered.map(this.mapToOrdemBancaria);
+      return data.map(this.mapToOrdemBancaria);
     } catch (err) {
       return [];
     }
