@@ -421,7 +421,6 @@ export class ContractDetailsPageComponent {
   private async enrichBudgetsWithSigef(budgets: Dotacao[], forceApiRefresh: boolean = false): Promise<{ enrichedBudgets: Dotacao[], sigefTransactions: Transaction[] }> {
     const enrichedBudgets = [...budgets];
     const transactionsMap = new Map<string, Transaction>();
-    const ugNum = parseInt(budgets[0]?.unid_gestora || '80101', 10);
 
     for (let i = 0; i < enrichedBudgets.length; i++) {
       const budget = enrichedBudgets[i];
@@ -431,6 +430,7 @@ export class ContractDetailsPageComponent {
           const neValue = budget.nunotaempenho.trim();
           const anoNE = neValue.substring(0, 4);
           const ug = budget.unid_gestora;
+          const ugNum = parseInt(ug, 10);
           
           console.log('[DEBUG] Processando NE:', neValue, 'UG:', ug, 'ForceRefresh:', forceApiRefresh);
           
