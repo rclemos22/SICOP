@@ -640,11 +640,17 @@
                                 <span class="font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
                              </div>
 
-                             <!-- Saldo do Empenho = Empenhado - Pago -->
+                             <!-- Cancelamento (do SIGEF) -->
+                             <div class="flex justify-between text-sm mb-1">
+                                <span class="text-red-500 font-medium">Cancelamento</span>
+                                <span class="font-bold text-red-500">{{ (budget.total_cancelado || 0) | currency:'BRL':'symbol':'1.2-2' }}</span>
+                             </div>
+
+                             <!-- Saldo do Empenho = Empenhado - Pago - Cancelado -->
                              <div class="flex justify-between text-sm mb-2 pt-1 border-t border-gray-100 dark:border-gray-700/50">
-                                <span class="text-gray-500 text-xs uppercase font-bold">Saldo Empenho (E-P)</span>
+                                <span class="text-gray-500 text-xs uppercase font-bold">Saldo Empenho (E-P-C)</span>
                                 <span class="font-bold text-gray-900 dark:text-white">
-                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
+                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0) - (budget.total_cancelado || 0)) | currency:'BRL':'symbol':'1.2-2' }}
                                 </span>
                              </div>
 
@@ -678,7 +684,8 @@
                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dotação</th>
                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Empenhado</th>
                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pago</th>
-                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saldo Emp.</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-red-400">Can.</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saldo (E-P-C)</th>
                           </tr>
                         </thead>
                         <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
@@ -708,8 +715,11 @@
                                 <span class="text-sm font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
                               </td>
                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                <span class="text-sm font-bold text-red-500">{{ (budget.total_cancelado || 0) | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </td>
+                              <td class="px-5 py-4 text-right whitespace-nowrap">
                                 <span class="text-sm font-bold text-gray-900 dark:text-white">
-                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
+                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0) - (budget.total_cancelado || 0)) | currency:'BRL':'symbol':'1.2-2' }}
                                 </span>
                               </td>
                             </tr>

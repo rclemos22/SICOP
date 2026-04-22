@@ -270,7 +270,15 @@ export class SigefSyncService {
         // Buscar movimentos (empenhos/anulações) com retry
         const movements = await this.withRetry(() => this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ug));
         if (movements.length > 0) {
-          await this.cacheService.saveNeMovimentos(movements.map(m => this.mapApiMovementToCache(m, ugNum)));
+          // Garante que todos os movimentos herdam o nuneoriginal da NE pai para correta contabilização
+          const parentOriginal = neCached?.nuneoriginal;
+          await this.cacheService.saveNeMovimentos(movements.map(m => {
+            const cacheM = this.mapApiMovementToCache(m, ugNum);
+            if (!cacheM.nuneoriginal && parentOriginal) {
+              cacheM.nuneoriginal = parentOriginal;
+            }
+            return cacheM;
+          }));
         }
 
         // Determinar a data mínima para filtrar OBs (pagamento não pode preceder empego)
@@ -347,7 +355,8 @@ export class SigefSyncService {
       cdmodalidade: m.cdmodalidade || undefined,
       vlnotaempenho: m.vlnotaempenho || 0,
       dtlancamento: m.dtlancamento || undefined,
-      dehistorico: m.dehistorico || undefined
+      dehistorico: m.dehistorico || undefined,
+      nuneoriginal: m.nuneoriginal || undefined
     };
   }
 

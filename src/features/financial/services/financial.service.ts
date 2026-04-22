@@ -243,8 +243,8 @@ export class FinancialService {
 
           transactionsToUpsert.push({
             contract_id: contractId,
-            sigef_id: `cache-mov-${neValue}-${m.cdevento}-${idx}`,
-            description: `${description} - NE ${neValue}`,
+            sigef_id: `cache-mov-${m.nunotaempenho}-${m.cdevento}-${idx}`,
+            description: `${description} ${m.nunotaempenho !== neValue ? '(' + m.nunotaempenho + ')' : ''} - NE Ref ${neValue}`,
             commitment_id: neValue,
             date: m.dtlancamento || new Date().toISOString().split('T')[0],
             type: type,

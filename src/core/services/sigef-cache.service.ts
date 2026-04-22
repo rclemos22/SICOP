@@ -55,8 +55,10 @@ export interface SigefNeMovimento {
   vlnotaempenho?: number;
   dtlancamento?: string;
   dehistorico?: string;
+  nuneoriginal?: string;
   created_at?: Date;
 }
+
 
 export interface SigefOrdemBancaria {
   id?: string;
@@ -208,7 +210,7 @@ export class SigefCacheService {
         .from('sigef_ne_movimentos')
         .select('*')
         .eq('cdunidadegestora', ug)
-        .eq('nunotaempenho', neNumber)
+        .or(`nunotaempenho.eq.${neNumber},nuneoriginal.eq.${neNumber}`)
         .order('dtlancamento', { ascending: true });
 
       if (error || !data) {
@@ -239,7 +241,8 @@ export class SigefCacheService {
       cdmodalidade: m.cdmodalidade,
       vlnotaempenho: m.vlnotaempenho,
       dtlancamento: m.dtlancamento,
-      dehistorico: m.dehistorico
+      dehistorico: m.dehistorico,
+      nuneoriginal: m.nuneoriginal
     }));
 
     if (payload.length > 0) {
@@ -519,6 +522,7 @@ export class SigefCacheService {
       vlnotaempenho: data.vlnotaempenho,
       dtlancamento: data.dtlancamento,
       dehistorico: data.dehistorico,
+      nuneoriginal: data.nuneoriginal,
       created_at: data.created_at
     };
   }
