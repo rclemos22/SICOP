@@ -87,17 +87,22 @@ export class ContractFormComponent implements OnInit {
   private populateFormWithContract(c: any) {
     console.log('[ContractForm] populateFormWithContract - c:', c);
     
+    const supplierName = c.fornecedor_nome || c.contratada || c.supplier || '';
+    
     // Vincular fornecedor ao sinalizador para exibir indicador visual
     this.selectedSupplier.set({ 
       id: c.fornecedor_id, 
-      razao_social: c.fornecedor_nome || c.contratada 
+      razao_social: supplierName
     } as any);
+
+    // IMPORTANTE: Atualizar o campo de busca que é exibido no template [value]="supplierSearch()"
+    this.supplierSearch.set(supplierName);
 
     this.contractForm.patchValue({
       number: c.contrato || '',
       processNumber: c.processo_sei || '',
       linkSei: c.link_sei || '',
-      supplier: c.contratada || c.supplier || '',
+      supplier: supplierName,
       fornecedor_id: c.fornecedor_id || '',
       cnpjContratada: c.cnpj_contratada || '',
       object: c.objeto || '',

@@ -339,28 +339,34 @@ export class DashboardPageComponent implements OnInit {
   // Alert: Saldo de Empenho <= Valor Mensal do Contrato
   lowBudgetAlerts = computed(() => {
     const budgets = this.budgetService.dotacoes();
-    const selectedYear = this.appContext.anoExercicio();
+    const contracts = this.contractService.contracts();
     
     return budgets
       .filter(b => b.nunotaempenho && b.total_empenhado !== null)
-      .filter(b => {
-        const totalEmpenhado = b.total_empenhado || 0;
-        const valorMensal = b.valor_dotacao || 0;
-        return totalEmpenhado <= valorMensal * 1.5;
-      })
       .map(b => {
-        const totalEmpenhado = b.total_empenhado || 0;
-        const valorMensal = b.valor_dotacao || 0;
+        const contract = contracts.find(c => c.id === b.contract_id);
+        const valorMensal = Number(contract?.valor_mensal) || 0;
+        
+        const totalEmpenhado = Number(b.total_empenhado) || 0;
+        const totalPago = Number(b.total_pago) || 0;
+        const totalCancelado = Number(b.total_cancelado) || 0;
+        
+        // Saldo real do empenho (E - P - C)
+        const saldoEmpenho = totalEmpenhado - totalPago - totalCancelado;
+        
         return {
           contractId: b.contract_id,
           contractNumber: b.numero_contrato,
           dotacao: b.dotacao,
           nunotaempenho: b.nunotaempenho,
           totalEmpenhado,
+          saldoEmpenho,
           valorMensal,
-          percentage: valorMensal > 0 ? (totalEmpenhado / valorMensal) * 100 : 0
+          // Porcentagem em relação ao valor mensal (para ordenação)
+          percentage: valorMensal > 0 ? (saldoEmpenho / valorMensal) * 100 : 0
         };
       })
+      .filter(alert => alert.saldoEmpenho <= alert.valorMensal) // Somente se saldo for menor ou igual à mensalidade
       .sort((a, b) => a.percentage - b.percentage)
       .slice(0, 10);
   });

@@ -116,6 +116,9 @@ export class SigefService implements OnDestroy {
   private refreshInterval: any;
   private authPromise: Promise<void> | null = null;
 
+  // Semáforo para controle de concorrência global (apenas 1 requisição por vez na API do SIGEF)
+  private apiQueue: Promise<any> = Promise.resolve();
+
   private readonly ACCESS_TOKEN_KEY = 'sigef_access_token';
   private readonly REFRESH_TOKEN_KEY = 'sigef_refresh_token';
   private readonly EXIRY_KEY = 'sigef_token_expiry';
@@ -333,50 +336,55 @@ export class SigefService implements OnDestroy {
     await this.ensureAuthenticated(false);
   }
 
-  private async callApi(url: string, options: RequestInit = {}, retries: number = 4, backoff: number = 2500): Promise<Response> {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 120000); // 120 segundos de timeout por requisição individual
+  private async callApi(url: string, options: RequestInit = {}, retries: number = 5, backoff: number = 3000): Promise<Response> {
+    // Enfileiramento global: cada nova chamada espera a anterior terminar
+    return this.apiQueue = this.apiQueue.then(async () => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 120000); // 120 segundos de timeout individual
 
-    try {
-      const response = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(id);
-      
-      // Auto-reautenticação em caso de expiração
-      if (response.status === 401 || response.status === 403) {
-        await this.handleUnauthorized();
-        const newOptions = { ...options, headers: this.getHeaders() };
-        return await this.callApi(url, newOptions, retries);
-      }
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        
+        // Auto-reautenticação em caso de expiração
+        if (response.status === 401 || response.status === 403) {
+          await this.handleUnauthorized();
+          const newOptions = { ...options, headers: this.getHeaders() };
+          return await this.callApi(url, newOptions, retries);
+        }
 
-      // Erros transientes de Gateway/Server (comuns em APIs governamentais instáveis)
-      if ([500, 502, 503, 504].includes(response.status) && retries > 0) {
-        console.warn(`[SIGEF] Erro de Gateway/Servidor (${response.status}). Retentando em ${backoff}ms... (${retries} tentativas restantes)`);
-        await new Promise(resolve => setTimeout(resolve, backoff));
-        return this.callApi(url, options, retries - 1, backoff * 1.5);
+        // Erros transientes de Gateway/Server
+        if ([500, 502, 503, 504].includes(response.status) && retries > 0) {
+          console.warn(`[SIGEF] Gateway Error (${response.status}). Backoff ${backoff}ms...`);
+          await new Promise(resolve => setTimeout(resolve, backoff));
+          return this.callApi(url, options, retries - 1, backoff * 1.5);
+        }
+        
+        // Pequeno delay "de cortesia" após cada sucesso para não bombardear a API
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        return response;
+      } catch (err: any) {
+        clearTimeout(id);
+        const errLower = (err.message || '').toLowerCase();
+        const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout');
+        const isNetworkError = isTimeout ||
+                               errLower.includes('network') || 
+                               errLower.includes('socket') || 
+                               errLower.includes('disconnected') ||
+                               errLower.includes('tls') ||
+                               errLower.includes('handshake') ||
+                               errLower.includes('connection reset') ||
+                               errLower.includes('failed to fetch');
+        
+        if (isNetworkError && retries > 0) {
+          console.warn(`[SIGEF] Infra Error (${err.message}). Retrying in ${backoff}ms...`);
+          await new Promise(resolve => setTimeout(resolve, backoff));
+          return this.callApi(url, options, retries - 1, backoff * 2); // Dobra o tempo em erros de infra
+        }
+        throw err;
       }
-      
-      return response;
-    } catch (err: any) {
-      clearTimeout(id);
-      // Erros de rede, sockets e TLS que nem chegam a retornar status HTTP
-      const errLower = (err.message || '').toLowerCase();
-      const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout');
-      const isNetworkError = isTimeout ||
-                             errLower.includes('network') || 
-                             errLower.includes('socket') || 
-                             errLower.includes('disconnected') ||
-                             errLower.includes('tls') ||
-                             errLower.includes('handshake') ||
-                             errLower.includes('connection reset') ||
-                             errLower.includes('failed to fetch');
-      
-      if (isNetworkError && retries > 0) {
-        console.warn(`[SIGEF] Falha de infraestrutura (${err.message}). Retentando em ${backoff}ms... (${retries} tentativas restantes)`);
-        await new Promise(resolve => setTimeout(resolve, backoff));
-        return this.callApi(url, options, retries - 1, backoff * 1.8); // Backoff levemente mais agressivo
-      }
-      throw err;
-    }
+    });
   }
 
   async getNotaEmpenho(ano: string, search?: string, page: number = 1, cdunidadegestora?: string): Promise<{ data: NotaEmpenho[], count: number, next: string | null, previous: string | null }> {
