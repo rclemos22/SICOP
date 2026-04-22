@@ -387,14 +387,7 @@ export class ContractDetailsPageComponent {
          this.budgetsError.set(result.error);
          this.budgets.set([]);
       } else {
-         // Primeiro tenta usar cache, sem forçar API
-         try {
-            const enrichedBudgets = await this.enrichBudgetsWithSigef(result.data!, false);
-            this.budgets.set(enrichedBudgets);
-         } catch (enrichErr) {
-            console.error('[ContractDetails] Error enriching budgets:', enrichErr);
-            this.budgets.set(result.data!);
-         }
+         this.budgets.set(result.data!);
          this.budgetsLoading.set(false);
       }
     } catch (err: any) {
@@ -404,68 +397,6 @@ export class ContractDetailsPageComponent {
     }
   }
 
-  /**
-   * Enriquece as dotações com valores do SIGEF (PRIMEIRO do cache, depois API se necessário)
-   * O botão "Atualizar" força consulta à API
-   */
-  private async enrichBudgetsWithSigef(budgets: Dotacao[], forceApiRefresh: boolean = false): Promise<Dotacao[]> {
-    const enrichedBudgets = [...budgets];
-
-    for (let i = 0; i < enrichedBudgets.length; i++) {
-      const budget = enrichedBudgets[i];
-      
-      if (budget.nunotaempenho) {
-        try {
-          const neValue = budget.nunotaempenho.trim();
-          const anoNE = neValue.substring(0, 4);
-          const ug = budget.unid_gestora;
-          const ugNum = parseInt(ug, 10);
-          
-          console.log('[DEBUG] Processando NE:', neValue, 'UG:', ug, 'ForceRefresh:', forceApiRefresh);
-          
-          // 1. Primeiro tenta obter do cache (movimentos e OBs)
-          let movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
-          let obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
-          
-          // 2. Só consome a API se forceApiRefresh for true (clique no botão)
-          if (forceApiRefresh) {
-            console.log('[DEBUG] Sincronização FORÇADA para NE:', neValue);
-            
-            // Buscar NE e movimentos da API e salvar no cache
-            await this.sigefSyncService.getNotaEmpenhoWithCache(anoNE, neValue, ug, true);
-            
-            // Recarregar do cache após sync
-            movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
-            obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
-          }
-          
-          console.log('[DEBUG] Movimentos do cache:', movimentosCache.length);
-          console.log('[DEBUG] OBs do cache:', obsCache.length);
-          
-          // 3. Calcular valores a partir do cache
-          const vlEmpenhado = this.sigefCacheService.calcularValorEmpenhado(movimentosCache);
-          const vlPago = this.sigefCacheService.calcularValorPago(obsCache);
-          
-          // 5. Cálculos para a dotação a partir do cache
-          const saldoDotacao = (budget.valor_dotacao || 0) - vlEmpenhado;
-          
-          enrichedBudgets[i] = {
-            ...budget,
-            total_empenhado: vlEmpenhado,
-            total_pago: vlPago,
-            saldo_disponivel: saldoDotacao
-          };
-          
-          console.log('[DEBUG] Valores atualizados - Empenhado:', vlEmpenhado, 'Pago:', vlPago);
-          
-        } catch (err) {
-          console.warn('[DEBUG] enrichBudgetsWithSigef - Error:', budget.nunotaempenho, err);
-        }
-      }
-    }
-
-    return enrichedBudgets;
-  }
 
   private async loadTransactions(contractId: string): Promise<void> {
     this.transactionsLoading.set(true);
@@ -658,12 +589,8 @@ export class ContractDetailsPageComponent {
       // 5. Recarregar transações do BANCO (agora incluindo os novos dados do SIGEF persistidos)
       await this.loadTransactions(this.contractId());
       
-      // 6. Recarregar e enriquecer as dotações para atualizar os valores de Empenhado/Pago nos cards
-      const budgetsResult = await this.budgetService.getBudgetsByContractId(this.contractId());
-      if (budgetsResult.data) {
-        const enrichedBudgets = await this.enrichBudgetsWithSigef(budgetsResult.data, true);
-        this.budgets.set(enrichedBudgets);
-      }
+      // 6. Recarregar as dotações (os valores estarão atualizados via database trigger)
+      await this.loadBudgets(this.contractId());
       
       this.lastSyncDate.set(new Date());
       console.log('[ContractDetails] Dados SIGEF atualizados com sucesso');
@@ -841,9 +768,8 @@ export class ContractDetailsPageComponent {
 
       await this.loadTransactions(this.contractId());
       
-      const currentBudgets = this.budgets();
-      const enrichedBudgets = await this.enrichBudgetsWithSigef(currentBudgets, false);
-      this.budgets.set(enrichedBudgets);
+      await this.loadBudgets(this.contractId());
+
       
       this.closeLinkObModal();
       
@@ -919,9 +845,8 @@ export class ContractDetailsPageComponent {
       // Recarregar dados
       await this.loadTransactions(this.contractId());
       
-      const currentBudgets = this.budgets();
-      const enrichedBudgets = await this.enrichBudgetsWithSigef(currentBudgets, false);
-      this.budgets.set(enrichedBudgets);
+      await this.loadBudgets(this.contractId());
+
       
       this.closeLinkObModal();
       
@@ -958,9 +883,8 @@ export class ContractDetailsPageComponent {
 
       // Recarrega TUDO para garantir que os cards superiores (view SQL) se atualizem
       await this.loadTransactions(this.contractId());
-      const currentBudgets = this.budgets();
-      const enrichedBudgets = await this.enrichBudgetsWithSigef(currentBudgets, false);
-      this.budgets.set(enrichedBudgets);
+      await this.loadBudgets(this.contractId());
+
       
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao desvincular:', err);

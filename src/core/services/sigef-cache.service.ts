@@ -13,6 +13,7 @@ export interface SigefNotaEmpenho {
   cdugfavorecida?: number;
   cdorgao?: number;
   cdsubacao?: number;
+  cdunidadeorcamentaria?: string;
   cdfuncao?: number;
   cdsubfuncao?: number;
   cdprograma?: number;
@@ -21,6 +22,8 @@ export interface SigefNotaEmpenho {
   cdnaturezadespesa?: string;
   cdfonte?: string;
   cdmodalidade?: number;
+  cdmodalidadelicitacao?: number;
+  demodalidadeempenho?: string;
   vlnotaempenho?: number;
   nuquantidade?: number;
   dtlancamento?: string;
@@ -86,6 +89,12 @@ export interface SigefOrdemBancaria {
   deobservacao?: string;
   definalidade?: string;
   usuario_responsavel?: string;
+  nuguiarecebimento?: string;
+  vlguiarecebimento?: number;
+  nunotalancamento?: string;
+  numns?: number;
+  domicilio_origem?: string;
+  domicilio_destino?: string;
   created_at?: Date;
   updated_at?: Date;
   last_sync?: Date;
@@ -163,6 +172,7 @@ export class SigefCacheService {
       cdugfavorecida: ne.cdugfavorecida,
       cdorgao: ne.cdorgao,
       cdsubacao: ne.cdsubacao,
+      cdunidadeorcamentaria: ne.cdunidadeorcamentaria,
       cdfuncao: ne.cdfuncao,
       cdsubfuncao: ne.cdsubfuncao,
       cdprograma: ne.cdprograma,
@@ -171,6 +181,8 @@ export class SigefCacheService {
       cdnaturezadespesa: ne.cdnaturezadespesa,
       cdfonte: ne.cdfonte,
       cdmodalidade: ne.cdmodalidade,
+      cdmodalidadelicitacao: ne.cdmodalidadelicitacao,
+      demodalidadeempenho: ne.demodalidadeempenho,
       vlnotaempenho: ne.vlnotaempenho,
       nuquantidade: ne.nuquantidade,
       dtlancamento: ne.dtlancamento,
@@ -310,6 +322,12 @@ export class SigefCacheService {
       deobservacao: ob.deobservacao,
       definalidade: ob.definalidade,
       usuario_responsavel: ob.usuario_responsavel,
+      nuguiarecebimento: ob.nuguiarecebimento,
+      vlguiarecebimento: ob.vlguiarecebimento,
+      nunotalancamento: ob.nunotalancamento,
+      numns: ob.numns,
+      domicilio_origem: ob.domicilio_origem,
+      domicilio_destino: ob.domicilio_destino,
       last_sync: new Date().toISOString()
     };
 
@@ -349,6 +367,12 @@ export class SigefCacheService {
       deobservacao: ob.deobservacao,
       definalidade: ob.definalidade,
       usuario_responsavel: ob.usuario_responsavel,
+      nuguiarecebimento: ob.nuguiarecebimento,
+      vlguiarecebimento: ob.vlguiarecebimento,
+      nunotalancamento: ob.nunotalancamento,
+      numns: ob.numns,
+      domicilio_origem: ob.domicilio_origem,
+      domicilio_destino: ob.domicilio_destino,
       last_sync: new Date().toISOString()
     }));
 
@@ -451,6 +475,7 @@ export class SigefCacheService {
       cdugfavorecida: data.cdugfavorecida,
       cdorgao: data.cdorgao,
       cdsubacao: data.cdsubacao,
+      cdunidadeorcamentaria: data.cdunidadeorcamentaria,
       cdfuncao: data.cdfuncao,
       cdsubfuncao: data.cdsubfuncao,
       cdprograma: data.cdprograma,
@@ -459,6 +484,8 @@ export class SigefCacheService {
       cdnaturezadespesa: data.cdnaturezadespesa,
       cdfonte: data.cdfonte,
       cdmodalidade: data.cdmodalidade,
+      cdmodalidadelicitacao: data.cdmodalidadelicitacao,
+      demodalidadeempenho: data.demodalidadeempenho,
       vlnotaempenho: data.vlnotaempenho,
       nuquantidade: data.nuquantidade,
       dtlancamento: data.dtlancamento,
@@ -528,6 +555,12 @@ export class SigefCacheService {
       deobservacao: data.deobservacao,
       definalidade: data.definalidade,
       usuario_responsavel: data.usuario_responsavel,
+      nuguiarecebimento: data.nuguiarecebimento,
+      vlguiarecebimento: data.vlguiarecebimento,
+      nunotalancamento: data.nunotalancamento,
+      numns: data.numns,
+      domicilio_origem: data.domicilio_origem,
+      domicilio_destino: data.domicilio_destino,
       created_at: data.created_at,
       updated_at: data.updated_at,
       last_sync: data.last_sync

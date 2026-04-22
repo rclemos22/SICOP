@@ -243,18 +243,22 @@
         <div #statusChart class="relative flex justify-center items-center h-[220px] w-full">
            <!-- D3 Chart will render here -->
         </div>
-        <div class="flex flex-wrap justify-center gap-3 mt-8">
+        <div class="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-8">
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
-             <span class="w-2 h-2 rounded-full bg-green-500 mr-1.5"></span> Vigentes
+             <span class="w-2 h-2 rounded-full bg-green-500 mr-1.5"></span> 
+             Vigentes ({{ contractsByStatus().vigentes }} · {{ (contractsByStatus().vigentes / (contractsByStatus().total || 1)) * 100 | number:'1.0-0' }}%)
            </span>
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
-             <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span> Finalizando
+             <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span> 
+             Finalizando ({{ contractsByStatus().finalizando }} · {{ (contractsByStatus().finalizando / (contractsByStatus().total || 1)) * 100 | number:'1.0-0' }}%)
            </span>
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
-             <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5"></span> Rescindidos
+             <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5"></span> 
+             Rescindidos ({{ contractsByStatus().rescindidos }} · {{ (contractsByStatus().rescindidos / (contractsByStatus().total || 1)) * 100 | number:'1.0-0' }}%)
            </span>
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
-             <span class="w-2 h-2 rounded-full bg-gray-400 mr-1.5"></span> Encerrados
+             <span class="w-2 h-2 rounded-full bg-gray-400 mr-1.5"></span> 
+             Encerrados ({{ contractsByStatus().encerrados }} · {{ (contractsByStatus().encerrados / (contractsByStatus().total || 1)) * 100 | number:'1.0-0' }}%)
            </span>
          </div>
       </div>
@@ -265,12 +269,14 @@
         <div #contractTypeChart class="relative flex justify-center items-center h-[220px] w-full">
            <!-- D3 Chart will render here -->
         </div>
-        <div class="flex flex-wrap justify-center gap-3 mt-8">
+        <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-8">
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
-             <span class="w-2 h-2 rounded-full bg-blue-500 mr-1.5"></span> Serviço
+             <span class="w-2 h-2 rounded-full bg-blue-500 mr-1.5"></span> 
+             Serviço ({{ contractsByType().servico }} · {{ (contractsByType().servico / (contractsByType().total || 1)) * 100 | number:'1.0-0' }}%)
            </span>
            <span class="flex items-center text-[10px] font-bold text-gray-500 uppercase">
-             <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span> Material
+             <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span> 
+             Material ({{ contractsByType().material }} · {{ (contractsByType().material / (contractsByType().total || 1)) * 100 | number:'1.0-0' }}%)
            </span>
         </div>
       </div>
