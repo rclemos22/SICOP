@@ -276,7 +276,6 @@ export class ContractService {
       total_pago: this.parseNumeric(raw.total_pago),
       saldo_a_pagar: this.parseNumeric(raw.saldo_a_pagar),
       data_ultimo_pagamento: raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined,
-      tipo: raw.tipo as 'serviço' | 'material' | undefined,
       valor_mensal: raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined,
       valor_global_atualizado: valorGlobalAtualizado,
       total_aditivos_valor: totalAditivosValor

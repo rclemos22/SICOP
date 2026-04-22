@@ -39,11 +39,19 @@ export class SigefSyncService {
   
   readonly progress = computed(() => {
     const queue = this._syncQueue();
-    if (queue.length === 0) return null;
+    if (queue.length === 0) return 0;
+    const current = Math.max(0, this._currentIdx());
+    return Math.round((current / queue.length) * 100);
+  });
+
+  readonly syncStatus = computed(() => {
+    const queue = this._syncQueue();
+    const idx = this._currentIdx();
+    if (queue.length === 0 || idx < 0) return null;
     return {
-      current: Math.max(0, this._currentIdx() + 1),
+      current: idx + 1,
       total: queue.length,
-      percentage: Math.round(((this._currentIdx()) / queue.length) * 100)
+      task: queue[idx]
     };
   });
 
@@ -145,25 +153,61 @@ export class SigefSyncService {
       return;
     }
 
-    console.log(`[SIGEF SYNC] Fila global gerada com ${allTasks.length} NEs de ${contracts.length} contratos.`);
+    console.log(`[SIGEF SYNC] Iniciando sincronização em lote de ${allTasks.length} NEs para ${contracts.length} contratos...`);
     
-    // 3. Executar o syncBatch para cada contrato sequencialmente para manter logs limpos
-    // Mas agrupamos NEs do mesmo contrato para chamar o syncSigefTransactions apenas uma vez por contrato
-    const grouped = new Map<string, typeof allTasks>();
-    allTasks.forEach(t => {
-      const list = grouped.get(t.contractId) || [];
-      list.push(t);
-      grouped.set(t.contractId, list);
-    });
+    // Configurar a fila única
+    const queue: SyncTask[] = allTasks.map(t => ({
+      ne: t.ne,
+      ug: t.ug,
+      ano: t.ano,
+      status: 'pending'
+    }));
 
-    for (const [contractId, tasks] of grouped.entries()) {
-      console.log(`[SIGEF SYNC] Sincronizando contrato ${contractId} (${tasks.length} NEs)`);
-      await this.syncBatch(tasks, contractId);
-      // Pequeno respiro entre contratos
-      await new Promise(resolve => setTimeout(resolve, 500));
+    this._syncQueue.set(queue);
+    this._currentIdx.set(0);
+    this._isLocked.set(true);
+
+    try {
+      // Processar todas as NEs da fila global
+      for (let i = 0; i < queue.length; i++) {
+        this._currentIdx.set(i);
+        const task = queue[i];
+        this.updateTaskStatus(i, 'processing');
+        
+        try {
+          // Sincronização profunda forçada (sem contractId aqui para evitar duplicidade de persistência parcial)
+          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true);
+          this.updateTaskStatus(i, 'completed');
+        } catch (err: any) {
+          this.updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
+        }
+
+        // Delay para respeitar a API
+        if (i < queue.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+      }
+
+      // 4. Persistência final em lote para todos os contratos afetados
+      console.log('[SIGEF SYNC] Movimentação de cache concluída. Atualizando tabelas financeiras...');
+      const affectedContractIds = [...new Set(allTasks.map(t => t.contractId))];
+      
+      for (const contractId of affectedContractIds) {
+        try {
+          await this.financialService.syncSigefTransactions(contractId);
+        } catch (err) {
+          console.error(`[SIGEF SYNC] Erro ao persistir contrato ${contractId}:`, err);
+        }
+      }
+      
+      console.log('[SIGEF SYNC] Sincronização global concluída com sucesso.');
+    } finally {
+      this._isLocked.set(false);
+      // Reset da fila após 5s
+      setTimeout(() => {
+        this._currentIdx.set(-1);
+      }, 5000);
     }
-
-    console.log('[SIGEF SYNC] Sincronização global concluída com sucesso.');
   }
 
   private updateTaskStatus(index: number, status: SyncTask['status'], message?: string) {

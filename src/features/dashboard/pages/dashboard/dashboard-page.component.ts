@@ -179,8 +179,12 @@ export class DashboardPageComponent implements OnInit {
       }
       
       const contract = this.contractService.contracts().find(c => c.id === t.contract_id);
-      const type = (contract?.tipo as 'serviço' | 'material') || 'material';
-      monthlyData[monthKey][type] += t.amount;
+      
+      // Normalização: A API/Modelo usa 'serviço' com acento, mas a estrutura do gráfico usa 'servico'
+      const rawType = t.contract_type || contract?.tipo || 'material';
+      const typeKey = rawType === 'serviço' ? 'servico' : 'material';
+      
+      monthlyData[monthKey][typeKey] += t.amount;
     });
 
     // Sort months and get last 12

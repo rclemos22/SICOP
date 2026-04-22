@@ -348,15 +348,16 @@
 
     <!-- Bottom Section: Latest Payments Table -->
     <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-      <div class="p-6 border-b border-gray-50 dark:border-gray-750 flex items-center justify-between">
+      <div class="p-4 sm:p-6 border-b border-gray-50 dark:border-gray-750 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h3 class="text-lg font-black text-gray-900 dark:text-white">Últimos Pagamentos Localizados</h3>
-        <button (click)="goToFinancial()" class="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center">
+        <button (click)="goToFinancial()" class="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center self-start sm:self-auto">
           Ver Histórico Completo <span class="material-symbols-outlined text-[14px] ml-2">chevron_right</span>
         </button>
       </div>
 
-      <div class="overflow-x-auto min-h-[300px]">
-        <table class="w-full">
+      <div class="overflow-x-auto">
+        <!-- Desktop Table View -->
+        <table class="w-full hidden md:table">
           <thead>
             <tr class="text-left border-b border-gray-50 dark:border-gray-750">
               <th class="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Nº Contrato</th>
@@ -397,6 +398,40 @@
             }
           </tbody>
         </table>
+
+        <!-- Mobile List View -->
+        <div class="md:hidden divide-y divide-gray-50 dark:divide-gray-800">
+          @for (p of recentPayments(); track p.id) {
+            <div class="p-4 hover:bg-gray-50/50 dark:hover:bg-gray-750/30 transition-colors flex flex-col gap-3">
+              <div class="flex items-start justify-between">
+                <div class="flex items-center">
+                  <div class="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs mr-3 rounded-full">
+                    {{ p.contratada.substring(0, 2).toUpperCase() }}
+                  </div>
+                  <div class="flex flex-col min-w-0">
+                    <p class="text-sm font-bold text-gray-900 dark:text-white truncate pr-2 max-w-[180px]">{{ p.contratada }}</p>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                      <span class="text-[10px] font-black text-gray-500 uppercase">OB {{ p.nuordembancaria }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-black text-emerald-600 dark:text-emerald-400">{{ p.vltotal | currency:'BRL' }}</p>
+                  <p class="text-[10px] text-gray-400 font-medium">{{ p.data_pagamento | date:'dd/MM/yyyy' }}</p>
+                </div>
+              </div>
+              <div class="flex items-center justify-between mt-1 pt-2 border-t border-gray-50 dark:border-gray-750">
+                 <div class="flex items-center gap-2">
+                   <span class="text-[10px] font-bold text-gray-400 uppercase">Contrato:</span>
+                   <span class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-[10px] font-black text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                     {{ p.contrato }}
+                   </span>
+                 </div>
+                 <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-tighter">{{ p.situacao }}</span>
+              </div>
+            </div>
+          }
+        </div>
         
         @if (recentPayments().length === 0) {
           <div class="flex flex-col items-center justify-center py-20 text-gray-300 dark:text-gray-600">
