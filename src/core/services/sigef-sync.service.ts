@@ -246,7 +246,14 @@ export class SigefSyncService {
         );
       }
 
-      console.log('[SIGEF SYNC] Sincronização global concluída.');
+      // Recarregar os caches locais para que as Dashboards sejam atualizadas instantaneamente
+      await Promise.all([
+        this.contractService.loadContracts(),
+        this.financialService.loadAllTransactions(),
+        this.budgetService.loadDotacoes()
+      ]);
+
+      console.log('[SIGEF SYNC] Sincronização global concluída e interface atualizada.');
     } finally {
       this._isLocked.set(false);
       setTimeout(() => { this._currentIdx.set(-1); }, 5000);

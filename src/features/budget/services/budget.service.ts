@@ -1,6 +1,7 @@
 import { inject, Injectable, signal, computed } from '@angular/core';
 import { AppContextService } from '../../../core/services/app-context.service';
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
+import { ContractService } from '../../contracts/services/contract.service';
 
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { Dotacao, DotacaoPayload } from '../../../shared/models/budget.model';
@@ -13,6 +14,7 @@ export class BudgetService {
   private supabaseService = inject(SupabaseService);
   private appContext = inject(AppContextService);
   private errorHandler = inject(ErrorHandlerService);
+  private contractService = inject(ContractService);
 
   private _allBudgets = signal<Dotacao[]>([]);
   private _loading = signal<boolean>(false);
@@ -106,7 +108,10 @@ export class BudgetService {
 
       if (error) throw error;
 
-      await this.loadDotacoes();
+      await Promise.all([
+        this.loadDotacoes(),
+        this.contractService.loadContracts() // Atualiza dashboard
+      ]);
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'BudgetService.addDotacao');
@@ -156,7 +161,11 @@ export class BudgetService {
         .eq('id', id);
 
       if (error) throw error;
-      await this.loadDotacoes();
+      
+      await Promise.all([
+        this.loadDotacoes(),
+        this.contractService.loadContracts() // Atualiza dashboard
+      ]);
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'BudgetService.updateDotacao');
@@ -172,7 +181,11 @@ export class BudgetService {
         .eq('id', id);
 
       if (error) throw error;
-      await this.loadDotacoes();
+      
+      await Promise.all([
+        this.loadDotacoes(),
+        this.contractService.loadContracts() // Atualiza dashboard
+      ]);
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'BudgetService.deleteDotacao');

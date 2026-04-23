@@ -151,6 +151,8 @@ export class ContractService {
 
       if (error) throw error;
 
+      await this.loadContracts(); // Atualiza a dashboard e cache central
+
       const newAditivo = this.mapRawToAditivo(data);
       return ok(newAditivo);
     } catch (err: any) {
@@ -170,6 +172,8 @@ export class ContractService {
 
       if (error) throw error;
 
+      await this.loadContracts(); // Atualiza a dashboard e cache central
+
       const updatedAditivo = this.mapRawToAditivo(data);
       return ok(updatedAditivo);
     } catch (err: any) {
@@ -186,6 +190,9 @@ export class ContractService {
         .eq('id', id);
 
       if (error) throw error;
+
+      await this.loadContracts(); // Atualiza a dashboard e cache central
+
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'ContractService.deleteAditivo');

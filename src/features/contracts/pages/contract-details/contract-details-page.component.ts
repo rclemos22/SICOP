@@ -309,9 +309,7 @@ export class ContractDetailsPageComponent {
   dbTransactions = signal<Transaction[]>([]);
   
   transactions = computed(() => {
-    const selectedYear = this.appContext.anoExercicio();
     return [...this.dbTransactions()]
-      .filter(t => new Date(t.date).getFullYear() === selectedYear)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   });
 
@@ -773,8 +771,8 @@ export class ContractDetailsPageComponent {
       await this.loadTransactions(this.contractId());
       
       await this.loadBudgets(this.contractId());
+      await this.contractService.loadContracts(); // Atualiza dashboard
 
-      
       this.closeLinkObModal();
       
     } catch (err: any) {
@@ -848,8 +846,7 @@ export class ContractDetailsPageComponent {
       await this.loadTransactions(this.contractId());
       
       await this.loadBudgets(this.contractId());
-
-      
+      await this.contractService.loadContracts(); // Atualiza dashboard
       this.closeLinkObModal();
       
     } catch (err: any) {
@@ -884,8 +881,7 @@ export class ContractDetailsPageComponent {
       // Recarrega TUDO para garantir que os cards superiores (view SQL) se atualizem
       await this.loadTransactions(this.contractId());
       await this.loadBudgets(this.contractId());
-
-      
+      await this.contractService.loadContracts(); // Atualiza dashboard
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao desvincular:', err);
       alert('Erro ao desvincular: ' + (err.message || 'Erro desconhecido'));

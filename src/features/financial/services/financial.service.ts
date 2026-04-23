@@ -46,17 +46,8 @@ export class FinancialService {
 
       const transactions = (data || []).map(this.mapRawToTransaction);
       
-      // Carregar do cache local (sem chamadas de API externas)
-      const sigefTransactions = await this.loadSigefFromCache();
-      
-      // Filtrar transações do SIGEF que já foram persistidas no banco local
-      // Evita duplicidade quando o usuário vincula uma OB e ela passa a existir no banco e no cache
-      const persistedSigefIds = new Set(transactions.filter(t => t.sigef_id).map(t => t.sigef_id));
-      const newSigefTransactions = sigefTransactions.filter(st => !persistedSigefIds.has(st.id));
-      
-      // Combinar transações locais com as do SIGEF (que ainda não foram persistidas)
-      const allTransactions = [...transactions, ...newSigefTransactions];
-      
+      const allTransactions = [...transactions];
+
       // Ordenar por data decrescente
       allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
