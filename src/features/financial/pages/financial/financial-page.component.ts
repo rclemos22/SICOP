@@ -136,7 +136,7 @@ export class FinancialPageComponent {
   async syncGlobal() {
     try {
       console.log('[FinancialPage] Iniciando sincronização global do SIGEF...');
-      await this.sigefSyncService.syncAllContractsFinance();
+      await this.sigefSyncService.syncAllContractsFinance(true);
       
       // Recarrega os lançamentos locais após terminar a sincronização global
       await this.financialService.loadAllTransactions();

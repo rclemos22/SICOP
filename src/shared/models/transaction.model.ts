@@ -24,7 +24,6 @@ export interface Transaction {
   unidade_gestora_label?: string; // Label formatado da unidade gestora (ex: "DPEMA", "FADEP")
   document_number?: string; // Número do Documento do SIGEF (ex: 2026PP...)
   ob_number?: string; // Número da Ordem Bancária (ex: 847)
-  contract_type?: 'serviço' | 'material'; // Tipo do contrato vinculado à transação
 }
 
 // Helpers for UI logic (Icons, Colors, Labels) based on Type

@@ -1,10 +1,11 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { SigefService, NotaEmpenho, OrdemBancaria } from './sigef.service';
-import { SigefCacheService, SigefNotaEmpenho, SigefNeMovimento, SigefOrdemBancaria, NeResumo } from './sigef-cache.service';
-import { signal, computed, effect } from '@angular/core';
+import { SigefMirrorService } from './sigef-mirror.service';
+import { SigefCacheService, SigefOrdemBancaria, NeResumo } from './sigef-cache.service';
 import { FinancialService } from '../../features/financial/services/financial.service';
 import { ContractService } from '../../features/contracts/services/contract.service';
 import { BudgetService } from '../../features/budget/services/budget.service';
+import { AppContextService } from './app-context.service';
 
 export interface SyncTask {
   ne: string;
@@ -15,132 +16,190 @@ export interface SyncTask {
   timestamp?: number;
 }
 
+/**
+ * SigefSyncService
+ *
+ * ARQUITETURA "ESPELHO PRIMEIRO":
+ *  - Toda consulta de NE/OB é feita PRIMEIRO nas tabelas import_sigef_ne / import_sigef_ob.
+ *  - A API oficial do SIGEF só é chamada quando o usuário clica em "Sincronizar SIGEF".
+ *  - A sincronização é INCREMENTAL: só baixa registros que ainda não existem no espelho,
+ *    ou que foram marcados para atualização forçada.
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class SigefSyncService {
-  private sigefService = inject(SigefService);
-  private cacheService = inject(SigefCacheService);
+  private sigefService    = inject(SigefService);
+  private mirrorService   = inject(SigefMirrorService);
+  private cacheService    = inject(SigefCacheService);
   private financialService = inject(FinancialService);
-  private contractService = inject(ContractService);
-  private budgetService = inject(BudgetService);
+  private contractService  = inject(ContractService);
+  private budgetService    = inject(BudgetService);
+  private appContext       = inject(AppContextService);
 
-  // Queue State
-  private _syncQueue = signal<SyncTask[]>([]);
-  private _currentIdx = signal<number>(-1);
-  
-  readonly syncQueue = this._syncQueue.asReadonly();
-  readonly currentIdx = this._currentIdx.asReadonly();
-  
-  readonly isSyncing = computed(() => this._currentIdx() >= 0 && this._currentIdx() < this._syncQueue().length);
-  private _isLocked = signal<boolean>(false);
-  readonly isLocked = this._isLocked.asReadonly();
-  readonly isGlobalSyncing = this._isLocked.asReadonly();
-  
+  // ─── Estado da fila ──────────────────────────────────────────
+  private _syncQueue   = signal<SyncTask[]>([]);
+  private _currentIdx  = signal<number>(-1);
+  private _isLocked    = signal<boolean>(false);
+
+  readonly syncQueue      = this._syncQueue.asReadonly();
+  readonly currentIdx     = this._currentIdx.asReadonly();
+  readonly isLocked       = this._isLocked.asReadonly();
+  readonly isSyncing      = computed(() => this._currentIdx() >= 0 && this._currentIdx() < this._syncQueue().length);
+  readonly isGlobalSyncing = computed(() => this.isSyncing());
+
   readonly progress = computed(() => {
     const queue = this._syncQueue();
     if (queue.length === 0) return 0;
-    const current = Math.max(0, this._currentIdx());
-    return Math.round((current / queue.length) * 100);
+    return Math.round((Math.max(0, this._currentIdx()) / queue.length) * 100);
   });
 
   readonly syncStatus = computed(() => {
     const queue = this._syncQueue();
-    const idx = this._currentIdx();
+    const idx   = this._currentIdx();
     if (queue.length === 0 || idx < 0) return null;
-    return {
-      current: idx + 1,
-      total: queue.length,
-      task: queue[idx]
-    };
+    return { current: idx + 1, total: queue.length, task: queue[idx] };
   });
 
-  /**
-   * Sincroniza um lote de NEs criando uma fila controlada
-   */
-  async syncBatch(tasks: { ne: string, ug: string, ano: string }[], contractId?: string): Promise<void> {
-    if (this.isSyncing()) {
-      console.warn('[SIGEF SYNC] Já existe uma sincronização em andamento.');
-      return;
-    }
+  private autoSyncInterval: any;
 
-    const queue: SyncTask[] = tasks.map(t => ({
-      ...t,
-      status: 'pending'
-    }));
-
-    this._syncQueue.set(queue);
-    this._currentIdx.set(0);
-    this._isLocked.set(true); // Bloqueia a navegação/interface
-
-    try {
-      for (let i = 0; i < queue.length; i++) {
-          this._currentIdx.set(i);
-          const task = queue[i];
-          
-          this.updateTaskStatus(i, 'processing');
-          
-          try {
-              console.log(`[SIGEF SYNC] Processando: ${i+1}/${queue.length} - NE: ${task.ne} (${task.ano})`);
-              // Sincronização profunda forçada
-              await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId);
-              this.updateTaskStatus(i, 'completed');
-          } catch (err: any) {
-              console.error(`[SIGEF SYNC] Erro na NE ${task.ne}:`, err);
-              this.updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
-          }
-
-          // Delay de cortesia para a API (800ms entre requisições de NEs para agilizar sincronização global)
-          if (i < queue.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 800));
-          }
-      }
-
-      // NOVO: Após sincronizar as NEs no cache, garantir persistência no banco para o contrato
-      if (contractId) {
-        console.log('[SIGEF SYNC] Persistindo transações para o contrato:', contractId);
-        await this.financialService.syncSigefTransactions(contractId);
-      }
-    } finally {
-      this._isLocked.set(false);
-    }
-
-    // Resetar após conclusão
+  constructor() {
+    // Sincronização automática: primeiro ciclo após 2 min, depois a cada 10 min
     setTimeout(() => {
-        if (!this.isSyncing()) {
-            this._currentIdx.set(-1);
-        }
-    }, 5000);
+      this.syncAllContractsFinance(false, this.appContext.anoExercicio());
+      this.startAutomaticSync();
+    }, 120000);
+  }
+
+  startAutomaticSync() {
+    if (this.autoSyncInterval) return;
+    this.autoSyncInterval = setInterval(() => {
+      if (!this.isSyncing()) {
+        const selectedYear = this.appContext.anoExercicio();
+        console.log(`[SIGEF SYNC] Ciclo automático: exercício ${selectedYear}`);
+        this.syncAllContractsFinance(false, selectedYear);
+      }
+    }, 10 * 60 * 1000);
+  }
+
+  // ─── API pública principal ───────────────────────────────────
+
+  /**
+   * Obtém o resumo de uma NE. Busca PRIMEIRO no espelho; só vai à API se forceSync = true.
+   * Este método é chamado pelo dashboard e páginas de contratos para exibir dados.
+   */
+  async getNotaEmpenhoWithCache(
+    ano: string,
+    neNumber: string,
+    ug: string,
+    forceSync: boolean = false,
+    contractId?: string
+  ): Promise<NeResumo | null> {
+    const ugStr = ug.toString();
+
+    // ── Fase 1: Espelho Primeiro ──────────────────────────────
+    if (!forceSync) {
+      const movements = await this.mirrorService.getNeMovementsRaw(neNumber, ugStr);
+      if (movements.length > 0) {
+        console.log(`[SIGEF SYNC] Espelho encontrado para NE ${neNumber}: ${movements.length} registro(s)`);
+        // Garante que as tabelas de cache estruturado também estão populadas (legado)
+        await this._persistFromMirrorToCache(neNumber, ugStr);
+        return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
+      }
+    }
+
+    // ── Fase 2: Sincronização via API (forceSync ou espelho vazio) ──
+    console.log(`[SIGEF SYNC] ${forceSync ? 'Sync forçado' : 'Espelho vazio'} – chamando API para NE: ${neNumber}`);
+    await this._syncNeFromApi(ano, neNumber, ugStr, forceSync);
+
+    // ── Fase 3: Persistir nas tabelas de cache estruturado (legado) ──
+    await this._persistFromMirrorToCache(neNumber, ugStr);
+
+    if (contractId) {
+      await this.financialService.syncSigefTransactions(contractId).catch(err =>
+        console.error('[SIGEF SYNC] Erro ao persistir transações:', err)
+      );
+    }
+
+    return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
   }
 
   /**
-   * Dispara a sincronização de toda a base de contratos e dotações
+   * Sincroniza um lote de NEs (chamado pelo botão "Sincronizar SIGEF").
+   * Faz download INCREMENTAL: baixa apenas NEs/OBs que ainda não estão no espelho.
    */
-  async syncAllContractsFinance(): Promise<void> {
+  async syncBatch(
+    tasks: { ne: string; ug: string; ano: string }[],
+    contractId?: string,
+    lockUI: boolean = false
+  ): Promise<void> {
+    if (this.isSyncing()) {
+      console.warn('[SIGEF SYNC] Sincronização já em andamento.');
+      return;
+    }
+
+    const queue: SyncTask[] = tasks.map(t => ({ ...t, status: 'pending' }));
+    this._syncQueue.set(queue);
+    this._currentIdx.set(0);
+    this._isLocked.set(lockUI);
+
+    try {
+      for (let i = 0; i < queue.length; i++) {
+        this._currentIdx.set(i);
+        const task = queue[i];
+        this._updateTaskStatus(i, 'processing');
+
+        try {
+          console.log(`[SIGEF SYNC] ${i + 1}/${queue.length} – NE: ${task.ne}`);
+          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId);
+          this._updateTaskStatus(i, 'completed');
+        } catch (err: any) {
+          console.error(`[SIGEF SYNC] Erro na NE ${task.ne}:`, err);
+          this._updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
+        }
+
+        if (i < queue.length - 1) {
+          await this._delay(800);
+        }
+      }
+
+      if (contractId) {
+        await this.financialService.syncSigefTransactions(contractId).catch(err =>
+          console.error('[SIGEF SYNC] Erro ao persistir contrato:', err)
+        );
+      }
+    } finally {
+      this._isLocked.set(false);
+      setTimeout(() => { if (!this.isSyncing()) this._currentIdx.set(-1); }, 5000);
+    }
+  }
+
+  /**
+   * Sincroniza todos os contratos. Chamado automaticamente ou pelo botão global.
+   */
+  async syncAllContractsFinance(lockUI: boolean = false, year?: number): Promise<void> {
     if (this.isSyncing()) return;
 
     console.log('[SIGEF SYNC] Iniciando varredura global de contratos...');
-    
-    // 1. Garantir que os contratos estão carregados
+
     if (this.contractService.contracts().length === 0) {
       await this.contractService.loadContracts();
     }
 
     const contracts = this.contractService.contracts();
-    const allTasks: { ne: string, ug: string, ano: string, contractId: string }[] = [];
+    const allTasks: { ne: string; ug: string; ano: string; contractId: string }[] = [];
 
-    // 2. Coletar todas as NEs de todos os contratos
     for (const contract of contracts) {
       const budgetResult = await this.budgetService.getBudgetsByContractId(contract.id);
       if (!budgetResult.error && budgetResult.data) {
         budgetResult.data.forEach(b => {
           if (b.nunotaempenho) {
-            const budgetDate = new Date(b.data_disponibilidade);
-            const ano = budgetDate.getFullYear().toString();
+            const bYear = new Date(b.data_disponibilidade).getFullYear();
+            if (year && bYear !== year) return;
             allTasks.push({
               ne: b.nunotaempenho,
               ug: b.unid_gestora || '080901',
-              ano: ano,
+              ano: bYear.toString(),
               contractId: contract.id
             });
           }
@@ -153,95 +212,200 @@ export class SigefSyncService {
       return;
     }
 
-    console.log(`[SIGEF SYNC] Iniciando sincronização em lote de ${allTasks.length} NEs para ${contracts.length} contratos...`);
-    
-    // Configurar a fila única
-    const queue: SyncTask[] = allTasks.map(t => ({
-      ne: t.ne,
-      ug: t.ug,
-      ano: t.ano,
-      status: 'pending'
-    }));
+    console.log(`[SIGEF SYNC] ${allTasks.length} NEs para ${contracts.length} contratos.`);
 
+    const queue: SyncTask[] = allTasks.map(t => ({ ne: t.ne, ug: t.ug, ano: t.ano, status: 'pending' }));
     this._syncQueue.set(queue);
     this._currentIdx.set(0);
-    this._isLocked.set(true);
+    this._isLocked.set(lockUI);
 
     try {
-      // Processar todas as NEs da fila global
       for (let i = 0; i < queue.length; i++) {
         this._currentIdx.set(i);
         const task = queue[i];
-        this.updateTaskStatus(i, 'processing');
-        
+        this._updateTaskStatus(i, 'processing');
+
         try {
-          // Sincronização profunda forçada (sem contractId aqui para evitar duplicidade de persistência parcial)
-          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true);
-          this.updateTaskStatus(i, 'completed');
+          // Sincronização incremental: forceSync = false (usa espelho se já existir)
+          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, false);
+          this._updateTaskStatus(i, 'completed');
         } catch (err: any) {
-          this.updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
+          this._updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
         }
 
-        // Delay para respeitar a API
         if (i < queue.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 800));
+          await this._delay(500);
         }
       }
 
-      // 4. Persistência final em lote para todos os contratos afetados
-      console.log('[SIGEF SYNC] Movimentação de cache concluída. Atualizando tabelas financeiras...');
+      // Persistir tabelas financeiras em lote
       const affectedContractIds = [...new Set(allTasks.map(t => t.contractId))];
-      
       for (const contractId of affectedContractIds) {
-        try {
-          await this.financialService.syncSigefTransactions(contractId);
-        } catch (err) {
-          console.error(`[SIGEF SYNC] Erro ao persistir contrato ${contractId}:`, err);
-        }
+        await this.financialService.syncSigefTransactions(contractId).catch(err =>
+          console.error(`[SIGEF SYNC] Erro ao persistir contrato ${contractId}:`, err)
+        );
       }
-      
-      console.log('[SIGEF SYNC] Sincronização global concluída com sucesso.');
+
+      console.log('[SIGEF SYNC] Sincronização global concluída.');
     } finally {
       this._isLocked.set(false);
-      // Reset da fila após 5s
-      setTimeout(() => {
-        this._currentIdx.set(-1);
-      }, 5000);
+      setTimeout(() => { this._currentIdx.set(-1); }, 5000);
     }
   }
 
-  private updateTaskStatus(index: number, status: SyncTask['status'], message?: string) {
-    this._syncQueue.update(q => {
-        const newQueue = [...q];
-        if (newQueue[index]) {
-            newQueue[index] = { ...newQueue[index], status, message, timestamp: Date.now() };
-        }
-        return newQueue;
-    });
+  // ─── Métodos privados ─────────────────────────────────────────
+
+  /**
+   * Baixa NE + seus movimentos + OBs da API e grava no espelho.
+   * Sincronização INCREMENTAL: para OBs, só baixa as que ainda não existem no espelho.
+   */
+  private async _syncNeFromApi(ano: string, neNumber: string, ugStr: string, forceSync: boolean): Promise<void> {
+    const ugNum = parseInt(ugStr, 10);
+
+    try {
+      // 1. Baixar a NE original
+      const ne = await this._withRetry(() =>
+        this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ugStr, forceSync)
+      );
+
+      if (ne) {
+        // Salva no espelho bruto (import_sigef_ne)
+        await this.mirrorService.saveNesBulk([ne as Record<string, any>], ugStr);
+        // Salva também no cache estruturado legado
+        await this.cacheService.saveNotaEmpenho(this._mapApiNeToCache(ne, ugNum));
+      }
+
+      // 2. Baixar todos os movimentos (reforços/anulações)
+      const movements = await this._withRetry(() =>
+        this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ugStr, forceSync)
+      );
+
+      if (movements.length > 0) {
+        await this.mirrorService.saveNesBulk(movements as Record<string, any>[], ugStr);
+        await this.cacheService.saveNeMovimentos(
+          movements.map(m => this._mapApiMovementToCache(m as any, ugNum))
+        );
+      }
+
+      // 3. Baixar OBs (incremental: só as novas)
+      const nesVinculadas = [...new Set([
+        neNumber,
+        ...movements.map(m => m.nunotaempenho).filter(Boolean)
+      ])] as string[];
+
+      for (const targetNE of nesVinculadas) {
+        await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync);
+      }
+    } catch (err) {
+      console.error(`[SIGEF SYNC] Erro ao sincronizar NE ${neNumber} via API:`, err);
+    }
   }
 
   /**
-   * Obtém resumo de NE usando cache quando disponível, mas garantindo sincronização de movimentos e OBs
+   * Baixa OBs para uma NE específica de forma incremental.
+   * Se forceSync = false, pula OBs que já existem no espelho.
    */
+  private async _syncObsForNe(
+    ano: string,
+    nunotaempenho: string,
+    ugStr: string,
+    ugNum: number,
+    forceSync: boolean
+  ): Promise<void> {
+    const targetNE = nunotaempenho.trim().toUpperCase();
+
+    // Verificar OBs já existentes no espelho (para sincronização incremental)
+    const existingObs = forceSync
+      ? new Set<string>()
+      : await this.mirrorService.getExistingObNumbers(targetNE, ugStr);
+
+    const anoNE = parseInt(ano, 10);
+    const anoAtual = new Date().getFullYear();
+
+    for (let a = anoNE; a <= anoAtual; a++) {
+      const datainicio = `${a}-01-01`;
+      const datafim    = `${a}-12-31`;
+
+      try {
+        let page = 1;
+        let hasNext = true;
+
+        while (hasNext && page <= 10) {
+          const result = await this.sigefService.getOrdemBancaria(
+            datainicio, datafim, page, undefined, targetNE, ugStr, forceSync
+          );
+
+          const filtered = result.data.filter(ob =>
+            (ob.nunotaempenho || '').trim().toUpperCase() === targetNE
+          );
+
+          // Incrementalmente: só salva as que ainda não existem
+          const newObs = forceSync
+            ? filtered
+            : filtered.filter(ob => !existingObs.has((ob.nuordembancaria || '').trim().toUpperCase()));
+
+          if (newObs.length > 0) {
+            // Salvar no espelho bruto
+            await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
+            // Salvar no cache estruturado legado
+            await this.cacheService.saveOrdensBancarias(
+              newObs.map(ob => this._mapApiObToCache(ob, ugNum))
+            );
+            // Atualizar o set de existentes
+            newObs.forEach(ob => existingObs.add((ob.nuordembancaria || '').trim().toUpperCase()));
+          }
+
+          hasNext = !!result.next;
+          page++;
+
+          if (hasNext) await this._delay(500);
+        }
+      } catch (err) {
+        console.warn(`[SIGEF SYNC] Erro ao baixar OBs do ano ${a} para NE ${targetNE}:`, err);
+      }
+    }
+  }
+
   /**
-   * Executa função com retry automático em caso de erro de rede
+   * Garante que as tabelas de cache estruturado (legado) estão populadas
+   * a partir do espelho bruto. Isso mantém compatibilidade com o restante do sistema.
    */
-  private async withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3, baseDelay: number = 2000): Promise<T> {
+  private async _persistFromMirrorToCache(neNumber: string, ugStr: string): Promise<void> {
+    const ugNum = parseInt(ugStr, 10);
+
+    // NEs
+    const neRaws = await this.mirrorService.getNeMovementsRaw(neNumber, ugStr);
+    for (const raw of neRaws) {
+      if (raw.nunotaempenho === neNumber || !raw.nuneoriginal) {
+        await this.cacheService.saveNotaEmpenho(this._mapRawNeToCache(raw, ugNum));
+      } else {
+        await this.cacheService.saveNeMovimentos([this._mapRawMovementToCache(raw, ugNum)]);
+      }
+    }
+
+    // OBs
+    const obRaws = await this.mirrorService.getObsRawByNe(neNumber, ugStr);
+    if (obRaws.length > 0) {
+      await this.cacheService.saveOrdensBancarias(
+        obRaws.map(raw => this._mapRawObToCache(raw, ugNum))
+      );
+    }
+  }
+
+  // ─── Utilitários ─────────────────────────────────────────────
+
+  private async _withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 2000): Promise<T> {
     let lastError: any;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await fn();
       } catch (err: any) {
         lastError = err;
-        const isNetworkError = err?.message?.includes('Failed to fetch') || 
-                            err?.message?.includes('NetworkError') ||
-                            err?.message?.includes('TLS') ||
-                            err?.message?.includes('disconnected');
-        
-        if (isNetworkError && attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1); // Backoff exponencial
-          console.log(`[SIGEF SYNC] Erro de rede. Tentativa ${attempt}/${maxRetries}. Retry em ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+        const isNet = /Failed to fetch|NetworkError|TLS|disconnected/i.test(err?.message || '');
+        if (isNet && attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          console.log(`[SIGEF SYNC] Retry ${attempt}/${maxRetries} em ${delay}ms...`);
+          await this._delay(delay);
         } else {
           throw err;
         }
@@ -250,80 +414,33 @@ export class SigefSyncService {
     throw lastError;
   }
 
-  async getNotaEmpenhoWithCache(ano: string, neNumber: string, ug: string, forceSync: boolean = false, contractId?: string): Promise<NeResumo | null> {
-    const ugNum = parseInt(ug, 10);
-    
-    // 1. Tentar obter os dados básicos da NE do cache local
-    let neCached = await this.cacheService.getNotaEmpenho(ugNum, neNumber);
-    
-    // 2. Só consome a API se forceSync for explicitamente true (clique no botão)
-    if (forceSync) {
-      console.log('[SIGEF SYNC] Sincronização FORÇADA iniciada para NE:', neNumber);
-      try {
-        // Buscar dados básicos da NE com retry
-        const ne = await this.withRetry(() => this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ug));
-        if (ne) {
-          await this.cacheService.saveNotaEmpenho(this.mapApiNeToCache(ne, ugNum));
-          neCached = await this.cacheService.getNotaEmpenho(ugNum, neNumber);
-        }
-
-        // Buscar movimentos (empenhos/anulações) com retry
-        const movements = await this.withRetry(() => this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ug));
-        if (movements.length > 0) {
-          // Garante que todos os movimentos herdam o nuneoriginal da NE pai para correta contabilização
-          const parentOriginal = neCached?.nuneoriginal;
-          await this.cacheService.saveNeMovimentos(movements.map(m => {
-            const cacheM = this.mapApiMovementToCache(m, ugNum);
-            if (!cacheM.nuneoriginal && parentOriginal) {
-              cacheM.nuneoriginal = parentOriginal;
-            }
-            return cacheM;
-          }));
-        }
-
-        // Determinar a data mínima para filtrar OBs (pagamento não pode preceder empego)
-        const allDates = movements.map(m => m.dtlancamento).filter(Boolean) as string[];
-        const minDate = allDates.length > 0 ? allDates.sort()[0] : undefined;
-        const nesVinculadas = [...new Set([neNumber, ...movements.map(m => m.nunotaempenho).filter(Boolean)])] as string[];
-        
-        console.log('[SIGEF SYNC] Buscando OBs atualizadas via API...');
-        // REMOÇÃO DO minDate: Garantimos a captura de todo o histórico da NE conforme solicitado
-        const obs = await this.withRetry(() => this.sigefService.getOrdemBancariaMovements(ano, nesVinculadas, ug, undefined));
-        if (obs.length > 0) {
-          await this.cacheService.saveOrdensBancarias(obs.map(ob => this.mapApiObToCache(ob, ugNum)));
-        }
-
-        // NOVO: Persistência automática se contractId for fornecido
-        if (contractId) {
-          console.log('[SIGEF SYNC] Iniciando persistência automática para o contrato:', contractId);
-          await this.financialService.syncSigefTransactions(contractId);
-        }
-      } catch (err) {
-        console.error('[SIGEF SYNC] Erro ao sincronizar via API:', neNumber, err);
-        // Se falhar a API, continuamos usando o que temos no cache
-      }
-    }
-
-    // 3. Retornar resumo consolidado do banco local (independente de ter sincronizado agora ou não)
-    return await this.cacheService.getNeResumo(ugNum, neNumber);
+  private _delay(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  private mapApiNeToCache(ne: NotaEmpenho, ug: number): SigefNotaEmpenho {
+  private _updateTaskStatus(index: number, status: SyncTask['status'], message?: string) {
+    this._syncQueue.update(q => {
+      const newQueue = [...q];
+      if (newQueue[index]) {
+        newQueue[index] = { ...newQueue[index], status, message, timestamp: Date.now() };
+      }
+      return newQueue;
+    });
+  }
+
+  // ─── Mappers: API → CacheService (legado) ────────────────────
+
+  private _mapApiNeToCache(ne: NotaEmpenho, ug: number) {
     return {
       cdunidadegestora: ug,
       nunotaempenho: ne.nunotaempenho || '',
       cdgestao: ne.cdgestao ? parseInt(ne.cdgestao, 10) : undefined,
       cdcredor: ne.cdcredor || undefined,
-      cdtipocredor: undefined,
-      cdtipocredorpessoa: undefined,
-      cdugfavorecida: undefined,
-      cdorgao: undefined,
       cdsubacao: ne.cdsubacao ? parseInt(ne.cdsubacao, 10) : undefined,
       cdfuncao: ne.cdfuncao ? parseInt(ne.cdfuncao, 10) : undefined,
       cdsubfuncao: ne.cdsubfuncao ? parseInt(ne.cdsubfuncao, 10) : undefined,
       cdprograma: ne.cdprograma || undefined,
       cdacao: ne.cdacao ? parseInt(ne.cdacao, 10) : undefined,
-      localizagasto: undefined,
       cdnaturezadespesa: ne.cdnaturezadespesa || undefined,
       cdfonte: ne.cdfonte || undefined,
       cdmodalidade: ne.cdmodalidadeempenho ? parseInt(ne.cdmodalidadeempenho, 10) : undefined,
@@ -337,7 +454,7 @@ export class SigefSyncService {
     };
   }
 
-  private mapApiMovementToCache(m: any, ug: number): SigefNeMovimento {
+  private _mapApiMovementToCache(m: any, ug: number) {
     return {
       cdunidadegestora: ug,
       nunotaempenho: m.nunotaempenho || '',
@@ -360,7 +477,7 @@ export class SigefSyncService {
     };
   }
 
-  private mapApiObToCache(ob: OrdemBancaria, ug: number): SigefOrdemBancaria {
+  private _mapApiObToCache(ob: OrdemBancaria, ug: number): SigefOrdemBancaria {
     return {
       nuordembancaria: ob.nuordembancaria || '',
       cdunidadegestora: ug,
@@ -391,6 +508,97 @@ export class SigefSyncService {
       deobservacao: ob.deobservacao || undefined,
       definalidade: ob.definalidade || undefined,
       usuario_responsavel: ob.usuario_responsavel || undefined
+    };
+  }
+
+  // ─── Mappers: raw_data (espelho) → CacheService (legado) ─────
+
+  private _mapRawNeToCache(raw: Record<string, any>, ug: number) {
+    return {
+      cdunidadegestora: ug,
+      nunotaempenho: raw['nunotaempenho'] || '',
+      cdgestao: raw['cdgestao'] ? parseInt(raw['cdgestao'], 10) : undefined,
+      cdcredor: raw['cdcredor'] || undefined,
+      cdsubacao: raw['cdsubacao'] ? parseInt(raw['cdsubacao'], 10) : undefined,
+      cdfuncao: raw['cdfuncao'] ? parseInt(raw['cdfuncao'], 10) : undefined,
+      cdsubfuncao: raw['cdsubfuncao'] ? parseInt(raw['cdsubfuncao'], 10) : undefined,
+      cdprograma: raw['cdprograma'] || undefined,
+      cdacao: raw['cdacao'] ? parseInt(raw['cdacao'], 10) : undefined,
+      cdnaturezadespesa: raw['cdnaturezadespesa'] || undefined,
+      cdfonte: raw['cdfonte'] || undefined,
+      cdmodalidade: raw['cdmodalidadeempenho']
+        ? parseInt(raw['cdmodalidadeempenho'], 10)
+        : raw['cdmodalidade'] ? parseInt(raw['cdmodalidade'], 10) : undefined,
+      vlnotaempenho: raw['vlnotaempenho'] || 0,
+      nuquantidade: raw['nuquantidade'] || undefined,
+      dtlancamento: raw['dtlancamento'] || undefined,
+      tipo: raw['tipo'] || undefined,
+      nuprocesso: raw['nuprocesso'] || undefined,
+      nuneoriginal: raw['nuneoriginal'] || undefined,
+      dehistorico: raw['dehistorico'] || undefined
+    };
+  }
+
+  private _mapRawMovementToCache(raw: Record<string, any>, ug: number) {
+    return {
+      cdunidadegestora: ug,
+      nunotaempenho: raw['nunotaempenho'] || '',
+      cdevento: raw['cdevento'] || 0,
+      nudocumento: raw['nudocumento'] || undefined,
+      cdcredor: raw['cdcredor'] || undefined,
+      cdorgao: raw['cdorgao'] || undefined,
+      cdsubacao: raw['cdsubacao'] || undefined,
+      cdfuncao: raw['cdfuncao'] || undefined,
+      cdsubfuncao: raw['cdsubfuncao'] || undefined,
+      cdprograma: raw['cdprograma'] || undefined,
+      cdacao: raw['cdacao'] || undefined,
+      cdnaturezadespesa: raw['cdnaturezadespesa'] || undefined,
+      cdfonte: raw['cdfonte'] || undefined,
+      cdmodalidade: raw['cdmodalidade'] || undefined,
+      vlnotaempenho: raw['vlnotaempenho'] || 0,
+      dtlancamento: raw['dtlancamento'] || undefined,
+      dehistorico: raw['dehistorico'] || undefined,
+      nuneoriginal: raw['nuneoriginal'] || undefined
+    };
+  }
+
+  private _mapRawObToCache(raw: Record<string, any>, ug: number): SigefOrdemBancaria {
+    return {
+      nuordembancaria: raw['nuordembancaria'] || '',
+      cdunidadegestora: ug,
+      nunotaempenho: raw['nunotaempenho'] || undefined,
+      cdgestao: raw['cdgestao'] || undefined,
+      cdevento: raw['cdevento'] || undefined,
+      nudocumento: raw['nudocumento'] || undefined,
+      cdcredor: raw['cdcredor'] || undefined,
+      cdtipocredor: raw['cdtipocredor'] || undefined,
+      cdugfavorecida: raw['cdugfavorecida'] || undefined,
+      cdorgao: raw['cdorgao'] || undefined,
+      cdsubacao: raw['cdsubacao'] || undefined,
+      cdfuncao: raw['cdfuncao'] || undefined,
+      cdsubfuncao: raw['cdsubfuncao'] || undefined,
+      cdprograma: raw['cdprograma'] || undefined,
+      cdacao: raw['cdacao'] || undefined,
+      localizagasto: raw['localizagasto'] || undefined,
+      cdnaturezadespesa: raw['cdnaturezadespesa'] || undefined,
+      cdfonte: raw['cdfonte'] || undefined,
+      cdmodalidade: raw['cdmodalidade'] || undefined,
+      vltotal: raw['vltotal'] || 0,
+      dtlancamento: raw['dtlancamento'] || undefined,
+      dtpagamento: raw['dtpagamento'] || undefined,
+      cdsituacaoordembancaria: raw['cdsituacaoordembancaria'] || undefined,
+      situacaopreparacaopagamento: raw['situacaopreparacaopagamento'] || undefined,
+      tipoordembancaria: raw['tipoordembancaria'] || undefined,
+      tipopreparacaopagamento: raw['tipopreparacaopagamento'] || undefined,
+      deobservacao: raw['deobservacao'] || undefined,
+      definalidade: raw['definalidade'] || undefined,
+      usuario_responsavel: raw['usuario_responsavel'] || undefined,
+      nuguiarecebimento: raw['nuguiarecebimento'] || undefined,
+      vlguiarecebimento: raw['vlguiarecebimento'] ? Number(raw['vlguiarecebimento']) : undefined,
+      nunotalancamento: raw['nunotalancamento'] || undefined,
+      numns: raw['numns'] || undefined,
+      domicilio_origem: raw['domicilio_origem'] || undefined,
+      domicilio_destino: raw['domicilio_destino'] || undefined
     };
   }
 }

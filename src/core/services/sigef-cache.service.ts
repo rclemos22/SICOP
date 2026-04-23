@@ -405,6 +405,139 @@ export class SigefCacheService {
   }
 
   // ============================================
+  // Espelho de Dados Brutos (import_sigef)
+  // ============================================
+
+  /**
+   * Salva dados brutos da API no espelho (import_sigef).
+   */
+  async saveRawMirror(identifier: string, type: string, rawData: any, year?: number): Promise<void> {
+    try {
+      console.log(`[SigefCache] Salvando espelho bruto: ${type} - ${identifier}`);
+      const payload = {
+        identifier: identifier.trim().toUpperCase(),
+        type,
+        raw_data: rawData,
+        year,
+        last_sync: new Date().toISOString()
+      };
+
+      const { error } = await this.supabaseService.client
+        .from('import_sigef')
+        .upsert(payload, { onConflict: 'identifier,type' });
+
+      if (error) {
+        console.error('[SigefCache] Erro ao salvar import_sigef:', error);
+      }
+    } catch (err) {
+      console.error('[SigefCache] Erro crítico ao salvar espelho bruto:', err);
+    }
+  }
+
+  /**
+   * Recupera dados brutos do espelho.
+   */
+  async getRawMirror(identifier: string, type: string): Promise<any | null> {
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('import_sigef')
+        .select('raw_data')
+        .eq('identifier', identifier.trim().toUpperCase())
+        .eq('type', type)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[SigefCache] Erro ao buscar no espelho:', error);
+        return null;
+      }
+
+      return data?.raw_data || null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /**
+   * Recupera uma lista de registros do espelho baseada em um campo do JSON.
+   * Útil para buscar todas as OBs de uma NE, por exemplo.
+   */
+  async getRawMirrorList(type: string, fieldName: string, value: string): Promise<any[]> {
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('import_sigef')
+        .select('raw_data')
+        .eq('type', type)
+        .eq(`raw_data->>${fieldName}`, value.trim().toUpperCase());
+
+      if (error) {
+        console.warn(`[SigefCache] Erro ao buscar lista no espelho (${type}.${fieldName}):`, error);
+        return [];
+      }
+
+      return data?.map(d => d.raw_data) || [];
+    } catch (err) {
+      console.error('[SigefCache] Erro crítico ao buscar lista no espelho:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Recupera todas as movimentações de uma NE (original + reforços/anulações) do espelho.
+   */
+  async getNotaEmpenhoMovementsFromMirror(neNumber: string): Promise<any[]> {
+    try {
+      const cleanNE = neNumber.trim().toUpperCase();
+      const { data, error } = await this.supabaseService.client
+        .from('import_sigef')
+        .select('raw_data')
+        .eq('type', 'NE')
+        .or(`identifier.eq.${cleanNE},raw_data->>nuneoriginal.eq.${cleanNE}`);
+
+      if (error) {
+        console.warn(`[SigefCache] Erro ao buscar movimentos no espelho para ${neNumber}:`, error);
+        return [];
+      }
+
+      return data?.map(d => d.raw_data) || [];
+    } catch (err) {
+      console.error('[SigefCache] Erro crítico ao buscar movimentos no espelho:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Salva múltiplos registros no espelho bruto de uma vez.
+   */
+  async saveRawMirrorBulk(items: any[], type: string, idField: string, yearField?: string): Promise<void> {
+    if (!items || items.length === 0) return;
+
+    try {
+      const payload = items.map(item => ({
+        identifier: (item[idField] || '').toString().trim().toUpperCase(),
+        type,
+        raw_data: item,
+        year: yearField ? item[yearField] : undefined,
+        last_sync: new Date().toISOString()
+      })).filter(p => p.identifier);
+
+      if (payload.length === 0) return;
+
+      console.log(`[SigefCache] Salvando ${payload.length} itens no espelho: ${type}`);
+      
+      const { error } = await this.supabaseService.client
+        .from('import_sigef')
+        .upsert(payload, { onConflict: 'identifier,type' });
+
+      if (error) {
+        console.error('[SigefCache] Erro ao salvar bulk import_sigef:', error);
+      }
+    } catch (err) {
+      console.error('[SigefCache] Erro crítico ao salvar espelho bruto (bulk):', err);
+    }
+  }
+
+
+  // ============================================
   // Funções de cálculo
   // ============================================
 

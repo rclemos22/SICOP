@@ -294,53 +294,8 @@ export class OrdemBancariaPageComponent implements OnInit {
     this.ordemBancaria.set(null);
     
     try {
-      // Garantir autenticação antes de qualquer busca
-      await this.sigefService.ensureAuthenticated();
-      
-      // Buscar com paginação para encontrar a OB
-      let page = 1;
-      const maxPages = 100;
-      let found: OrdemBancaria | null = null;
-      
-      while (page <= maxPages && !found) {
-        const ob = await this.sigefService.getOrdemBancaria(
-          `${ano}-01-01`,
-          `${ano}-12-31`,
-          page,
-          cleanOB, // Usar nuordembancaria para buscar por número da OB
-          undefined,
-          ug // Passar a UG selecionada para o filtro da API
-        );
-        
-        console.log(`[DEBUG OB] Página ${page}: ${ob.data.length} resultados, next: ${ob.next}`);
-        
-        if (ob.data.length === 0) {
-          console.log('[DEBUG OB] Sem resultados nesta página, parando');
-          break;
-        }
-        
-        // Log dos primeiros resultados para debug
-        if (page === 1) {
-          console.log('[DEBUG OB] Primeiros resultados (keys):', ob.data.slice(0, 3).map((item: any) => Object.keys(item)));
-          console.log('[DEBUG OB] Primeiros resultados (full):', ob.data.slice(0, 3));
-        }
-        
-        // Filtrar pelo número da OB e UG - usar nudocumento como fallback
-        // Normalizar UG para número para evitar problemas com zeros à esquerda
-        found = ob.data.find(item => 
-          (item.nuordembancaria?.toUpperCase() === cleanOB || item.nudocumento?.toUpperCase() === cleanOB) && 
-          Number(item.cdunidadegestora) === Number(ug)
-        ) || null;
-        
-        console.log(`[DEBUG OB] após filtro: found=${found ? found.nuordembancaria : null}`);
-        
-        if (!found && ob.next) {
-          page++;
-          await new Promise(r => setTimeout(r, 100));
-        } else {
-          break;
-        }
-      }
+      // Usar a nova lógica de espelho (Cache-First)
+      const found = await this.sigefService.getOrdemBancariaByNumberWithMirror(cleanOB, ug);
       
       console.log('[DEBUG OB] Resultado:', found ? `Encontrado: nudocumento:${found.nudocumento} nuordembancaria:${found.nuordembancaria} UG:${found.cdunidadegestora}` : 'Não encontrado');
       

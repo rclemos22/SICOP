@@ -27,9 +27,6 @@ export class DashboardPageComponent implements OnInit {
 
   // D3 Container for Status Chart
   statusChartContainer = viewChild<ElementRef>('statusChart');
-  
-  // D3 Container for Contract Type Chart
-  contractTypeChartContainer = viewChild<ElementRef>('contractTypeChart');
 
   // D3 Container for Monthly Execution Chart
   monthlyExecutionChartContainer = viewChild<ElementRef>('monthlyExecutionChart');
@@ -64,25 +61,39 @@ export class DashboardPageComponent implements OnInit {
 
   ngOnInit() {
     this.loadAllData();
+    
+    // Efeito para recarregar dados quando o ano muda
+    effect(() => {
+      const year = this.appContext.anoExercicio();
+      console.log('[DASHBOARD] Ano alterado para', year, '- Recarregando dados...');
+      this.loadAllData();
+    }, { allowSignalWrites: true });
   }
 
   async loadAllData() {
+    const selectedYear = this.appContext.anoExercicio();
+    
     await Promise.all([
       this.contractService.loadContracts(),
       this.budgetService.loadDotacoes(),
       this.financialService.loadAllTransactions(),
-      (async () => {
-        const { data: payments, error: paymentsError } = await this.supabaseService.client
-          .from('vw_recent_payments')
-          .select('*')
-          .order('data_pagamento', { ascending: false })
-          .limit(10);
-        
-        if (!paymentsError) {
-          this.recentPaymentsList.set(payments || []);
-        }
-      })()
+      this.loadRecentPayments(selectedYear)
     ]);
+  }
+
+  async loadRecentPayments(year: number) {
+    const { data: payments, error: paymentsError } = await this.supabaseService.client
+      .from('vw_recent_payments')
+      .select('*')
+      // Filtra pelo ano da data de pagamento
+      .gte('data_pagamento', `${year}-01-01`)
+      .lte('data_pagamento', `${year}-12-31`)
+      .order('data_pagamento', { ascending: false })
+      .limit(10);
+    
+    if (!paymentsError) {
+      this.recentPaymentsList.set(payments || []);
+    }
   }
 
   // --- Metrics Calculation ---
@@ -153,20 +164,10 @@ export class DashboardPageComponent implements OnInit {
     };
   });
 
-  // Contracts by type (serviço vs material)
-  contractsByType = computed(() => {
-    const contracts = this.filteredContracts();
-    return {
-      servico: contracts.filter(c => c.tipo === 'serviço').length,
-      material: contracts.filter(c => c.tipo === 'material').length,
-      total: contracts.length
-    };
-  });
-
-  // Monthly execution by contract type
-  monthlyExecutionByType = computed(() => {
+  // Monthly execution
+  monthlyExecution = computed(() => {
     const transactions = this.financialService.transactions();
-    const monthlyData: Record<string, { servico: number; material: number }> = {};
+    const monthlyData: Record<string, number> = {};
 
     transactions.forEach(t => {
       if (t.type !== TransactionType.LIQUIDATION) return;
@@ -175,16 +176,10 @@ export class DashboardPageComponent implements OnInit {
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
       if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { servico: 0, material: 0 };
+        monthlyData[monthKey] = 0;
       }
       
-      const contract = this.contractService.contracts().find(c => c.id === t.contract_id);
-      
-      // Normalização: A API/Modelo usa 'serviço' com acento, mas a estrutura do gráfico usa 'servico'
-      const rawType = t.contract_type || contract?.tipo || 'material';
-      const typeKey = rawType === 'serviço' ? 'servico' : 'material';
-      
-      monthlyData[monthKey][typeKey] += t.amount;
+      monthlyData[monthKey] += t.amount;
     });
 
     // Sort months and get last 12
@@ -192,8 +187,7 @@ export class DashboardPageComponent implements OnInit {
     
     return sortedMonths.map(month => ({
       month,
-      servico: monthlyData[month].servico,
-      material: monthlyData[month].material
+      total: monthlyData[month]
     }));
   });
 
@@ -312,16 +306,34 @@ export class DashboardPageComponent implements OnInit {
       .reduce((acc, c) => acc + (c.valor_anual || 0), 0);
   });
 
-  // Total Committed (Empenhado Real do SIGEF - todas as dotações)
+  // Total Committed (Empenhado Real do SIGEF - baseado nas transações filtradas por ano)
   totalCommittedValue = computed(() => {
-    return this.budgetService.allDotacoes()
-      .reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
+    const selectedYear = this.appContext.anoExercicio();
+    return this.financialService.transactions()
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === selectedYear && (
+          t.type === TransactionType.COMMITMENT || 
+          t.type === TransactionType.REINFORCEMENT || 
+          t.type === TransactionType.CANCELLATION
+        );
+      })
+      .reduce((acc, t) => {
+        const val = Number(t.amount) || 0;
+        // Anulações subtraem do total empenhado
+        return t.type === TransactionType.CANCELLATION ? acc - val : acc + val;
+      }, 0);
   });
 
-  // Total Paid (Pago Real do SIGEF - todas as dotações)
+  // Total Paid (Pago Real do SIGEF - baseado nas transações filtradas por ano)
   totalPaidValue = computed(() => {
-    return this.budgetService.allDotacoes()
-      .reduce((acc, b) => acc + (b.total_pago || 0), 0);
+    const selectedYear = this.appContext.anoExercicio();
+    return this.financialService.transactions()
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === selectedYear && t.type === TransactionType.LIQUIDATION;
+      })
+      .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   });
 
   // Balance (Saldo real a pagar)
@@ -489,18 +501,9 @@ export class DashboardPageComponent implements OnInit {
       }
     });
 
-    // Reactively render contract type chart
-    effect(() => {
-      const typeData = this.contractsByType();
-      const container = this.contractTypeChartContainer()?.nativeElement;
-      if (container) {
-        this.renderContractTypeChart(container, typeData);
-      }
-    });
-
     // Reactively render monthly execution bar chart
     effect(() => {
-      const data = this.monthlyExecutionByType();
+      const data = this.monthlyExecution();
       const container = this.monthlyExecutionChartContainer()?.nativeElement;
       if (container) {
         this.renderMonthlyExecutionChart(container, data);
@@ -693,71 +696,7 @@ export class DashboardPageComponent implements OnInit {
       .text(data.total);
   }
 
-  private renderContractTypeChart(container: HTMLElement, data: { servico: number; material: number; total: number }) {
-    d3.select(container).selectAll('*').remove();
-
-    if (data.total === 0) {
-      d3.select(container)
-        .append('div')
-        .attr('class', 'flex items-center justify-center h-full text-gray-400 text-sm')
-        .text('Sem dados de contratos');
-      return;
-    }
-
-    const chartData = [
-      { label: 'Serviço', value: data.servico, color: '#3B82F6' },
-      { label: 'Material', value: data.material, color: '#F59E0B' }
-    ];
-
-    const width = 180;
-    const height = 180;
-    const margin = 15;
-    const radius = Math.min(width, height) / 2 - margin;
-
-    const svg = d3.select(container)
-      .append('svg')
-      .attr('width', width)
-      .attr('height', height)
-      .append('g')
-      .attr('transform', `translate(${width / 2},${height / 2})`);
-
-    const pie = d3.pie<any>()
-      .value((d: any) => d.value)
-      .sort(null);
-
-    const arc = d3.arc()
-      .innerRadius(radius * 0.5)
-      .outerRadius(radius);
-
-    const arcHover = d3.arc()
-      .innerRadius(radius * 0.5)
-      .outerRadius(radius * 1.05);
-
-    svg.selectAll('path')
-      .data(pie(chartData))
-      .join('path')
-      .attr('d', arc as any)
-      .attr('fill', (d: any) => d.data.color)
-      .attr('stroke', 'white')
-      .style('stroke-width', '2px')
-      .style('cursor', 'pointer')
-      .on('mouseover', function (event, d: any) {
-        d3.select(this).transition().duration(200).attr('d', arcHover as any);
-      })
-      .on('mouseout', function (event, d) {
-        d3.select(this).transition().duration(200).attr('d', arc as any);
-      });
-
-    svg.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('dy', '0.35em')
-      .style('font-size', '24px')
-      .style('font-weight', 'bold')
-      .style('fill', '#374151')
-      .text(data.total);
-  }
-
-  private renderMonthlyExecutionChart(container: HTMLElement, data: { month: string; servico: number; material: number }[]) {
+  private renderMonthlyExecutionChart(container: HTMLElement, data: { month: string; total: number }[]) {
     d3.select(container).selectAll('*').remove();
 
     if (data.length === 0) {
@@ -770,10 +709,9 @@ export class DashboardPageComponent implements OnInit {
 
     // Calculate variations
     const dataWithVariation = data.map((d, i) => {
-      const total = d.servico + d.material;
-      const prevTotal = i > 0 ? data[i - 1].servico + data[i - 1].material : 0;
-      const variation = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : 0;
-      return { ...d, total, variation };
+      const prevTotal = i > 0 ? data[i - 1].total : 0;
+      const variation = prevTotal > 0 ? ((d.total - prevTotal) / prevTotal) * 100 : 0;
+      return { ...d, variation };
     });
 
     const margin = { top: 30, right: 20, bottom: 45, left: 55 };
@@ -787,34 +725,22 @@ export class DashboardPageComponent implements OnInit {
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // Gradient definitions
+    // Gradient definition
     const defs = svg.append('defs');
     
     const gradientBlue = defs.append('linearGradient')
-      .attr('id', 'gradientServico')
+      .attr('id', 'gradientTotal')
       .attr('x1', '0%').attr('y1', '0%')
       .attr('x2', '0%').attr('y2', '100%');
     gradientBlue.append('stop').attr('offset', '0%').attr('stop-color', '#60A5FA');
     gradientBlue.append('stop').attr('offset', '100%').attr('stop-color', '#3B82F6');
-    
-    const gradientAmber = defs.append('linearGradient')
-      .attr('id', 'gradientMaterial')
-      .attr('x1', '0%').attr('y1', '0%')
-      .attr('x2', '0%').attr('y2', '100%');
-    gradientAmber.append('stop').attr('offset', '0%').attr('stop-color', '#FBBF24');
-    gradientAmber.append('stop').attr('offset', '100%').attr('stop-color', '#F59E0B');
 
-    const x0 = d3.scaleBand()
+    const x = d3.scaleBand()
       .domain(dataWithVariation.map(d => d.month))
       .rangeRound([0, width])
-      .paddingInner(0.25);
+      .padding(0.3);
 
-    const x1 = d3.scaleBand()
-      .domain(['servico', 'material'])
-      .rangeRound([0, x0.bandwidth()])
-      .padding(0.1);
-
-    const maxValue = d3.max(dataWithVariation, d => Math.max(d.servico, d.material)) || 0;
+    const maxValue = d3.max(dataWithVariation, d => d.total) || 0;
     const y = d3.scaleLinear()
       .domain([0, maxValue * 1.15])
       .range([height, 0]);
@@ -838,7 +764,7 @@ export class DashboardPageComponent implements OnInit {
     svg.append('g')
       .attr('class', 'x-axis')
       .attr('transform', `translate(0,${height})`)
-      .call(d3.axisBottom(x0).tickFormat(d => {
+      .call(d3.axisBottom(x).tickFormat(d => {
         const parts = d.split('-');
         const label = monthLabels[parts[1]] || d;
         const year = parts[0].slice(2);
@@ -868,35 +794,27 @@ export class DashboardPageComponent implements OnInit {
       .style('opacity', 0);
 
     // Bars
-    const monthGroups = svg.selectAll('.month-group')
+    svg.selectAll('.bar')
       .data(dataWithVariation)
-      .join('g')
-      .attr('class', 'month-group')
-      .attr('transform', d => `translate(${x0(d.month)},0)`);
-
-    monthGroups.selectAll('rect')
-      .data(d => [
-        { key: 'servico', value: d.servico },
-        { key: 'material', value: d.material }
-      ])
       .join('rect')
-      .attr('x', d => x1(d.key) || 0)
-      .attr('y', d => y(d.value))
-      .attr('width', x1.bandwidth())
-      .attr('height', d => height - y(d.value))
-      .attr('fill', d => d.key === 'servico' ? 'url(#gradientServico)' : 'url(#gradientMaterial)')
+      .attr('class', 'bar')
+      .attr('x', d => x(d.month) || 0)
+      .attr('y', d => y(d.total))
+      .attr('width', x.bandwidth())
+      .attr('height', d => height - y(d.total))
+      .attr('fill', 'url(#gradientTotal)')
       .attr('rx', 3)
       .style('cursor', 'pointer')
       .on('mouseover', function(event, d) {
         d3.select(this).style('opacity', 0.85);
         tooltip
-          .html(`<div class="font-bold mb-1">${d.key === 'servico' ? 'Serviço' : 'Material'}</div><div class="text-gray-300">R$ ${d.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>`)
+          .html(`<div class="font-bold mb-1">Total Executado</div><div class="text-gray-300">R$ ${d.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>`)
           .style('opacity', 1)
           .classed('hidden', false);
       })
       .on('mousemove', function(event) {
-        const [x, y] = d3.pointer(event, container);
-        tooltip.style('left', `${x + 10}px`).style('top', `${y - 10}px`);
+        const [xPos, yPos] = d3.pointer(event, container);
+        tooltip.style('left', `${xPos + 10}px`).style('top', `${yPos - 10}px`);
       })
       .on('mouseout', function() {
         d3.select(this).style('opacity', 1);
@@ -906,8 +824,9 @@ export class DashboardPageComponent implements OnInit {
     // Variation indicators (arrows between months)
     if (dataWithVariation.length > 1) {
       dataWithVariation.slice(1).forEach((d, i) => {
-        const prev = dataWithVariation[i];
-        const xPos = x0(d.month)! + x0.bandwidth() / 2;
+        if(d.variation === 0) return;
+        
+        const xPos = x(d.month)! + x.bandwidth() / 2;
         
         const arrowGroup = svg.append('g')
           .attr('transform', `translate(${xPos}, -8)`)

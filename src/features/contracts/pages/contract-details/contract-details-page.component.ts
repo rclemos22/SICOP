@@ -46,7 +46,7 @@ export class ContractDetailsPageComponent {
   private financialService = inject(FinancialService);
   private appContext = inject(AppContextService);
   private sigefService = inject(SigefService);
-  private sigefSyncService = inject(SigefSyncService);
+  public sigefSyncService = inject(SigefSyncService);
   private sigefCacheService = inject(SigefCacheService);
   private supabaseService = inject(SupabaseService);
 
@@ -98,8 +98,6 @@ export class ContractDetailsPageComponent {
   extraObs = signal<Transaction[]>([]);
   isDeepSearching = signal<boolean>(false);
   
-  /** Estado de sincronização SIGEF forçada */
-  isForceSyncing = signal<boolean>(false);
 
   // Filtra transações de liquidação (pagamentos) para vinculação
   availableObs = computed(() => {
@@ -296,11 +294,14 @@ export class ContractDetailsPageComponent {
   budgets = signal<Dotacao[]>([]);
 
   sortedBudgets = computed(() => {
-    return [...this.budgets()].sort((a, b) => {
-      const dateA = a.data_disponibilidade ? new Date(a.data_disponibilidade).getTime() : 0;
-      const dateB = b.data_disponibilidade ? new Date(b.data_disponibilidade).getTime() : 0;
-      return dateB - dateA; // Descendente
-    });
+    const selectedYear = this.appContext.anoExercicio();
+    return [...this.budgets()]
+      .filter(b => new Date(b.data_disponibilidade).getFullYear() === selectedYear)
+      .sort((a, b) => {
+        const dateA = a.data_disponibilidade ? new Date(a.data_disponibilidade).getTime() : 0;
+        const dateB = b.data_disponibilidade ? new Date(b.data_disponibilidade).getTime() : 0;
+        return dateB - dateA; // Descendente
+      });
   });
   budgetsLoading = signal<boolean>(false);
   budgetsError = signal<string | null>(null);
@@ -308,7 +309,10 @@ export class ContractDetailsPageComponent {
   dbTransactions = signal<Transaction[]>([]);
   
   transactions = computed(() => {
-    return [...this.dbTransactions()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const selectedYear = this.appContext.anoExercicio();
+    return [...this.dbTransactions()]
+      .filter(t => new Date(t.date).getFullYear() === selectedYear)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   });
 
   transactionsLoading = signal<boolean>(false);
@@ -316,21 +320,24 @@ export class ContractDetailsPageComponent {
 
   lastSyncDate = signal<Date | null>(new Date());
   
-  // Controlador de sync SIGEF
-  sigefSyncing = signal<boolean>(false);
   sigefLastSync = signal<Map<string, Date>>(new Map());
 
-  // Calcula total engajado das dotações do contrato (considera todo o histórico)
+  // Calcula total engajado das dotações do contrato filtrado pelo ano selecionado
   budgetSummary = computed(() => {
+    const selectedYear = this.appContext.anoExercicio();
     const allBudgets = this.budgets();
     
-    // Para contratos, somamos todos os orçamentos vinculados, independente do ano
-    // Isso garante que o gestor veja o total empenhado/pago de toda a vida do contrato
-    const totalEmpenhado = allBudgets.reduce((sum, b) => sum + (b.total_empenhado || 0), 0);
-    const totalPago = allBudgets.reduce((sum, b) => sum + (b.total_pago || 0), 0);
-    const saldoDisponivel = allBudgets.reduce((sum, b) => sum + (b.saldo_disponivel || 0), 0);
+    // Filtra dotações pelo ano selecionado
+    const filteredBudgets = allBudgets.filter(b => {
+      const budgetDate = new Date(b.data_disponibilidade);
+      return budgetDate.getFullYear() === selectedYear;
+    });
     
-    console.log('[DEBUG] budgetSummary - complete contract history. Budgets:', allBudgets.length, 'totalEmpenhado:', totalEmpenhado);
+    const totalEmpenhado = filteredBudgets.reduce((sum, b) => sum + (b.total_empenhado || 0), 0);
+    const totalPago = filteredBudgets.reduce((sum, b) => sum + (b.total_pago || 0), 0);
+    const saldoDisponivel = filteredBudgets.reduce((sum, b) => sum + (b.saldo_disponivel || 0), 0);
+    
+    console.log('[DEBUG] budgetSummary - year:', selectedYear, 'Budgets:', filteredBudgets.length, 'totalEmpenhado:', totalEmpenhado);
     
     return { totalEmpenhado, totalPago, saldoDisponivel };
   });
@@ -558,7 +565,6 @@ export class ContractDetailsPageComponent {
       return;
     }
     
-    this.sigefSyncing.set(true);
     console.log('[ContractDetails] Atualizando dados SIGEF via Batch Sync...');
     
     try {
@@ -574,7 +580,7 @@ export class ContractDetailsPageComponent {
       });
 
       // 2. Executar a sincronização em lote (fila controlada com persistência automática no banco)
-      await this.sigefSyncService.syncBatch(tasks, this.contract()?.id);
+      await this.sigefSyncService.syncBatch(tasks, this.contract()?.id, true);
       
       // 3. Atualizar carimbos de data de sincronização local para cada dotação
       const lastSyncMap = new Map(this.sigefLastSync());
@@ -597,7 +603,6 @@ export class ContractDetailsPageComponent {
     } catch (err: any) {
       console.error('[ContractDetails] Erro na sincronização batch:', err);
     } finally {
-      this.sigefSyncing.set(false);
     }
   }
 
@@ -718,7 +723,6 @@ export class ContractDetailsPageComponent {
     }
 
     try {
-      this.sigefSyncing.set(true);
 
       for (const transaction of selectedObs) {
         const isSigef = transaction.id.startsWith('sigef-') || transaction.id.startsWith('cache-');
@@ -777,7 +781,6 @@ export class ContractDetailsPageComponent {
       console.error('[ContractDetails] Erro ao vincular OBs:', err);
       alert('Erro ao vincular Ordens Bancárias: ' + (err.message || 'Erro desconhecido'));
     } finally {
-      this.sigefSyncing.set(false);
     }
   }
 
@@ -790,7 +793,6 @@ export class ContractDetailsPageComponent {
     if (!transaction) return;
 
     try {
-      this.sigefSyncing.set(true); // Reusa o spinner para indicar processamento
 
       // Se for uma transação do SIGEF (id começa com 'sigef-' ou 'cache-'), 
       // precisamos primeiro persistir no banco 'transacoes' se não existir, 
@@ -854,7 +856,6 @@ export class ContractDetailsPageComponent {
       console.error('[ContractDetails] Erro ao vincular OB:', err);
       alert('Erro ao vincular Ordem Bancária: ' + (err.message || 'Erro desconhecido'));
     } finally {
-      this.sigefSyncing.set(false);
     }
   }
 
@@ -862,7 +863,6 @@ export class ContractDetailsPageComponent {
     if (!confirm('Deseja remover o vínculo desta OB com a parcela?')) return;
     
     try {
-      this.sigefSyncing.set(true);
 
       // Tenta remover vínculo pelo id ou pelo sigef_id
       const query = this.supabaseService.client
@@ -890,7 +890,6 @@ export class ContractDetailsPageComponent {
       console.error('[ContractDetails] Erro ao desvincular:', err);
       alert('Erro ao desvincular: ' + (err.message || 'Erro desconhecido'));
     } finally {
-      this.sigefSyncing.set(false);
     }
   }
   
@@ -924,7 +923,6 @@ export class ContractDetailsPageComponent {
       return;
     }
 
-    this.isForceSyncing.set(true);
     try {
       console.log(`[ForceSync] Iniciando sincronização em lote de ${tasks.length} NEs para contrato ${this.contractId()}`);
       
@@ -940,7 +938,6 @@ export class ContractDetailsPageComponent {
       console.error('[ForceSync] Erro:', err);
       alert('Erro na sincronização: ' + (err.message || 'Erro desconhecido'));
     } finally {
-      this.isForceSyncing.set(false);
     }
   }
 }

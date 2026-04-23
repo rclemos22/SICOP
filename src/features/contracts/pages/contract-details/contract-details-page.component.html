@@ -34,10 +34,10 @@
          </button>
          <button 
            (click)="refreshSigefData()"
-           [disabled]="sigefSyncing()"
+           [disabled]="sigefSyncService.isGlobalSyncing()"
            class="md:flex-none px-3 md:px-4 py-1.5 md:py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px]"
          >
-           @if (sigefSyncing()) {
+           @if (sigefSyncService.isGlobalSyncing()) {
              <span class="animate-spin material-symbols-outlined text-[16px] md:text-[18px]">sync</span>
              <span class="text-[10px] sm:text-[11px] leading-tight text-center uppercase font-bold mt-0.5">Sincronizando</span>
            } @else {
@@ -581,11 +581,11 @@
                     
                     <button 
                       (click)="forceSyncSigef()" 
-                      [disabled]="isForceSyncing()"
+                      [disabled]="sigefSyncService.isGlobalSyncing()"
                       class="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all shadow-sm"
-                      [class]="isForceSyncing() ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 cursor-wait' : 'bg-yellow-500 hover:bg-yellow-600 text-white'"
+                      [class]="sigefSyncService.isGlobalSyncing() ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 cursor-wait' : 'bg-yellow-500 hover:bg-yellow-600 text-white'"
                     >
-                      @if (isForceSyncing()) {
+                      @if (sigefSyncService.isGlobalSyncing()) {
                         <span class="animate-spin material-symbols-outlined text-[18px]">sync</span>
                         <span>Sincronizando...</span>
                       } @else {

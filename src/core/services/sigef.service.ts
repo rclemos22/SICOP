@@ -1,5 +1,6 @@
-import { Injectable, inject, signal, OnDestroy } from '@angular/core';
+import { Injectable, inject, signal, OnDestroy, forwardRef } from '@angular/core';
 import { environment } from '../../environments/environment';
+import { SigefCacheService, SIGEF_PAID_STATUSES } from './sigef-cache.service';
 
 export type ApiStatus = 'connected' | 'disconnected' | 'refreshing' | 'error';
 
@@ -114,6 +115,7 @@ export class SigefService implements OnDestroy {
   private refreshToken: string | null = null;
   private tokenExpiry: number | null = null;
   private refreshInterval: any;
+  private cacheService = inject(forwardRef(() => SigefCacheService));
   private authPromise: Promise<void> | null = null;
 
   // Semáforo para controle de concorrência global (apenas 1 requisição por vez na API do SIGEF)
@@ -378,22 +380,36 @@ export class SigefService implements OnDestroy {
                                errLower.includes('failed to fetch');
         
         if (isNetworkError && retries > 0) {
-          console.warn(`[SIGEF] Infra Error (${err.message}). Retrying in ${backoff}ms...`);
-          await new Promise(resolve => setTimeout(resolve, backoff));
-          return this.callApi(url, options, retries - 1, backoff * 2); // Dobra o tempo em erros de infra
+          const infraBackoff = backoff * (errLower.includes('tls') || errLower.includes('socket') ? 3 : 2);
+          console.warn(`[SIGEF] Infra Error (${err.message}). Retrying in ${infraBackoff}ms...`);
+          await new Promise(resolve => setTimeout(resolve, infraBackoff));
+          return this.callApi(url, options, retries - 1, infraBackoff * 1.5);
         }
         throw err;
       }
     });
   }
 
-  async getNotaEmpenho(ano: string, search?: string, page: number = 1, cdunidadegestora?: string): Promise<{ data: NotaEmpenho[], count: number, next: string | null, previous: string | null }> {
+  async getNotaEmpenho(ano: string, search?: string, page: number = 1, cdunidadegestora?: string, bypassMirror: boolean = false): Promise<SigefResponse<NotaEmpenho>> {
     this._loading.set(true);
     this._error.set(null);
 
     try {
       await this.ensureAuthenticated();
       
+      if (!bypassMirror && search && search.length >= 10 && page === 1) {
+        const cached = await this.cacheService.getRawMirror(search, 'NE');
+        if (cached) {
+          console.log(`[SIGEF RAW MIRROR] NE ${search} encontrada no espelho.`);
+          return {
+            data: [cached],
+            count: 1,
+            next: null,
+            previous: null
+          };
+        }
+      }
+
       const url = `${this.apiUrl}/sigef/notaempenho/`;
       let queryParams = `ano=${ano}&page=${page}`;
       if (search) {
@@ -418,6 +434,12 @@ export class SigefService implements OnDestroy {
       this._authenticated.set(true);
       this._apiStatus.set('connected');
       const data = await response.json();
+      
+      // Salvar cada item individualmente no espelho bruto (General Mirror)
+      if (data.results && data.results.length > 0) {
+        await this.cacheService.saveRawMirrorBulk(data.results, 'NE', 'nunotaempenho', 'ano');
+      }
+
       return {
         data: (data.results || []) as NotaEmpenho[],
         count: data.count || 0,
@@ -432,49 +454,62 @@ export class SigefService implements OnDestroy {
     }
   }
 
-  async getNotaEmpenhoByNumber(ano: string, numeroNE: string, cdunidadegestora?: string): Promise<NotaEmpenho | null> {
-    console.log('=== [SIGEF SERVICE] getNotaEmpenhoByNumber ===');
-    console.log('[SIGEF] Recebendo params - ano:', ano, 'numeroNE:', numeroNE, 'UG:', cdunidadegestora);
-    let page = 1;
-    while (true) {
-      console.log('[SIGEF] Verificando pagina:', page, 'com ano:', ano);
-      const result = await this.getNotaEmpenho(ano, undefined, page, undefined);
-      console.log('[SIGEF] Resultados nesta pagina:', result.data.length, 'Total:', result.count);
-      
-      const found = result.data.find(ne => 
-        ne.nunotaempenho === numeroNE && 
-        ne.cdunidadegestora === cdunidadegestora
-      );
-      
-      if (found) {
-        console.log('[SIGEF] NE encontrada na pagina', page, ':', found.nunotaempenho, 'UG:', found.cdunidadegestora);
-        return found;
+  async getNotaEmpenhoByNumber(ano: string, numeroNE: string, cdunidadegestora?: string, bypassMirror: boolean = false): Promise<NotaEmpenho | null> {
+    console.log('[SIGEF] Buscando NE específica via busca:', numeroNE, 'ano:', ano, 'bypassMirror:', bypassMirror);
+    
+    // Otimização: Usar search=numeroNE para evitar varredura de páginas
+    const result = await this.getNotaEmpenho(ano, numeroNE, 1, cdunidadegestora, bypassMirror);
+    
+    let found = result.data.find(ne => 
+      ne.nunotaempenho === numeroNE && 
+      (!cdunidadegestora || ne.cdunidadegestora === cdunidadegestora)
+    );
+
+    if (found) return found;
+
+    // Se não achou na busca direta (comportamento inconsistente da API às vezes), tenta scan limitado
+    if (result.count > result.data.length) {
+      let page = 2;
+      const MAX_SCAN = 5; // Máximo 5 páginas de scan para evitar sobrecarga
+      while (page <= MAX_SCAN) {
+        console.log(`[SIGEF] Scan Fallback - Pagina ${page}...`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Delay longo entre páginas de scan
+        const pResult = await this.getNotaEmpenho(ano, undefined, page, cdunidadegestora);
+        
+        found = pResult.data.find(ne => 
+          ne.nunotaempenho === numeroNE && 
+          (!cdunidadegestora || ne.cdunidadegestora === cdunidadegestora)
+        );
+        if (found) return found;
+        if (!pResult.next) break;
+        page++;
       }
-      
-      if (!result.next) {
-        console.log('[SIGEF] Fim da paginacao, NE nao encontrada para UG:', cdunidadegestora);
-        return null;
-      }
-      page++;
-      // Delay de cortesia para evitar bloqueio TLS
-      await new Promise(resolve => setTimeout(resolve, 800));
     }
+
+    return null;
   }
 
-  /**
-   * Busca todas as movimentações (inicial, reforços e anulações) relacionadas a um empenho.
-   */
-  async getNotaEmpenhoMovements(ano: string, numeroNE: string, cdunidadegestora: string): Promise<NotaEmpenho[]> {
-    console.log('=== [SIGEF SERVICE] getNotaEmpenhoMovements ===');
-    console.log('[SIGEF] Buscando movimentações - ano:', ano, 'numeroNE:', numeroNE, 'UG:', cdunidadegestora);
+  async getNotaEmpenhoMovements(ano: string, numeroNE: string, cdunidadegestora: string, bypassMirror: boolean = false): Promise<NotaEmpenho[]> {
+    console.log('=== [SIGEF SERVICE] getNotaEmpenhoMovements (GENERAL MIRROR) ===');
+    console.log('[SIGEF] Buscando movimentações - ano:', ano, 'numeroNE:', numeroNE, 'UG:', cdunidadegestora, 'bypassMirror:', bypassMirror);
     
+    // 1. Tentar carregar do Espelho Geral (General Mirror)
+    if (!bypassMirror) {
+      const cached = await this.cacheService.getNotaEmpenhoMovementsFromMirror(numeroNE);
+      if (cached && cached.length > 0) {
+        console.log(`[SIGEF RAW MIRROR] Encontrados ${cached.length} movimentos no espelho para NE ${numeroNE}`);
+        // Filtragem por UG apenas por segurança
+        return cached.filter(ne => ne.cdunidadegestora === cdunidadegestora) as NotaEmpenho[];
+      }
+    }
+
     const movements: NotaEmpenho[] = [];
     let page = 1;
     
     while (true) {
       try {
         // Usamos o numeroNE no search para a API filtrar registros relevantes
-        const result = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora);
+        const result = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora, bypassMirror);
         
         const filtered = result.data.filter(ne => 
           (ne.nunotaempenho === numeroNE || ne.nuneoriginal === numeroNE) && 
@@ -500,9 +535,27 @@ export class SigefService implements OnDestroy {
   /**
    * Consulta ordens bancárias filtradas por período.
    */
-  async getOrdemBancaria(datainicio: string, datafim: string, page: number = 1, nuordembancaria?: string, nunotaempenho?: string, cdunidadegestora?: string): Promise<SigefResponse<OrdemBancaria>> {
+  async getOrdemBancaria(datainicio: string, datafim: string, page: number = 1, nuordembancaria?: string, nunotaempenho?: string, cdunidadegestora?: string, bypassMirror: boolean = false): Promise<SigefResponse<OrdemBancaria>> {
     this._loading.set(true);
     this._error.set(null);
+
+    if (!bypassMirror && page === 1) {
+      if (nuordembancaria) {
+        const cachedItems = await this.cacheService.getRawMirrorList('OB', 'nuordembancaria', nuordembancaria);
+        if (cachedItems && cachedItems.length > 0) {
+          console.log(`[SIGEF RAW MIRROR] OB ${nuordembancaria} encontrada no espelho (${cachedItems.length} itens).`);
+          return { data: cachedItems, count: cachedItems.length, next: null, previous: null };
+        }
+      }
+      
+      if (nunotaempenho) {
+        const cachedList = await this.cacheService.getRawMirrorList('OB', 'nunotaempenho', nunotaempenho);
+        if (cachedList && cachedList.length > 0) {
+          console.log(`[SIGEF RAW MIRROR] OB_LIST para ${nunotaempenho} encontrada no espelho (${cachedList.length} itens).`);
+          return { data: cachedList, count: cachedList.length, next: null, previous: null };
+        }
+      }
+    }
 
     try {
       await this.ensureAuthenticated();
@@ -547,7 +600,17 @@ export class SigefService implements OnDestroy {
 
       const data = await response.json();
       console.log('[SIGEF OB] Response data:', JSON.stringify(data).substring(0, 500));
-      
+
+      // Salvar cada item individualmente no espelho bruto (General Mirror)
+      // Usamos identificador composto para não sobrescrever itens diferentes da mesma OB
+      if (data.results && data.results.length > 0) {
+        const itemsWithId = data.results.map((item: any) => ({
+          ...item,
+          _composite_id: `${item.nuordembancaria}-${item.cdunidadegestora}-${item.nudocumento || ''}`
+        }));
+        await this.cacheService.saveRawMirrorBulk(itemsWithId, 'OB', '_composite_id', undefined);
+      }
+
       return {
         data: (data.results || []) as OrdemBancaria[],
         count: data.count || 0,
@@ -572,74 +635,232 @@ export class SigefService implements OnDestroy {
 
   /**
    * Busca todas as ordens bancárias confirmadas vinculadas a uma lista de notas de empenho (original + reforços).
-   * Busca a partir do ano da NE até o ano atual, pois pagamentos podem ser efetuados em anos posteriores.
+   * IMPLEMENTAÇÃO OTIMIZADA COM ESPELHO:
+   * 1. Busca no cache local primeiro.
+   * 2. Busca na API apenas o período que pode ter novos dados (incremental).
    */
-  async getOrdemBancariaMovements(ano: string, numeroNEs: string[], cdunidadegestora: string, minDate?: string): Promise<OrdemBancaria[]> {
-    console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements ===', { ano, numeroNEs, ug: cdunidadegestora, minDate });
-    const allOBs: OrdemBancaria[] = [];
-    const MAX_PAGES = 50; // Com busca mensal, raramente passará de 1-2 páginas
-    const anoNE = parseInt(ano, 10);
-    const date = new Date();
-    const anoAtual = date.getFullYear();
-    const mesAtual = date.getMonth() + 1;
+  async getOrdemBancariaMovements(ano: string, numeroNEs: string[], cdunidadegestora: string, bypassMirror: boolean = false): Promise<OrdemBancaria[]> {
+    console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements (MIRROR OPTIMIZED) ===', { ano, numeroNEs, ug: cdunidadegestora, bypassMirror });
     
-    // Iterar sobre todas as NEs encontradas para este contrato/UG
+    const allOBs: OrdemBancaria[] = [];
+    const ugNum = parseInt(cdunidadegestora, 10);
+
     for (const neNumber of numeroNEs) {
       if (!neNumber) continue;
       const targetNE = neNumber.trim().toUpperCase();
-      console.log(`[SIGEF OB] Buscando OBs para NE: ${targetNE} na UG: ${cdunidadegestora}`);
       
+      // 1. Tentar carregar do espelho bruto (Raw Mirror)
+      if (!bypassMirror) {
+        const rawMirrorList = await this.cacheService.getRawMirrorList('OB', 'nunotaempenho', targetNE);
+        if (rawMirrorList && rawMirrorList.length > 0) {
+           console.log(`[SIGEF RAW MIRROR] Usando dados brutos do espelho para OB_LIST da NE ${targetNE} (${rawMirrorList.length} itens)`);
+           allOBs.push(...rawMirrorList);
+           continue; 
+        }
+      }
+
+      // 2. Tentar carregar o "espelho" processado (cache local legado)
+      const cachedOBs = await this.cacheService.getOrdensBancariasPorNe(ugNum, targetNE);
+      
+      // Mapear para o tipo OrdemBancaria da API
+      const mappedCached = cachedOBs.map(ob => ({
+        nuordembancaria: ob.nuordembancaria,
+        cdunidadegestora: ob.cdunidadegestora,
+        cdgestao: ob.cdgestao || null,
+        cdevento: ob.cdevento || null,
+        nudocumento: ob.nudocumento || null,
+        nunotaempenho: ob.nunotaempenho || null,
+        cdcredor: ob.cdcredor || null,
+        cdtipocredor: ob.cdtipocredor || null,
+        cdugfavorecida: ob.cdugfavorecida || null,
+        cdorgao: ob.cdorgao || null,
+        cdsubacao: ob.cdsubacao || null,
+        cdfuncao: ob.cdfuncao || null,
+        cdsubfuncao: ob.cdsubfuncao || null,
+        cdprograma: ob.cdprograma || null,
+        cdacao: ob.cdacao || null,
+        localizagasto: ob.localizagasto || null,
+        cdnaturezadespesa: ob.cdnaturezadespesa || null,
+        cdfonte: ob.cdfonte || null,
+        cdmodalidade: ob.cdmodalidade || null,
+        vltotal: ob.vltotal || null,
+        dtlancamento: ob.dtlancamento || null,
+        dtpagamento: ob.dtpagamento || null,
+        definalidade: ob.definalidade || null,
+        nuguiarecebimento: ob.nuguiarecebimento || null,
+        vlguiarecebimento: ob.vlguiarecebimento ? ob.vlguiarecebimento.toString() : null,
+        nunotalancamento: ob.nunotalancamento || null,
+        numns: ob.numns || null,
+        deobservacao: ob.deobservacao || null,
+        domicilio_origem: ob.domicilio_origem || null,
+        domicilio_destino: ob.domicilio_destino || null,
+        cdsituacaoordembancaria: ob.cdsituacaoordembancaria || null,
+        situacaopreparacaopagamento: ob.situacaopreparacaopagamento || null,
+        tipoordembancaria: ob.tipoordembancaria || null,
+        tipopreparacaopagamento: ob.tipopreparacaopagamento || null,
+        usuario_responsavel: ob.usuario_responsavel || null
+      } as OrdemBancaria));
+
+      allOBs.push(...mappedCached);
+
+      // 3. Determinar se precisamos buscar na API (Sincronização Incremental)
+      const anoNE = parseInt(ano, 10);
+      const anoAtual = new Date().getFullYear();
+
       for (let a = anoNE; a <= anoAtual; a++) {
-        // Pesquisar mês a mês para reduzir o tamanho do result set e evitar timeouts
-        for (let m = 1; m <= 12; m++) {
-          // Se for o ano atual, não pesquisa meses futuros
-          if (a === anoAtual && m > mesAtual) break;
-
-          const mesStr = m.toString().padStart(2, '0');
-          const lastDay = new Date(a, m, 0).getDate();
-          const datainicio = `${a}-${mesStr}-01`;
-          const datafim = `${a}-${mesStr}-${lastDay}`;
+        const datainicio = `${a}-01-01`;
+        const datafim = `${a}-12-31`;
+        
+        try {
+          const result = await this.getOrdemBancaria(datainicio, datafim, 1, undefined, targetNE, cdunidadegestora, bypassMirror);
           
-          let page = 1;
-          console.log(`[SIGEF OB] Consultando período: ${datainicio} a ${datafim} (NE: ${targetNE})`);
-
-          while (page <= MAX_PAGES) {
-            try {
-              const result = await this.getOrdemBancaria(datainicio, datafim, page, undefined, targetNE, cdunidadegestora);
-              
-              if (result.data.length > 0) {
-                const filteredMatches = result.data.filter(ob => (ob.nunotaempenho || '').trim().toUpperCase() === targetNE);
-                
-                if (filteredMatches.length > 0) {
-                  allOBs.push(...filteredMatches);
-                  console.log(`[SIGEF OB] ${targetNE} em ${mesStr}/${a}: Encontradas ${filteredMatches.length} OBs`);
-                }
-              }
-              
-              if (!result.next || result.data.length === 0) break;
-              page++;
-              await new Promise(resolve => setTimeout(resolve, 800));
-            } catch (err) {
-              console.warn(`[SIGEF OB] Erro na pág ${page} (${datainicio}). Retrying monthly chunk...`, err);
-              break; 
+          if (result.data.length > 0) {
+            const filteredMatches = result.data.filter(ob => (ob.nunotaempenho || '').trim().toUpperCase() === targetNE);
+            for (const apiOb of filteredMatches) {
+              const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
+              if (!alreadyHas) allOBs.push(apiOb);
             }
           }
-          // Pequeno respiro entre meses
-          await new Promise(resolve => setTimeout(resolve, 400));
+
+          let page = 2;
+          let nextUrl = result.next;
+          while (nextUrl && page <= 10) {
+             const nextResult = await this.getOrdemBancaria(datainicio, datafim, page, undefined, targetNE, cdunidadegestora, bypassMirror);
+             const nextMatches = nextResult.data.filter(ob => (ob.nunotaempenho || '').trim().toUpperCase() === targetNE);
+             for (const apiOb of nextMatches) {
+                const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
+                if (!alreadyHas) allOBs.push(apiOb);
+             }
+             nextUrl = nextResult.next;
+             page++;
+          }
+        } catch (err) {
+          console.warn(`[SIGEF OB] Erro no ano ${a} para NE ${targetNE}. Pulando...`, err);
         }
       }
     }
     
-    // Deduplicação final por número de OB e documento para maior segurança
+    // Deduplicação final
     const uniqueMap = new Map<string, OrdemBancaria>();
     allOBs.forEach(ob => {
       const key = `${ob.nuordembancaria}-${ob.cdunidadegestora}-${ob.nudocumento || ''}-${ob.vltotal}`;
       uniqueMap.set(key, ob);
     });
     
-    const finalResult = Array.from(uniqueMap.values());
-    console.log(`[SIGEF OB] Sincronização concluída. Total único: ${finalResult.length} OBs`);
-    return finalResult;
+    return Array.from(uniqueMap.values());
+  }
+
+  /**
+   * Busca uma Ordem Bancária específica pelo número, usando lógica de espelho (Cache-First).
+   */
+  async getOrdemBancariaByNumberWithMirror(nuOB: string, ug: string): Promise<OrdemBancaria | null> {
+    const ugNum = parseInt(ug, 10);
+    const cleanOB = nuOB.trim().toUpperCase();
+
+    // 1. Tentar o espelho (Cache)
+    const cached = await this.cacheService.getOrdemBancaria(cleanOB, ugNum);
+    if (cached) {
+      console.log(`[SIGEF MIRROR] OB ${cleanOB} encontrada no espelho.`);
+      return this.mapCacheToApiOb(cached);
+    }
+
+    // 2. Se não encontrar, busca na API (Pesquisa Direta)
+    console.log(`[SIGEF MIRROR] OB ${cleanOB} não encontrada no espelho. Buscando na API...`);
+    const ano = cleanOB.substring(0, 4); // Assume que os 4 primeiros dígitos são o ano (padrão 2026OB...)
+    const datainicio = `${ano}-01-01`;
+    const datafim = `${ano}-12-31`;
+
+    try {
+      const result = await this.getOrdemBancaria(datainicio, datafim, 1, cleanOB, undefined, ug);
+      const found = result.data.find(ob => 
+        (ob.nuordembancaria?.toUpperCase() === cleanOB || ob.nudocumento?.toUpperCase() === cleanOB) && 
+        Number(ob.cdunidadegestora) === ugNum
+      );
+
+      if (found) {
+        // Salva no espelho para futuras consultas
+        await this.cacheService.saveOrdemBancaria(this.mapApiObToCache(found, ugNum));
+        return found;
+      }
+    } catch (err) {
+      console.error(`[SIGEF MIRROR] Erro ao buscar OB ${cleanOB} na API:`, err);
+    }
+
+    return null;
+  }
+
+  private mapCacheToApiOb(ob: any): OrdemBancaria {
+    return {
+      nuordembancaria: ob.nuordembancaria,
+      cdunidadegestora: ob.cdunidadegestora,
+      cdgestao: ob.cdgestao || null,
+      cdevento: ob.cdevento || null,
+      nudocumento: ob.nudocumento || null,
+      nunotaempenho: ob.nunotaempenho || null,
+      cdcredor: ob.cdcredor || null,
+      cdtipocredor: ob.cdtipocredor || null,
+      cdugfavorecida: ob.cdugfavorecida || null,
+      cdorgao: ob.cdorgao || null,
+      cdsubacao: ob.cdsubacao || null,
+      cdfuncao: ob.cdfuncao || null,
+      cdsubfuncao: ob.cdsubfuncao || null,
+      cdprograma: ob.cdprograma || null,
+      cdacao: ob.cdacao || null,
+      localizagasto: ob.localizagasto || null,
+      cdnaturezadespesa: ob.cdnaturezadespesa || null,
+      cdfonte: ob.cdfonte || null,
+      cdmodalidade: ob.cdmodalidade || null,
+      vltotal: ob.vltotal || null,
+      dtlancamento: ob.dtlancamento || null,
+      dtpagamento: ob.dtpagamento || null,
+      definalidade: ob.definalidade || null,
+      nuguiarecebimento: ob.nuguiarecebimento || null,
+      vlguiarecebimento: ob.vlguiarecebimento ? ob.vlguiarecebimento.toString() : null,
+      nunotalancamento: ob.nunotalancamento || null,
+      numns: ob.numns || null,
+      deobservacao: ob.deobservacao || null,
+      domicilio_origem: ob.domicilio_origem || null,
+      domicilio_destino: ob.domicilio_destino || null,
+      cdsituacaoordembancaria: ob.cdsituacaoordembancaria || null,
+      situacaopreparacaopagamento: ob.situacaopreparacaopagamento || null,
+      tipoordembancaria: ob.tipoordembancaria || null,
+      tipopreparacaopagamento: ob.tipopreparacaopagamento || null,
+      usuario_responsavel: ob.usuario_responsavel || null
+    };
+  }
+
+  private mapApiObToCache(ob: OrdemBancaria, ug: number): any {
+    return {
+      nuordembancaria: ob.nuordembancaria || '',
+      cdunidadegestora: ug,
+      nunotaempenho: ob.nunotaempenho || undefined,
+      cdgestao: ob.cdgestao || undefined,
+      cdevento: ob.cdevento || undefined,
+      nudocumento: ob.nudocumento || undefined,
+      cdcredor: ob.cdcredor || undefined,
+      cdtipocredor: ob.cdtipocredor || undefined,
+      cdugfavorecida: ob.cdugfavorecida || undefined,
+      cdorgao: ob.cdorgao || undefined,
+      cdsubacao: ob.cdsubacao || undefined,
+      cdfuncao: ob.cdfuncao || undefined,
+      cdsubfuncao: ob.cdsubfuncao || undefined,
+      cdprograma: ob.cdprograma || undefined,
+      cdacao: ob.cdacao || undefined,
+      localizagasto: ob.localizagasto || undefined,
+      cdnaturezadespesa: ob.cdnaturezadespesa || undefined,
+      cdfonte: ob.cdfonte || undefined,
+      cdmodalidade: ob.cdmodalidade || undefined,
+      vltotal: ob.vltotal || 0,
+      dtlancamento: ob.dtlancamento || undefined,
+      dtpagamento: ob.dtpagamento || undefined,
+      cdsituacaoordembancaria: ob.cdsituacaoordembancaria || undefined,
+      situacaopreparacaopagamento: ob.situacaopreparacaopagamento || undefined,
+      tipoordembancaria: ob.tipoordembancaria || undefined,
+      tipopreparacaopagamento: ob.tipopreparacaopagamento || undefined,
+      deobservacao: ob.deobservacao || undefined,
+      definalidade: ob.definalidade || undefined,
+      usuario_responsavel: ob.usuario_responsavel || undefined
+    };
   }
 
 

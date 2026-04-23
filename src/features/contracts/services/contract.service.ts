@@ -1,4 +1,4 @@
-import { Injectable, signal, inject } from '@angular/core';
+import { Injectable, inject, signal, effect } from '@angular/core';
 import { AppContextService } from '../../../core/services/app-context.service';
 
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
@@ -24,6 +24,7 @@ import { Result, ok, fail } from '../../../shared/models/result.model';
 export class ContractService {
   private supabaseService = inject(SupabaseService);
   private errorHandler = inject(ErrorHandlerService);
+  private appContext = inject(AppContextService);
 
   // ── Estado Interno ──────────────────────────────────
   private _contracts = signal<Contract[]>([]);
@@ -39,16 +40,19 @@ export class ContractService {
   readonly error = this._error.asReadonly();
 
   constructor() {
-    this.loadContracts();
+    // Reagir a mudanças no ano de exercício global
+    effect(() => {
+      const year = this.appContext.anoExercicio();
+      this.loadContracts(year);
+    });
   }
 
   // ── Data Fetching ───────────────────────────────────────────────────────
 
-  private async fetchContracts() {
+  private async fetchContracts(year: number) {
     try {
       return await this.supabaseService.client
-        .from('vw_contratos_vigencia')
-        .select('*');
+        .rpc('rpc_contratos_por_ano', { p_ano: year });
     } catch (err) {
       console.warn('Erro na query de contratos:', err);
       return { data: [], error: null };
@@ -82,7 +86,7 @@ export class ContractService {
     }
   }
 
-  async loadContracts(): Promise<void> {
+  async loadContracts(year?: number): Promise<void> {
     this._loading.set(true);
     this._error.set(null);
 
@@ -90,7 +94,8 @@ export class ContractService {
       let rawContracts: any[] = [];
       let aditivosMap = new Map<string, Aditivo[]>();
 
-      const contractsResult = await this.fetchContracts();
+      const targetYear = year || this.appContext.anoExercicio();
+      const contractsResult = await this.fetchContracts(targetYear);
       rawContracts = contractsResult.data || [];
 
       aditivosMap = await this.fetchAllAditivos();
