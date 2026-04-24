@@ -61,25 +61,39 @@ export class SigefSyncService {
     return { current: idx + 1, total: queue.length, task: queue[idx] };
   });
 
-  private autoSyncInterval: any;
+  private autoSyncTimer: any;
 
   constructor() {
     // Sincronização automática: primeiro ciclo após 2 min, depois a cada 10 min
     setTimeout(() => {
-      this.syncAllContractsFinance(false, this.appContext.anoExercicio());
-      this.startAutomaticSync();
+      this.runAutomaticSyncCycle();
     }, 120000);
   }
 
-  startAutomaticSync() {
-    if (this.autoSyncInterval) return;
-    this.autoSyncInterval = setInterval(() => {
+  private async runAutomaticSyncCycle() {
+    try {
       if (!this.isSyncing()) {
         const selectedYear = this.appContext.anoExercicio();
         console.log(`[SIGEF SYNC] Ciclo automático: exercício ${selectedYear}`);
-        this.syncAllContractsFinance(false, selectedYear);
+        await this.syncAllContractsFinance(false, selectedYear);
       }
-    }, 10 * 60 * 1000);
+    } catch (err) {
+      console.error('[SIGEF SYNC] Erro no ciclo automático:', err);
+    } finally {
+      // Agenda o próximo ciclo para 10 minutos APÓS a finalização deste
+      if (this.autoSyncTimer) clearTimeout(this.autoSyncTimer);
+      this.autoSyncTimer = setTimeout(() => {
+        this.runAutomaticSyncCycle();
+      }, 10 * 60 * 1000);
+    }
+  }
+
+  startAutomaticSync() {
+    if (!this.autoSyncTimer) {
+      this.autoSyncTimer = setTimeout(() => {
+        this.runAutomaticSyncCycle();
+      }, 10 * 60 * 1000);
+    }
   }
 
   // ─── API pública principal ───────────────────────────────────
@@ -342,9 +356,12 @@ export class SigefSyncService {
             datainicio, datafim, page, undefined, targetNE, ugStr, forceSync
           );
 
-          const filtered = result.data.filter(ob =>
-            (ob.nunotaempenho || '').trim().toUpperCase() === targetNE
-          );
+          const filtered = result.data.filter(ob => {
+            const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
+            const isMesUm = (ob.dtlancamento && ob.dtlancamento.split('-')[1] === '01') || 
+                            (ob.dtpagamento && ob.dtpagamento.split('-')[1] === '01');
+            return isTargetNe && !isMesUm;
+          });
 
           // Incrementalmente: só salva as que ainda não existem
           const newObs = forceSync

@@ -601,6 +601,15 @@ export class SigefService implements OnDestroy {
       const data = await response.json();
       console.log('[SIGEF OB] Response data:', JSON.stringify(data).substring(0, 500));
 
+      // Remover pagamentos do mês 01 (Janeiro) - não podem ocorrer antes do empenho inicial
+      if (data.results) {
+        data.results = data.results.filter((ob: any) => {
+          const isMesUm = (ob.dtlancamento && ob.dtlancamento.split('-')[1] === '01') || 
+                          (ob.dtpagamento && ob.dtpagamento.split('-')[1] === '01');
+          return !isMesUm;
+        });
+      }
+
       // Salvar cada item individualmente no espelho bruto (General Mirror)
       // Usamos identificador composto para não sobrescrever itens diferentes da mesma OB
       if (data.results && data.results.length > 0) {
@@ -715,7 +724,11 @@ export class SigefService implements OnDestroy {
           const result = await this.getOrdemBancaria(datainicio, datafim, 1, undefined, targetNE, cdunidadegestora, bypassMirror);
           
           if (result.data.length > 0) {
-            const filteredMatches = result.data.filter(ob => (ob.nunotaempenho || '').trim().toUpperCase() === targetNE);
+            const filteredMatches = result.data.filter(ob => {
+              const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
+              const isMesUm = (ob.dtlancamento && ob.dtlancamento.split('-')[1] === '01') || (ob.dtpagamento && ob.dtpagamento.split('-')[1] === '01');
+              return isTargetNe && !isMesUm;
+            });
             for (const apiOb of filteredMatches) {
               const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
               if (!alreadyHas) allOBs.push(apiOb);
@@ -726,7 +739,11 @@ export class SigefService implements OnDestroy {
           let nextUrl = result.next;
           while (nextUrl && page <= 10) {
              const nextResult = await this.getOrdemBancaria(datainicio, datafim, page, undefined, targetNE, cdunidadegestora, bypassMirror);
-             const nextMatches = nextResult.data.filter(ob => (ob.nunotaempenho || '').trim().toUpperCase() === targetNE);
+             const nextMatches = nextResult.data.filter(ob => {
+               const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
+               const isMesUm = (ob.dtlancamento && ob.dtlancamento.split('-')[1] === '01') || (ob.dtpagamento && ob.dtpagamento.split('-')[1] === '01');
+               return isTargetNe && !isMesUm;
+             });
              for (const apiOb of nextMatches) {
                 const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
                 if (!alreadyHas) allOBs.push(apiOb);

@@ -195,8 +195,91 @@
         <p class="mt-2 text-[10px] text-gray-400 font-medium italic">Compromissos pendentes de liquidação</p>
       </div>
     </div>
+    
+    <!-- Distribution by Type (Material vs Serviços) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <!-- Materiais -->
+      <div 
+        (click)="navigate.emit('contracts')"
+        class="bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-6 flex flex-col group hover:border-blue-500/30 hover:shadow-md transition-all cursor-pointer"
+      >
+        <div class="flex justify-between items-center mb-6">
+          <div class="flex items-center gap-4">
+             <div class="p-3.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors rounded-lg">
+               <span class="material-symbols-outlined text-[28px]">inventory_2</span>
+             </div>
+             <div>
+               <h3 class="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Materiais</h3>
+               <p class="text-2xl font-black text-gray-900 dark:text-white">{{ expensesByType().materialCount }} <span class="text-xs font-bold text-gray-400">Contratos</span></p>
+             </div>
+          </div>
+          <span class="text-sm font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 border border-blue-100 dark:border-blue-800 rounded-md">
+             {{ expensesByType().totalCount > 0 ? ((expensesByType().materialCount / expensesByType().totalCount) * 100 | number:'1.0-0') : 0 }}%
+          </span>
+        </div>
+        
+        <div class="flex-1 flex flex-col justify-end">
+          <div class="flex justify-between items-end mb-1.5">
+             <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Evolução Financeira</span>
+             <span class="text-xs font-black text-blue-600">{{ expensesByType().materialPercent | number:'1.0-1' }}% Pago</span>
+          </div>
+          <div class="w-full bg-gray-100 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden mb-3">
+             <div class="bg-blue-500 h-full rounded-full transition-all duration-1000" [style.width.%]="expensesByType().materialPercent"></div>
+          </div>
+          <div class="flex justify-between items-center mt-1">
+             <div class="flex flex-col">
+               <span class="text-[9px] text-gray-400 uppercase tracking-widest">Previsto (Ano)</span>
+               <span class="text-xs font-black text-gray-600 dark:text-gray-300">{{ expensesByType().materialPlanejado | currency:'BRL' }}</span>
+             </div>
+             <div class="flex flex-col text-right">
+               <span class="text-[9px] text-gray-400 uppercase tracking-widest">Liquidado</span>
+               <span class="text-xs font-black text-emerald-600 dark:text-emerald-400">{{ expensesByType().materialPago | currency:'BRL' }}</span>
+             </div>
+          </div>
+        </div>
+      </div>
 
-    <!-- Middle Section: Charts -->
+      <!-- Serviços -->
+      <div 
+        (click)="navigate.emit('contracts')"
+        class="bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-6 flex flex-col group hover:border-indigo-500/30 hover:shadow-md transition-all cursor-pointer"
+      >
+        <div class="flex justify-between items-center mb-6">
+          <div class="flex items-center gap-4">
+             <div class="p-3.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors rounded-lg">
+               <span class="material-symbols-outlined text-[28px]">engineering</span>
+             </div>
+             <div>
+               <h3 class="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Serviços</h3>
+               <p class="text-2xl font-black text-gray-900 dark:text-white">{{ expensesByType().serviceCount }} <span class="text-xs font-bold text-gray-400">Contratos</span></p>
+             </div>
+          </div>
+          <span class="text-sm font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 border border-indigo-100 dark:border-indigo-800 rounded-md">
+             {{ expensesByType().totalCount > 0 ? ((expensesByType().serviceCount / expensesByType().totalCount) * 100 | number:'1.0-0') : 0 }}%
+          </span>
+        </div>
+        
+        <div class="flex-1 flex flex-col justify-end">
+          <div class="flex justify-between items-end mb-1.5">
+             <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Evolução Financeira</span>
+             <span class="text-xs font-black text-indigo-600">{{ expensesByType().servicePercent | number:'1.0-1' }}% Pago</span>
+          </div>
+          <div class="w-full bg-gray-100 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden mb-3">
+             <div class="bg-indigo-500 h-full rounded-full transition-all duration-1000" [style.width.%]="expensesByType().servicePercent"></div>
+          </div>
+          <div class="flex justify-between items-center mt-1">
+             <div class="flex flex-col">
+               <span class="text-[9px] text-gray-400 uppercase tracking-widest">Previsto (Ano)</span>
+               <span class="text-xs font-black text-gray-600 dark:text-gray-300">{{ expensesByType().servicePlanejado | currency:'BRL' }}</span>
+             </div>
+             <div class="flex flex-col text-right">
+               <span class="text-[9px] text-gray-400 uppercase tracking-widest">Liquidado</span>
+               <span class="text-xs font-black text-emerald-600 dark:text-emerald-400">{{ expensesByType().servicePago | currency:'BRL' }}</span>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       
       <!-- Monthly Execution (Bar Chart) -->

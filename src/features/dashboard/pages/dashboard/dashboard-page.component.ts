@@ -56,8 +56,6 @@ export class DashboardPageComponent implements OnInit {
     this.loadAllData();
   }
 
-  // D3 Container
-  chartContainer = viewChild<ElementRef>('chart');
 
   ngOnInit() {
     this.loadAllData();
@@ -137,13 +135,27 @@ export class DashboardPageComponent implements OnInit {
   // 1. Contracts Filtered by Selected Year
   filteredContracts = computed(() => {
     const selectedYear = this.appContext.anoExercicio();
+    const transactions = this.financialService.transactions();
     const inicioAno = new Date(selectedYear, 0, 1);
     const fimAno = new Date(selectedYear, 11, 31);
+
+    // Identify which contracts had liquidations in the selected year (or from this year's budget)
+    const contractsWithPaymentsThisYear = new Set(
+      transactions
+        .filter(t => {
+          const isFromCurrentBudget = t.commitment_id ? t.commitment_id.startsWith(selectedYear.toString()) : new Date(t.date).getFullYear() === selectedYear;
+          return isFromCurrentBudget && t.type === TransactionType.LIQUIDATION;
+        })
+        .map(t => t.contract_id)
+    );
 
     return this.contractService.contracts().filter(c => {
       const start = c.data_inicio;
       const end = c.data_fim_efetiva || c.data_fim;
-      return (start <= fimAno) && (end >= inicioAno);
+      const isActiveInYear = (start <= fimAno) && (end >= inicioAno);
+      const hasPaymentsThisYear = contractsWithPaymentsThisYear.has(c.id);
+      
+      return isActiveInYear || hasPaymentsThisYear;
     });
   });
 
@@ -277,10 +289,10 @@ export class DashboardPageComponent implements OnInit {
         }
       }
 
-      // 2. Calculate Paid for current year
+      // 2. Calculate Paid for current year's budget
       const paidTotal = transactions
         .filter(t => t.contract_id === c.id && t.type === TransactionType.LIQUIDATION)
-        .filter(t => new Date(t.date).getFullYear() === selectedYear)
+        .filter(t => t.commitment_id ? t.commitment_id.startsWith(selectedYear.toString()) : new Date(t.date).getFullYear() === selectedYear)
         .reduce((sum, t) => sum + t.amount, 0);
 
       return {
@@ -306,13 +318,67 @@ export class DashboardPageComponent implements OnInit {
       .reduce((acc, c) => acc + (c.valor_anual || 0), 0);
   });
 
+  // Cross expenses Material vs Servicos
+  expensesByType = computed(() => {
+    const contracts = this.filteredContracts();
+    const transactions = this.financialService.transactions();
+    const selectedYear = this.appContext.anoExercicio();
+    
+    let materialCount = 0;
+    let serviceCount = 0;
+    let materialPlanejado = 0;
+    let servicePlanejado = 0;
+    let materialPago = 0;
+    let servicePago = 0;
+
+    // Filter payments for the current year's budget (Restos a pagar included)
+    const liquidationsThisYear = transactions.filter(t => {
+      const isFromCurrentBudget = t.commitment_id ? t.commitment_id.startsWith(selectedYear.toString()) : new Date(t.date).getFullYear() === selectedYear;
+      return isFromCurrentBudget && t.type === TransactionType.LIQUIDATION;
+    });
+
+    contracts.forEach(c => {
+      const tipo = c.tipo?.toLowerCase() || '';
+      const isMaterial = tipo === 'material';
+      const isServico = tipo === 'serviço' || tipo === 'servico';
+      const isVigente = c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO;
+      
+      const paidForContract = liquidationsThisYear
+        .filter(t => t.contract_id === c.id)
+        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+      if (isMaterial) {
+        materialCount++;
+        if (isVigente) materialPlanejado += (c.valor_anual || 0);
+        materialPago += paidForContract;
+      } else if (isServico) {
+        serviceCount++;
+        if (isVigente) servicePlanejado += (c.valor_anual || 0);
+        servicePago += paidForContract;
+      }
+    });
+
+    return {
+      materialCount,
+      serviceCount,
+      materialPlanejado,
+      servicePlanejado,
+      materialPago,
+      servicePago,
+      materialPercent: materialPlanejado > 0 ? (materialPago / materialPlanejado) * 100 : 0,
+      servicePercent: servicePlanejado > 0 ? (servicePago / servicePlanejado) * 100 : 0,
+      totalCount: materialCount + serviceCount
+    };
+  });
+
+
   // Total Committed (Empenhado Real do SIGEF - baseado nas transações filtradas por ano)
   totalCommittedValue = computed(() => {
     const selectedYear = this.appContext.anoExercicio();
     return this.financialService.transactions()
       .filter(t => {
-        const d = new Date(t.date);
-        return d.getFullYear() === selectedYear && (
+        const isFromCurrentBudget = t.commitment_id ? t.commitment_id.startsWith(selectedYear.toString()) : new Date(t.date).getFullYear() === selectedYear;
+        return isFromCurrentBudget && (
           t.type === TransactionType.COMMITMENT || 
           t.type === TransactionType.REINFORCEMENT || 
           t.type === TransactionType.CANCELLATION
@@ -330,8 +396,8 @@ export class DashboardPageComponent implements OnInit {
     const selectedYear = this.appContext.anoExercicio();
     return this.financialService.transactions()
       .filter(t => {
-        const d = new Date(t.date);
-        return d.getFullYear() === selectedYear && t.type === TransactionType.LIQUIDATION;
+        const isFromCurrentBudget = t.commitment_id ? t.commitment_id.startsWith(selectedYear.toString()) : new Date(t.date).getFullYear() === selectedYear;
+        return isFromCurrentBudget && t.type === TransactionType.LIQUIDATION;
       })
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   });
@@ -465,14 +531,15 @@ export class DashboardPageComponent implements OnInit {
     const budgets = this.budgetService.dotacoes();
 
     const totalBudget = budgets.reduce((acc, b) => acc + b.valor_dotacao, 0);
-    const totalUsed = budgets.reduce((acc, b) => acc + (b.total_empenhado || 0), 0);
+    // Utiliza o motor de cálculo corrigido para o ano orçamentário (Restos a Pagar)
+    const totalUsed = this.totalCommittedValue();
 
     const percentageUsed = totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0;
 
     return {
       totalBudget,
       totalUsed,
-      available: totalBudget - totalUsed,
+      available: Math.max(0, totalBudget - totalUsed),
       percentageUsed
     };
   });
@@ -483,15 +550,6 @@ export class DashboardPageComponent implements OnInit {
   });
 
   constructor() {
-    // Reactively render budget chart when metrics change
-    effect(() => {
-      const metrics = this.budgetMetrics();
-      const container = this.chartContainer()?.nativeElement;
-      if (container) {
-        this.renderDonutChart(container, metrics);
-      }
-    });
-
     // Reactively render status chart when contracts change
     effect(() => {
       const statusData = this.contractsByStatus();
@@ -527,107 +585,6 @@ export class DashboardPageComponent implements OnInit {
         this.renderContractComparisonChart(container, data);
       }
     });
-  }
-
-  private renderDonutChart(container: HTMLElement, metrics: any) {
-    // Clear previous chart
-    d3.select(container).selectAll('*').remove();
-
-    // Create Tooltip Div
-    const tooltip = d3.select(container)
-      .append('div')
-      .attr('class', 'absolute z-10 hidden bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg pointer-events-none transition-opacity duration-200 opacity-0')
-      .style('opacity', 0); // Start hidden
-
-    const width = 220;
-    const height = 220;
-    const margin = 20;
-    const radius = Math.min(width, height) / 2 - margin;
-
-    const svg = d3.select(container)
-      .append('svg')
-      .attr('width', width)
-      .attr('height', height)
-      .append('g')
-      .attr('transform', `translate(${width / 2},${height / 2})`);
-
-    // Data for D3
-    const data = {
-      Used: metrics.totalUsed,
-      Available: metrics.available
-    };
-
-    // Currency Formatter
-    const currencyFormatter = new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
-
-    // Color Palette
-    const color = d3.scaleOrdinal()
-      .domain(['Used', 'Available'])
-      .range(['#004B85', '#E5E7EB']);
-
-    const pie = d3.pie<any>()
-      .value((d: any) => d[1])
-      .sort(null);
-
-    const data_ready = pie(Object.entries(data));
-
-    const arc = d3.arc()
-      .innerRadius(radius * 0.65)
-      .outerRadius(radius);
-
-    const arcHover = d3.arc()
-      .innerRadius(radius * 0.65)
-      .outerRadius(radius * 1.05);
-
-    svg.selectAll('allSlices')
-      .data(data_ready)
-      .join('path')
-      .attr('d', arc as any)
-      .attr('fill', (d: any) => color(d.data[0]) as string)
-      .attr('stroke', 'white')
-      .style('stroke-width', '2px')
-      .style('cursor', 'pointer')
-      .style('opacity', 0.9)
-      .on('mouseover', function (event, d: any) {
-        d3.select(this).transition().duration(200).attr('d', arcHover as any);
-        const key = d.data[0];
-        const value = d.data[1];
-        const label = key === 'Used' ? 'Empenhado' : 'Disponível';
-        tooltip.html(`
-          <span class="font-bold block mb-0.5 text-gray-300 uppercase text-[10px]">${label}</span>
-          <span class="text-sm font-semibold">${currencyFormatter.format(value)}</span>
-        `)
-          .style('opacity', 1)
-          .classed('hidden', false);
-      })
-      .on('mousemove', function (event) {
-        const [x, y] = d3.pointer(event, container);
-        tooltip
-          .style('left', `${x + 15}px`)
-          .style('top', `${y + 15}px`);
-      })
-      .on('mouseout', function (event, d) {
-        d3.select(this).transition().duration(200).attr('d', arc as any);
-        tooltip.style('opacity', 0).classed('hidden', true);
-      });
-
-    svg.append("text")
-      .attr("text-anchor", "middle")
-      .attr("dy", "-0.2em")
-      .style("font-size", "24px")
-      .style("font-weight", "bold")
-      .style("fill", "#004B85")
-      .text(`${metrics.percentageUsed.toFixed(1)}%`);
-
-    svg.append("text")
-      .attr("text-anchor", "middle")
-      .attr("dy", "1.2em")
-      .style("font-size", "12px")
-      .style("fill", "#6B7280")
-      .text(`Executado`);
   }
 
   private renderStatusChart(container: HTMLElement, data: { vigentes: number; finalizando: number; rescindidos: number; encerrados: number; total: number }) {
