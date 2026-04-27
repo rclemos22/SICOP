@@ -421,9 +421,7 @@ export class SigefSyncService {
 
           const filtered = result.data.filter(ob => {
             const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-            const isMesUm    = (ob.dtlancamento && ob.dtlancamento.split('-')[1] === '01') ||
-                               (ob.dtpagamento  && ob.dtpagamento.split('-')[1]  === '01');
-            return isTargetNe && !isMesUm;
+            return isTargetNe;
           });
 
           const newObs = forceSync

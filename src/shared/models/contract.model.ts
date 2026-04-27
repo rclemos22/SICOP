@@ -29,6 +29,8 @@ export interface Aditivo {
   data_assinatura?: Date;
   nova_vigencia?: Date;
   valor_aditivo?: number;
+  novo_valor_mensal?: number;
+  data_inicio_novo?: Date;
 }
 
 

@@ -40,7 +40,9 @@ export class AditivoFormComponent implements OnInit {
       tipo_id: ['', Validators.required],
       data_assinatura: [new Date().toISOString().split('T')[0], Validators.required],
       nova_vigencia: [''],
-      valor_aditivo: ['', [CurrencyUtils.currencyValidator(0)]]
+      valor_aditivo: ['', [CurrencyUtils.currencyValidator(0)]],
+      novo_valor_mensal: ['', [CurrencyUtils.currencyValidator(0)]],
+      data_inicio_novo: ['']
     });
   }
 
@@ -54,7 +56,9 @@ export class AditivoFormComponent implements OnInit {
         tipo_id: aditivoData.tipo_id || '',
         data_assinatura: aditivoData.data_assinatura ? new Date(aditivoData.data_assinatura).toISOString().split('T')[0] : '',
         nova_vigencia: aditivoData.nova_vigencia ? new Date(aditivoData.nova_vigencia).toISOString().split('T')[0] : '',
-        valor_aditivo: CurrencyUtils.formatBRL(aditivoData.valor_aditivo)
+        valor_aditivo: CurrencyUtils.formatBRL(aditivoData.valor_aditivo),
+        novo_valor_mensal: CurrencyUtils.formatBRL(aditivoData.novo_valor_mensal),
+        data_inicio_novo: aditivoData.data_inicio_novo ? new Date(aditivoData.data_inicio_novo).toISOString().split('T')[0] : ''
       });
     } else {
       // Preencher o campo numero_contrato automaticamente
@@ -87,6 +91,13 @@ export class AditivoFormComponent implements OnInit {
     this.aditivoForm.get('valor_aditivo')?.setValue(masked, { emitEvent: false });
   }
 
+  onNovoValorMensalInput(event: any) {
+    const input = event.target as HTMLInputElement;
+    const masked = CurrencyUtils.applyMask(input.value);
+    input.value = masked;
+    this.aditivoForm.get('novo_valor_mensal')?.setValue(masked, { emitEvent: false });
+  }
+
   get f() { return this.aditivoForm.controls; }
 
   isAditivoDePrazo(): boolean {
@@ -117,7 +128,9 @@ export class AditivoFormComponent implements OnInit {
             tipo_id: formData.tipo_id,
             data_assinatura: new Date(formData.data_assinatura),
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
-            valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null
+            valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null,
+            novo_valor_mensal: CurrencyUtils.parseBRL(formData.novo_valor_mensal) || null,
+            data_inicio_novo: formData.data_inicio_novo ? new Date(formData.data_inicio_novo) : null
           };
           
           console.log('Updating aditivo:', formData.id, updateData);
@@ -140,7 +153,9 @@ export class AditivoFormComponent implements OnInit {
             tipo_id: formData.tipo_id,
             data_assinatura: new Date(formData.data_assinatura),
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
-            valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null
+            valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null,
+            novo_valor_mensal: CurrencyUtils.parseBRL(formData.novo_valor_mensal) || null,
+            data_inicio_novo: formData.data_inicio_novo ? new Date(formData.data_inicio_novo) : null
           };
           
           console.log('Creating aditivo with contract_id:', this.contractId());

@@ -32,6 +32,7 @@ interface PaymentSchedule {
   status: 'PAID' | 'OPEN' | 'OVERDUE';
   linkedTransactions: Transaction[];
   totalPago: number;
+  paidAt?: Date;
 }
 
 @Component({
@@ -86,6 +87,7 @@ export class ContractDetailsPageComponent {
   isDotacaoModalOpen = signal(false);
   isObjetoModalOpen = signal(false);
   isLinkObModalOpen = signal(false);
+  isMarkAsPaidModalOpen = signal(false);
   
   editingAditivo = signal<Aditivo | null>(null);
   editingDotacao = signal<Dotacao | null>(null);
@@ -218,9 +220,12 @@ export class ContractDetailsPageComponent {
 
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
       
-      // Só marca como PAID se houver transação confirmada (ou manual sem sigef_id)
+      // Marca como PAID se houver transação manual ou transação SIGEF confirmada
       const hasConfirmedPayment = matches.some(t => {
-        if (!t.sigef_id) return true;
+        // Pagamento manual sempre confirma
+        if (t.manual_payment === true) return true;
+        // Transação SIGEF só confirma se tiver status de pago
+        if (!t.sigef_id) return false;
         const desc = t.description.toLowerCase();
         return SIGEF_PAID_STATUSES.some(s => desc.includes(s.toLowerCase()));
       });
@@ -231,6 +236,10 @@ export class ContractDetailsPageComponent {
         status = 'OVERDUE';
       }
 
+      // Encontrar data do pagamento manual
+      const manualPayment = matches.find(t => t.manual_payment === true);
+      const paidAt = manualPayment?.parcela_pago_em;
+
       payments.push({
         monthLabel, // Exibe o mês de REFERÊNCIA (Jan 2026)
         reference,
@@ -240,7 +249,8 @@ export class ContractDetailsPageComponent {
         isPast,
         status,
         linkedTransactions: matches,
-        totalPago: matches.reduce((acc, t) => acc + (t.amount || 0), 0)
+        totalPago: matches.reduce((acc, t) => acc + (t.amount || 0), 0),
+        paidAt
       });
 
       currentDate.setMonth(currentDate.getMonth() + 1);
@@ -886,6 +896,80 @@ export class ContractDetailsPageComponent {
       console.error('[ContractDetails] Erro ao desvincular:', err);
       alert('Erro ao desvincular: ' + (err.message || 'Erro desconhecido'));
     } finally {
+    }
+  }
+
+  // ── Marcar Parcela como Pago ─────────────────────────────────────────────────
+
+  openMarkAsPaidModal(installment: PaymentSchedule) {
+    this.selectedInstallment.set(installment);
+    this.isMarkAsPaidModalOpen.set(true);
+  }
+
+  closeMarkAsPaidModal() {
+    this.isMarkAsPaidModalOpen.set(false);
+    this.selectedInstallment.set(null);
+  }
+
+  async markInstallmentAsPaid() {
+    const installment = this.selectedInstallment();
+    if (!installment) return;
+
+    try {
+      // Criar uma transação manual de pagamento para marcar como pago
+      const { data, error } = await this.supabaseService.client
+        .from('transacoes')
+        .insert({
+          contract_id: this.contractId(),
+          description: `Pagamento Parcela ${installment.reference} - Registro Manual`,
+          type: 'LIQUIDATION' as const,
+          amount: installment.valor,
+          date: new Date().toISOString().split('T')[0],
+          parcela_referencia: installment.reference,
+          parcela_valor: installment.valor,
+          parcela_pago_em: new Date().toISOString(),
+          manual_payment: true
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Recarregar dados
+      await this.loadTransactions(this.contractId());
+      await this.loadBudgets(this.contractId());
+      await this.contractService.loadContracts();
+
+      this.closeMarkAsPaidModal();
+      
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro ao marcar como pago:', err);
+      alert('Erro ao registrar pagamento: ' + (err.message || 'Erro desconhecido'));
+    }
+  }
+
+  async unmarkInstallmentAsPaid(installment: PaymentSchedule) {
+    if (!confirm('Deseja remover a marcação de pago desta parcela?')) return;
+
+    try {
+      // Remover transações manuais vinculadas a esta parcela
+      const { error } = await this.supabaseService.client
+        .from('transacoes')
+        .delete()
+        .eq('contract_id', this.contractId())
+        .eq('parcela_referencia', installment.reference)
+        .eq('manual_payment', true);
+
+      if (error) throw error;
+
+      // Recarregar dados
+      await this.loadTransactions(this.contractId());
+      await this.loadBudgets(this.contractId());
+      await this.contractService.loadContracts();
+
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro ao desmarcar pagamento:', err);
+      alert('Erro ao remover pagamento: ' + (err.message || 'Erro desconhecido'));
     }
   }
   

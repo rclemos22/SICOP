@@ -321,18 +321,15 @@
 
                           <div class="flex justify-between items-end">
                             <div class="flex flex-col gap-1 w-full">
-                              @if (p.linkedTransactions.length > 0) {
-                                <div class="flex items-center justify-between bg-blue-50 dark:bg-blue-900/10 p-2 rounded-lg border border-blue-100 dark:border-blue-900/30 mt-1 cursor-pointer" (click)="openLinkObModal(p)">
-                                  <div class="flex items-center gap-1.5 text-[10px] font-bold text-sco-blue dark:text-blue-400">
-                                    <span class="material-symbols-outlined text-[16px]">payments</span>
-                                    <span>{{ p.linkedTransactions.length }} {{ p.linkedTransactions.length === 1 ? 'OB vinculada' : 'OBs vinculadas' }}</span>
+                              @if (p.status === 'PAID') {
+                                <div class="flex items-center gap-2 bg-green-50 dark:bg-green-900/10 p-2 rounded-lg border border-green-100 dark:border-green-900/30">
+                                  <div class="flex items-center gap-1.5 text-[10px] font-bold text-green-700 dark:text-green-400">
+                                    <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                                    <span>Pago</span>
                                   </div>
-                                  <div class="flex items-center gap-1.5">
-                                    <span class="text-[10px] font-bold" [class.text-green-600]="p.totalPago >= p.valor" [class.text-gray-700]="p.totalPago < p.valor">
-                                      {{ p.totalPago | currency:'BRL':'symbol':'1.0-0' }}
-                                    </span>
-                                    <span class="material-symbols-outlined text-[14px] text-gray-400">chevron_right</span>
-                                  </div>
+                                  @if (p.paidAt) {
+                                    <span class="text-[9px] text-green-600 dark:text-green-500">{{ p.paidAt | date:'dd/MM/yyyy' }}</span>
+                                  }
                                 </div>
                               } @else {
                                 <div class="flex items-center gap-1 text-[11px] text-gray-400">
@@ -342,13 +339,23 @@
                               }
                               <div class="flex justify-between items-center mt-1">
                                 <span class="text-sm font-bold text-gray-900 dark:text-white">{{ p.valor | currency:'BRL':'symbol':'1.2-2' }}</span>
-                                <button 
-                                  (click)="openLinkObModal(p)"
-                                  class="p-1 px-2 rounded-lg bg-gray-50 hover:bg-sco-blue hover:text-white text-gray-500 border border-gray-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
-                                >
-                                  <span class="material-symbols-outlined text-[14px]">link</span>
-                                  Vincular OB
-                                </button>
+                                @if (p.status !== 'PAID') {
+                                  <button 
+                                    (click)="openMarkAsPaidModal(p)"
+                                    class="p-1 px-2 rounded-lg bg-green-50 hover:bg-green-100 hover:text-green-700 text-green-600 border border-green-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
+                                  >
+                                    <span class="material-symbols-outlined text-[14px]">check</span>
+                                    Marcar Pago
+                                  </button>
+                                } @else {
+                                  <button 
+                                    (click)="unmarkInstallmentAsPaid(p)"
+                                    class="p-1 px-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
+                                    title="Desmarcar pagamento"
+                                  >
+                                    <span class="material-symbols-outlined text-[14px]">undo</span>
+                                  </button>
+                                }
                               </div>
                             </div>
                           </div>
@@ -441,6 +448,16 @@
                                <span class="text-xs text-gray-500">Valor</span>
                                <span class="font-bold text-gray-900 dark:text-white">{{ aditivo.valor_aditivo != null && aditivo.valor_aditivo > 0 ? (aditivo.valor_aditivo | currency:'BRL':'symbol':'1.2-2') : '---' }}</span>
                              </div>
+                             @if (aditivo.novo_valor_mensal != null && aditivo.novo_valor_mensal > 0) {
+                               <div class="flex justify-between items-center mt-1">
+                                 <span class="text-xs text-gray-500">Novo Mensal</span>
+                                 <span class="font-bold text-gray-900 dark:text-white">{{ aditivo.novo_valor_mensal | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </div>
+                               <div class="flex justify-between items-center mt-1">
+                                 <span class="text-xs text-gray-500">Início Novo</span>
+                                 <span class="text-xs font-medium text-gray-900 dark:text-white">{{ aditivo.data_inicio_novo ? (aditivo.data_inicio_novo | date:'dd/MM/yyyy') : '---' }}</span>
+                               </div>
+                             }
                           </div>
                           <!-- Edit/Delete Buttons -->
                           <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -467,14 +484,16 @@
                   <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead class="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº Aditivo</th>
-                          <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
-                          <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Assinatura</th>
-                          <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nova Vigência</th>
-                          <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor</th>
-                          <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
-                        </tr>
+<tr>
+                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº Aditivo</th>
+                           <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
+                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Assinatura</th>
+                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nova Vigência</th>
+                           <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor</th>
+                           <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Novo Mensal</th>
+                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Início Novo</th>
+                           <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                         </tr>
                       </thead>
                       <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
                         @for (aditivo of sortedAditivos(); track aditivo.id) {
@@ -520,6 +539,22 @@
                               } @else {
                                 <span class="text-sm text-gray-400">---</span>
                               }
+                            </td>
+
+                            <!-- Novo Valor Mensal -->
+                            <td class="px-5 py-4 text-right whitespace-nowrap">
+                              @if (aditivo.novo_valor_mensal != null && aditivo.novo_valor_mensal > 0) {
+                                <span class="text-sm font-bold text-gray-900 dark:text-white">
+                                  {{ aditivo.novo_valor_mensal | currency:'BRL':'symbol':'1.2-2' }}
+                                </span>
+                              } @else {
+                                <span class="text-sm text-gray-400">---</span>
+                              }
+                            </td>
+
+                            <!-- Data Início Novo -->
+                            <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                              {{ aditivo.data_inicio_novo ? (aditivo.data_inicio_novo | date:'dd/MM/yyyy') : '---' }}
                             </td>
 
                             <!-- Ações -->
@@ -1175,6 +1210,60 @@
                 class="px-8 py-2.5 text-sm font-bold text-white bg-sco-blue hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-95"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Modal: Marcar Parcela como Pago -->
+    @if (isMarkAsPaidModalOpen()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div class="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-800 overflow-hidden animate-in zoom-in-95 duration-200">
+          
+          <!-- Header -->
+          <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900">
+            <div class="flex items-center gap-4">
+              <div class="h-12 w-12 rounded-2xl bg-green-50 dark:bg-green-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-green-600 text-[28px]">check_circle</span>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Marcar como Pago</h3>
+                <p class="text-sm text-gray-500 flex items-center gap-1.5 mt-0.5">
+                  Parcela: <span class="font-bold text-sco-blue">{{ selectedInstallment()?.monthLabel }}</span>
+                  <span class="h-1 w-1 rounded-full bg-gray-300"></span>
+                  <span class="font-bold text-gray-700 dark:text-gray-300">{{ selectedInstallment()?.valor | currency:'BRL':'symbol':'1.2-2' }}</span>
+                </p>
+              </div>
+            </div>
+            <button (click)="closeMarkAsPaidModal()" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <!-- Content -->
+          <div class="p-8 bg-gray-50/50 dark:bg-gray-900/50">
+            <div class="bg-green-50/50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/30 p-4 rounded-2xl mb-6">
+              <p class="text-xs font-medium text-green-800 dark:text-green-300 flex items-start gap-2">
+                <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                Isso registrará um pagamento manual para esta parcela. Use esta opção quando o pagamento for efetivado fora do SIGEF ou para registrar baixa manual.
+              </p>
+            </div>
+
+            <div class="flex gap-3">
+              <button 
+                (click)="closeMarkAsPaidModal()"
+                class="flex-1 px-6 py-3 text-sm font-bold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                (click)="markInstallmentAsPaid()"
+                class="flex-1 px-6 py-3 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-md shadow-green-500/20 flex items-center justify-center gap-2"
+              >
+                <span class="material-symbols-outlined text-[18px]">check</span>
+                Confirmar Pagamento
               </button>
             </div>
           </div>

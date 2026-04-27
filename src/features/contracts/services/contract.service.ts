@@ -311,7 +311,9 @@ export class ContractService {
       tipo_id: raw.tipo_id ?? undefined,
       data_assinatura: raw.data_assinatura ? this.parseDate(raw.data_assinatura) : undefined,
       nova_vigencia: raw.nova_vigencia ? this.parseDate(raw.nova_vigencia) : undefined,
-      valor_aditivo: raw.valor_aditivo != null ? this.parseNumeric(raw.valor_aditivo) : undefined
+      valor_aditivo: raw.valor_aditivo != null ? this.parseNumeric(raw.valor_aditivo) : undefined,
+      novo_valor_mensal: raw.novo_valor_mensal != null ? this.parseNumeric(raw.novo_valor_mensal) : undefined,
+      data_inicio_novo: raw.data_inicio_novo ? this.parseDate(raw.data_inicio_novo) : undefined
     };
   }
 

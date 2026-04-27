@@ -185,7 +185,10 @@ export class FinancialService {
       payment_month: raw.payment_month,
       unidade_gestora_label: raw.unidade_gestora_label,
       document_number: raw.document_number,
-      ob_number: raw.ob_number
+      ob_number: raw.ob_number,
+      parcela_valor: raw.parcela_valor != null ? Number(raw.parcela_valor) : undefined,
+      parcela_pago_em: raw.parcela_pago_em ? new Date(raw.parcela_pago_em) : undefined,
+      manual_payment: raw.manual_payment === true || raw.manual_payment === 'true'
     };
   }
 

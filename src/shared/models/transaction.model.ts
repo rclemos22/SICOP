@@ -24,6 +24,9 @@ export interface Transaction {
   unidade_gestora_label?: string; // Label formatado da unidade gestora (ex: "DPEMA", "FADEP")
   document_number?: string; // Número do Documento do SIGEF (ex: 2026PP...)
   ob_number?: string; // Número da Ordem Bancária (ex: 847)
+  parcela_valor?: number; // Valor da parcela pago
+  parcela_pago_em?: Date; // Data quando o pagamento foi registrado
+  manual_payment?: boolean; // Indica se o pagamento foi registrado manualmente
 }
 
 // Helpers for UI logic (Icons, Colors, Labels) based on Type
