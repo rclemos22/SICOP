@@ -342,7 +342,8 @@ export class ContractService {
       const allowedFields = [
         'contrato', 'processo_sei', 'link_sei', 'contratada', 'cnpj_contratada', 'fornecedor_id',
         'data_inicio', 'data_fim', 'data_pagamento', 'valor_anual', 'valor_mensal', 'status',
-        'setor_id', 'unid_gestora', 'objeto', 'gestor_contrato', 'fiscal_admin', 'fiscal_tecnico', 'tipo'
+        'setor_id', 'unid_gestora', 'objeto', 'gestor_contrato', 'fiscal_admin', 'fiscal_tecnico', 'tipo',
+        'total_empenhado', 'total_pago', 'saldo_a_pagar', 'data_ultimo_pagamento'
       ];
       
       for (const key of allowedFields) {

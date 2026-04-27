@@ -236,19 +236,26 @@ export class SigefService implements OnDestroy {
     }
   }
 
-  private async refreshAccessToken(retries: number = 3): Promise<void> {
+  private async refreshAccessToken(retries: number = 5, backoff: number = 3000): Promise<void> {
     if (!this.refreshToken) {
       throw new Error('Refresh token não disponível');
     }
     
     this._apiStatus.set('refreshing');
     const url = `${this.apiUrl}/token/refresh/`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh: this.refreshToken }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error('Falha ao renovar token');
@@ -256,7 +263,6 @@ export class SigefService implements OnDestroy {
 
       const data = await response.json();
       this.bearerToken = data.access;
-      // Se a API retornar um novo refresh token (rotação), atualizamos
       if (data.refresh) {
         this.refreshToken = data.refresh;
       }
@@ -269,11 +275,16 @@ export class SigefService implements OnDestroy {
       this._apiStatus.set('connected');
       this.updateExpiresAt();
     } catch (err: any) {
-      if (retries > 0 && err.message?.includes('ETIMEDOUT')) {
-        console.warn(`[SIGEF] Timeout no refresh. Retentando... (${retries} restantes)`);
-        await new Promise(r => setTimeout(r, 2000));
-        return this.refreshAccessToken(retries - 1);
+      clearTimeout(timeoutId);
+      const errLower = (err.message || err.name || '').toLowerCase();
+      const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout') || errLower.includes('aborted');
+      
+      if (retries > 0 && isTimeout) {
+        console.warn(`[SIGEF] Timeout no refresh. Backoff ${backoff}ms, retries: ${retries}`);
+        await new Promise(r => setTimeout(r, backoff));
+        return this.refreshAccessToken(retries - 1, Math.min(backoff * 2, 60000));
       }
+      
       this._authenticated.set(false);
       this.refreshToken = null;
       localStorage.removeItem(this.REFRESH_TOKEN_KEY);
@@ -338,11 +349,11 @@ export class SigefService implements OnDestroy {
     await this.ensureAuthenticated(false);
   }
 
-  private async callApi(url: string, options: RequestInit = {}, retries: number = 5, backoff: number = 3000): Promise<Response> {
+  private async callApi(url: string, options: RequestInit = {}, retries: number = 5, backoff: number = 5000): Promise<Response> {
     // Enfileiramento global: cada nova chamada espera a anterior terminar
     return this.apiQueue = this.apiQueue.then(async () => {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 120000); // 120 segundos de timeout individual
+      const id = setTimeout(() => controller.abort(), 180000); // 180 segundos de timeout individual
 
       try {
         const response = await fetch(url, { ...options, signal: controller.signal });
@@ -359,7 +370,7 @@ export class SigefService implements OnDestroy {
         if ([500, 502, 503, 504].includes(response.status) && retries > 0) {
           console.warn(`[SIGEF] Gateway Error (${response.status}). Backoff ${backoff}ms...`);
           await new Promise(resolve => setTimeout(resolve, backoff));
-          return this.callApi(url, options, retries - 1, backoff * 1.5);
+          return this.callApi(url, options, retries - 1, Math.min(backoff * 2, 60000));
         }
         
         // Pequeno delay "de cortesia" após cada sucesso para não bombardear a API
@@ -380,10 +391,10 @@ export class SigefService implements OnDestroy {
                                errLower.includes('failed to fetch');
         
         if (isNetworkError && retries > 0) {
-          const infraBackoff = backoff * (errLower.includes('tls') || errLower.includes('socket') ? 3 : 2);
-          console.warn(`[SIGEF] Infra Error (${err.message}). Retrying in ${infraBackoff}ms...`);
+          const infraBackoff = backoff * (errLower.includes('tls') || errLower.includes('socket') || isTimeout ? 2 : 1.5);
+          console.warn(`[SIGEF] Infra Error (${err.message}). Backoff ${infraBackoff}ms, retries: ${retries}`);
           await new Promise(resolve => setTimeout(resolve, infraBackoff));
-          return this.callApi(url, options, retries - 1, infraBackoff * 1.5);
+          return this.callApi(url, options, retries - 1, Math.min(infraBackoff * 2, 120000));
         }
         throw err;
       }
@@ -448,6 +459,76 @@ export class SigefService implements OnDestroy {
       };
     } catch (err: any) {
       this._error.set(err.message || 'Erro desconhecido');
+      throw err;
+    } finally {
+      this._loading.set(false);
+    }
+  }
+
+  /**
+   * Busca todas as NEs de um período de datas (sem filtro por número de NE).
+   * Usado pelo SigefBulkSyncService para download total de um mês/período.
+   * Não usa cache — sempre vai à API para garantir dados completos.
+   */
+  async getNotaEmpenhoByPeriod(
+    datainicio: string,
+    datafim: string,
+    page: number = 1,
+    cdunidadegestora?: string
+  ): Promise<SigefResponse<NotaEmpenho>> {
+    this._loading.set(true);
+    this._error.set(null);
+
+    try {
+      await this.ensureAuthenticated();
+
+      // Extrair o ano do período para o parâmetro obrigatório da API
+      const ano = datainicio.substring(0, 4);
+
+      const url = `${this.apiUrl}/sigef/notaempenho/`;
+      const params = new URLSearchParams({
+        ano,
+        page: page.toString(),
+        dtlancamento_after: datainicio,
+        dtlancamento_before: datafim
+      });
+
+      if (cdunidadegestora) {
+        params.append('cdunidadegestora', cdunidadegestora);
+      }
+
+      const fullUrl = `${url}?${params}`;
+      console.log(`[SIGEF NE PERIOD] ${datainicio}→${datafim} pág.${page}: ${fullUrl}`);
+
+      const response = await this.callApi(fullUrl, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        if (response.status >= 500) {
+          console.warn(`[SIGEF NE PERIOD] Erro ${response.status}, retornando vazio.`);
+          return { data: [], count: 0, next: null, previous: null };
+        }
+        throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
+      }
+
+      this._apiStatus.set('connected');
+      const data = await response.json();
+
+      return {
+        data: (data.results || []) as NotaEmpenho[],
+        count: data.count || 0,
+        next: data.next,
+        previous: data.previous
+      };
+    } catch (err: any) {
+      const isNet = /Failed to fetch|NetworkError|TLS|disconnected/i.test(err?.message || '');
+      if (isNet) {
+        console.warn('[SIGEF NE PERIOD] Erro de rede:', err.message);
+        return { data: [], count: 0, next: null, previous: null };
+      }
+      this._error.set(err.message || 'Erro ao buscar NEs por período');
       throw err;
     } finally {
       this._loading.set(false);
@@ -931,10 +1012,13 @@ export class SigefService implements OnDestroy {
     return itens;
   }
 
-  async authenticate(username: string, password: string, retries: number = 3): Promise<string> {
+  async authenticate(username: string, password: string, retries: number = 5, backoff: number = 3000): Promise<string> {
     this._loading.set(true);
     this._error.set(null);
     this._apiStatus.set('refreshing');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     try {
       const url = `${this.apiUrl}/token/`;
@@ -946,8 +1030,10 @@ export class SigefService implements OnDestroy {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ username, password }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       console.log('[SIGEF AUTH] Status:', response.status);
 
       if (!response.ok) {
@@ -968,11 +1054,16 @@ export class SigefService implements OnDestroy {
       this.updateExpiresAt();
       return data.access;
     } catch (err: any) {
-      if (retries > 0 && (err.message?.includes('ETIMEDOUT') || err.message?.includes('fetch'))) {
-        console.warn(`[SIGEF] Timeout ou erro de rede no login. Retentando em 3s... (${retries} restantes)`);
-        await new Promise(r => setTimeout(r, 3000));
-        return this.authenticate(username, password, retries - 1);
+      clearTimeout(timeoutId);
+      const errLower = (err.message || err.name || '').toLowerCase();
+      const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout') || errLower.includes('aborted');
+      
+      if (retries > 0 && isTimeout) {
+        console.warn(`[SIGEF] Timeout no login (${err.message}). Backoff ${backoff}ms, retries: ${retries}`);
+        await new Promise(r => setTimeout(r, backoff));
+        return this.authenticate(username, password, retries - 1, Math.min(backoff * 2, 60000));
       }
+      
       console.error('[SIGEF AUTH] Erro capturado:', err);
       this._error.set(err.message || 'Erro na autenticação');
       this._authenticated.set(false);

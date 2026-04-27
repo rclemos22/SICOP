@@ -11,6 +11,7 @@ export interface ImportSigefNe {
   cdunidadegestora: string;
   ano?: number | null;
   nuneoriginal?: string | null;
+  dtlancamento?: string | null;
   raw_data: Record<string, any>;
   imported_at?: string;
   last_sync?: string;
@@ -45,10 +46,10 @@ export interface ImportSigefOb {
  *
  * PRINCÍPIOS:
  *  1. Os dados são gravados SEM QUALQUER TRATAMENTO (raw_data = JSON da API).
- *  2. As consultas são feitas PRIMEIRO aqui; a API oficial só é chamada na sincronização
- *     explícita (botão "Sincronizar SIGEF").
- *  3. A sincronização é INCREMENTAL: só insere/atualiza registros que ainda não existem
- *     ou que mudaram, evitando consumo desnecessário da API.
+ *  2. As consultas são feitas PRIMEIRO aqui; a API oficial só é chamada quando
+ *     o período ainda não foi baixado (verificado via sigef_sync_periods).
+ *  3. Após o download bulk inicial, TODAS as consultas de NE/OB são atendidas
+ *     localmente sem qualquer chamada à API do SIGEF.
  */
 @Injectable({
   providedIn: 'root'
@@ -87,7 +88,7 @@ export class SigefMirrorService {
       .select('*')
       .eq('cdunidadegestora', cdunidadegestora.toString())
       .or(`nunotaempenho.eq.${ne},nuneoriginal.eq.${ne}`)
-      .order('imported_at', { ascending: true });
+      .order('dtlancamento', { ascending: true, nullsFirst: false });
 
     if (error) {
       console.error('[SigefMirror] Erro ao buscar NEs:', error);
@@ -121,9 +122,13 @@ export class SigefMirrorService {
 
   /**
    * Salva um lote de NEs no espelho (upsert por nunotaempenho + cdunidadegestora).
-   * Só atualiza registros que já existem (incremental).
+   * Parâmetro dtlancamentoPeriodo: fallback quando a NE não tem dtlancamento explícito.
    */
-  async saveNesBulk(items: Record<string, any>[], cdunidadegestora: string): Promise<void> {
+  async saveNesBulk(
+    items: Record<string, any>[],
+    cdunidadegestora: string,
+    dtlancamentoPeriodo?: string
+  ): Promise<void> {
     if (!items || items.length === 0) return;
 
     const payload: ImportSigefNe[] = items
@@ -131,10 +136,13 @@ export class SigefMirrorService {
       .map(item => ({
         nunotaempenho: (item.nunotaempenho as string).trim().toUpperCase(),
         cdunidadegestora: cdunidadegestora.toString(),
-        ano: item.ano ? Number(item.ano) : null,
+        ano: item.ano ? Number(item.ano) : (
+          item.dtlancamento ? parseInt((item.dtlancamento as string).substring(0, 4), 10) : null
+        ),
         nuneoriginal: item.nuneoriginal
           ? (item.nuneoriginal as string).trim().toUpperCase()
           : null,
+        dtlancamento: item.dtlancamento || dtlancamentoPeriodo || null,
         raw_data: item,
         last_sync: new Date().toISOString()
       }));
@@ -178,6 +186,7 @@ export class SigefMirrorService {
 
   /**
    * Retorna todas as OBs de uma NE no espelho.
+   * Busca tanto por nunotaempenho direto quanto no raw_data (fallback).
    */
   async getObsByNe(nunotaempenho: string, cdunidadegestora: string): Promise<ImportSigefOb[]> {
     const { data, error } = await this.client
@@ -185,7 +194,7 @@ export class SigefMirrorService {
       .select('*')
       .eq('nunotaempenho', nunotaempenho.trim().toUpperCase())
       .eq('cdunidadegestora', cdunidadegestora.toString())
-      .order('dtlancamento', { ascending: true });
+      .order('dtlancamento', { ascending: true, nullsFirst: false });
 
     if (error) {
       console.error('[SigefMirror] Erro ao buscar OBs:', error);
@@ -232,7 +241,8 @@ export class SigefMirrorService {
         nunotaempenho: item.nunotaempenho
           ? (item.nunotaempenho as string).trim().toUpperCase()
           : null,
-        ano: item.ano ? Number(item.ano) : null,
+        ano: item.ano ? Number(item.ano)
+          : (item.dtlancamento ? parseInt((item.dtlancamento as string).substring(0, 4), 10) : null),
         dtlancamento: item.dtlancamento || null,
         dtpagamento: item.dtpagamento || null,
         cdsituacaoordembancaria: item.cdsituacaoordembancaria || null,
@@ -243,15 +253,20 @@ export class SigefMirrorService {
 
     if (payload.length === 0) return;
 
-    const { error } = await this.client
-      .from('import_sigef_ob')
-      .upsert(payload, { onConflict: 'nuordembancaria,cdunidadegestora,nudocumento' });
+    // Upsert em lotes de 500 para evitar timeout
+    const BATCH = 500;
+    for (let i = 0; i < payload.length; i += BATCH) {
+      const batch = payload.slice(i, i + BATCH);
+      const { error } = await this.client
+        .from('import_sigef_ob')
+        .upsert(batch, { onConflict: 'nuordembancaria,cdunidadegestora,nudocumento' });
 
-    if (error) {
-      console.error('[SigefMirror] Erro ao salvar OBs em bulk:', error);
-    } else {
-      console.log(`[SigefMirror] ${payload.length} OBs salvas no espelho.`);
+      if (error) {
+        console.error('[SigefMirror] Erro ao salvar OBs em bulk (lote):', error);
+      }
     }
+
+    console.log(`[SigefMirror] ${payload.length} OBs salvas no espelho.`);
   }
 
   /**
@@ -289,7 +304,7 @@ export class SigefMirrorService {
   }
 
   // =============================================================
-  // Utilitários
+  // Estatísticas e diagnóstico
   // =============================================================
 
   /**
@@ -322,5 +337,19 @@ export class SigefMirrorService {
 
     if (!data?.last_sync) return null;
     return new Date(data.last_sync);
+  }
+
+  /**
+   * Retorna totais de registros no espelho.
+   */
+  async getMirrorStats(): Promise<{ totalNe: number; totalOb: number }> {
+    const [neResult, obResult] = await Promise.all([
+      this.client.from('import_sigef_ne').select('id', { count: 'exact', head: true }),
+      this.client.from('import_sigef_ob').select('id', { count: 'exact', head: true })
+    ]);
+    return {
+      totalNe: neResult.count ?? 0,
+      totalOb: obResult.count ?? 0
+    };
   }
 }

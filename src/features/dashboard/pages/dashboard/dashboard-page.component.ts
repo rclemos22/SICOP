@@ -372,34 +372,28 @@ export class DashboardPageComponent implements OnInit {
   });
 
 
-  // Total Committed (Empenhado Real do SIGEF - baseado nas transações filtradas por ano)
+  // Total Committed (Empenhado Real - baseado nos contratos do ano selecionado)
   totalCommittedValue = computed(() => {
     const selectedYear = this.appContext.anoExercicio();
-    return this.financialService.transactions()
-      .filter(t => {
-        const isFromCurrentBudget = t.commitment_id ? t.commitment_id.startsWith(selectedYear.toString()) : new Date(t.date).getFullYear() === selectedYear;
-        return isFromCurrentBudget && (
-          t.type === TransactionType.COMMITMENT || 
-          t.type === TransactionType.REINFORCEMENT || 
-          t.type === TransactionType.CANCELLATION
-        );
+    return this.contractService.contracts()
+      .filter(c => {
+        if (!c.data_inicio) return false;
+        const dataInicio = new Date(c.data_inicio);
+        return dataInicio.getFullYear() <= selectedYear;
       })
-      .reduce((acc, t) => {
-        const val = Number(t.amount) || 0;
-        // Anulações subtraem do total empenhado
-        return t.type === TransactionType.CANCELLATION ? acc - val : acc + val;
-      }, 0);
+      .reduce((acc, c) => acc + (Number(c.total_empenhado) || 0), 0);
   });
 
-  // Total Paid (Pago Real do SIGEF - baseado nas transações filtradas por ano)
+  // Total Paid (Pago Real - baseado nos contratos do ano selecionado)
   totalPaidValue = computed(() => {
     const selectedYear = this.appContext.anoExercicio();
-    return this.financialService.transactions()
-      .filter(t => {
-        const isFromCurrentBudget = t.commitment_id ? t.commitment_id.startsWith(selectedYear.toString()) : new Date(t.date).getFullYear() === selectedYear;
-        return isFromCurrentBudget && t.type === TransactionType.LIQUIDATION;
+    return this.contractService.contracts()
+      .filter(c => {
+        if (!c.data_inicio) return false;
+        const dataInicio = new Date(c.data_inicio);
+        return dataInicio.getFullYear() <= selectedYear;
       })
-      .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      .reduce((acc, c) => acc + (Number(c.total_pago) || 0), 0);
   });
 
   // Balance (Saldo real a pagar)
@@ -416,27 +410,25 @@ export class DashboardPageComponent implements OnInit {
 
   // Alert: Saldo de Empenho <= Valor Mensal do Contrato
   lowBudgetAlerts = computed(() => {
-    const budgets = this.budgetService.dotacoes();
-    const contracts = this.contractService.contracts();
+    const contracts = this.contractService.contracts()
+      .filter(c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO)
+      .filter(c => c.valor_mensal && c.valor_mensal > 0);
     
-    return budgets
-      .filter(b => b.nunotaempenho && b.total_empenhado !== null)
-      .map(b => {
-        const contract = contracts.find(c => c.id === b.contract_id);
-        const valorMensal = Number(contract?.valor_mensal) || 0;
+    return contracts
+      .map(c => {
+        const valorMensal = Number(c.valor_mensal) || 0;
         
-        const totalEmpenhado = Number(b.total_empenhado) || 0;
-        const totalPago = Number(b.total_pago) || 0;
-        const totalCancelado = Number(b.total_cancelado) || 0;
+        const totalEmpenhado = Number(c.total_empenhado) || 0;
+        const totalPago = Number(c.total_pago) || 0;
         
-        // Saldo real do empenho (E - P - C)
-        const saldoEmpenho = totalEmpenhado - totalPago - totalCancelado;
+        // Saldo real do empenho (E - P)
+        const saldoEmpenho = totalEmpenhado - totalPago;
         
         return {
-          contractId: b.contract_id,
-          contractNumber: b.numero_contrato,
-          dotacao: b.dotacao,
-          nunotaempenho: b.nunotaempenho,
+          contractId: c.id,
+          contractNumber: c.contrato,
+          dotacao: c.objeto || '',
+          nunotaempenho: '',
           totalEmpenhado,
           saldoEmpenho,
           valorMensal,
@@ -444,7 +436,8 @@ export class DashboardPageComponent implements OnInit {
           percentage: valorMensal > 0 ? (saldoEmpenho / valorMensal) * 100 : 0
         };
       })
-      .filter(alert => alert.saldoEmpenho <= alert.valorMensal) // Somente se saldo for menor ou igual à mensalidade
+      .filter(alert => alert.saldoEmpenho <= alert.valorMensal) // Somente se saldo <= mensalidade
+      .filter(alert => alert.saldoEmpenho > 0) // Apenas alertas com saldo positivo mas menor que mensalidade
       .sort((a, b) => a.percentage - b.percentage)
       .slice(0, 10);
   });

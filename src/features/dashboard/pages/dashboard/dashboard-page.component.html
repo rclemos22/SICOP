@@ -90,11 +90,11 @@
         </div>
         <div class="p-2 max-h-[180px] overflow-y-auto custom-scrollbar">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            @for (alert of lowBudgetAlerts(); track alert.nunotaempenho) {
+            @for (alert of lowBudgetAlerts(); track alert.contractId) {
               <div 
-                (click)="goToBudget()"
+                (click)="viewContract.emit(alert.contractId)"
                 class="flex items-center p-3 bg-gray-50/50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-900/50 hover:bg-amber-50/20 transition-all cursor-pointer group"
-                title="Clique para ir às dotações"
+                title="Clique para ir ao contrato"
               >
                 <div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 mr-3 group-hover:scale-110 transition-transform">
                   <span class="material-symbols-outlined text-[20px]">account_balance</span>

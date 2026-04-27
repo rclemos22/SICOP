@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { AppContextService } from './core/services/app-context.service';
 import { SigefService } from './core/services/sigef.service';
 import { SigefSyncService } from './core/services/sigef-sync.service';
-
+import { SigefBulkSyncService } from './core/services/sigef-bulk-sync.service';
 
 import { BudgetPageComponent } from './features/budget/pages/budget/budget-page.component';
 import { ContractFormComponent } from './features/contracts/components/contract-form/contract-form.component';
@@ -42,10 +42,30 @@ registerLocaleData(localePt);
 })
 export class AppComponent {
   // Global App Context (Year Selection)
-  public contextService = inject(AppContextService);
-  public sigefService = inject(SigefService);
-  public sigefSyncService = inject(SigefSyncService);
-  private contractService = inject(ContractService);
+  public contextService    = inject(AppContextService);
+  public sigefService      = inject(SigefService);
+  public sigefSyncService  = inject(SigefSyncService);
+  public bulkSyncService   = inject(SigefBulkSyncService);
+  private contractService  = inject(ContractService);
+
+  constructor() {
+    // Após 3s, verifica se o espelho completo já foi baixado.
+    // Se não, inicia o download de 2025 + 2026 automaticamente em background.
+    setTimeout(async () => {
+      try {
+        const done = await this.bulkSyncService.isInitialDownloadComplete();
+        if (!done) {
+          console.log('[App] Espelho SIGEF vazio — iniciando download inicial (2025 + 2026)...');
+          await this.bulkSyncService.downloadInitialData();
+          console.log('[App] Download inicial concluído.');
+        } else {
+          console.log('[App] Espelho SIGEF já possui dados. Download inicial pulado.');
+        }
+      } catch (err) {
+        console.error('[App] Erro no download inicial do SIGEF:', err);
+      }
+    }, 3000);
+  }
 
   // Navigation State
   view = signal<'dashboard' | 'list' | 'form' | 'financial' | 'budget' | 'contract-details' | 'suppliers' | 'nota-empenho' | 'ordem-bancaria'>('dashboard');

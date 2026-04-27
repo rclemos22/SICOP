@@ -12,6 +12,7 @@ import {
 
 import { FinancialService } from '../../services/financial.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { SigefBulkSyncService } from '../../../../core/services/sigef-bulk-sync.service';
 
 @Component({
   selector: 'app-financial-page',
@@ -20,8 +21,9 @@ import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
   templateUrl: './financial-page.component.html'
 })
 export class FinancialPageComponent {
-  public financialService = inject(FinancialService);
-  public sigefSyncService = inject(SigefSyncService);
+  public financialService  = inject(FinancialService);
+  public sigefSyncService  = inject(SigefSyncService);
+  public bulkSyncService   = inject(SigefBulkSyncService);
 
   // Signals
   searchQuery = signal('');
@@ -131,19 +133,43 @@ export class FinancialPageComponent {
   }
 
   /**
-   * Dispara a sincronização global de todos os contratos cadastrados no sistema
+   * Atualiza o espelho com dados dos últimos 60 dias e depois recarrega os contratos.
+   * Este é o comportamento do botão "Atualizar SIGEF" na tela financeira.
    */
   async syncGlobal() {
     try {
-      console.log('[FinancialPage] Iniciando sincronização global do SIGEF...');
+      console.log('[FinancialPage] Baixando dados dos últimos 60 dias...');
+      // 1. Download bulk dos últimos 60 dias (NE + OB)
+      await this.bulkSyncService.downloadLast60Days();
+
+      // 2. Recarregar contratos a partir do espelho atualizado
       await this.sigefSyncService.syncAllContractsFinance(true);
-      
-      // Recarrega os lançamentos locais após terminar a sincronização global
+
+      // 3. Recarregar lançamentos locais
       await this.financialService.loadAllTransactions();
-      
-      console.log('[FinancialPage] Sincronização global concluída.');
+
+      console.log('[FinancialPage] Atualização SIGEF concluída.');
     } catch (err: any) {
-      console.error('[FinancialPage] Erro na sincronização global:', err);
+      console.error('[FinancialPage] Erro na atualização SIGEF:', err);
     }
+  }
+
+  /**
+   * Indica se qualquer operação de sync está em andamento (bulk ou NE-a-NE).
+   */
+  get isAnySyncing(): boolean {
+    return this.bulkSyncService.isRunning() || this.sigefSyncService.isGlobalSyncing();
+  }
+
+  /**
+   * Label dinâmico do botão de sync.
+   */
+  get syncButtonLabel(): string {
+    if (this.bulkSyncService.isRunning()) {
+      const p = this.bulkSyncService.progress();
+      return `${p.currentLabel} (${p.percent}%)`;
+    }
+    if (this.sigefSyncService.isGlobalSyncing()) return 'Atualizando contratos...';
+    return 'Atualizar SIGEF';
   }
 }

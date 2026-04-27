@@ -6,6 +6,7 @@ import { FinancialService } from '../../features/financial/services/financial.se
 import { ContractService } from '../../features/contracts/services/contract.service';
 import { BudgetService } from '../../features/budget/services/budget.service';
 import { AppContextService } from './app-context.service';
+import { SupabaseService } from './supabase.service';
 
 export interface SyncTask {
   ne: string;
@@ -19,33 +20,45 @@ export interface SyncTask {
 /**
  * SigefSyncService
  *
- * ARQUITETURA "ESPELHO PRIMEIRO":
- *  - Toda consulta de NE/OB é feita PRIMEIRO nas tabelas import_sigef_ne / import_sigef_ob.
- *  - A API oficial do SIGEF só é chamada quando o usuário clica em "Sincronizar SIGEF".
- *  - A sincronização é INCREMENTAL: só baixa registros que ainda não existem no espelho,
- *    ou que foram marcados para atualização forçada.
+ * ARQUITETURA "ESPELHO PRIMEIRO" (refatorado):
+ *
+ *  - O espelho (import_sigef_ne / import_sigef_ob) é a ÚNICA fonte de dados.
+ *  - O download bulk (por período) é feito EXCLUSIVAMENTE pelo SigefBulkSyncService.
+ *  - Este serviço apenas:
+ *      1. Lê do espelho para popular os caches estruturados (legado).
+ *      2. Gerencia a fila de tarefas e o estado de progresso da UI.
+ *      3. Chama a API individual somente quando uma NE não existe no espelho
+ *         (fallback pontual para casos que escaparam do bulk).
  */
 @Injectable({
   providedIn: 'root'
 })
 export class SigefSyncService {
-  private sigefService    = inject(SigefService);
-  private mirrorService   = inject(SigefMirrorService);
-  private cacheService    = inject(SigefCacheService);
+  private sigefService     = inject(SigefService);
+  private mirrorService    = inject(SigefMirrorService);
+  private cacheService     = inject(SigefCacheService);
   private financialService = inject(FinancialService);
   private contractService  = inject(ContractService);
   private budgetService    = inject(BudgetService);
   private appContext       = inject(AppContextService);
+  private supabase         = inject(SupabaseService);
+
+  /**
+   * Flag: true quando o download bulk inicial já tem ao menos UM período concluído.
+   * Enquanto false, NENHUMA chamada à API individual é feita — evita ETIMEDOUT
+   * em massa enquanto o espelho ainda está sendo populado.
+   */
+  private _bulkReady = false;
 
   // ─── Estado da fila ──────────────────────────────────────────
-  private _syncQueue   = signal<SyncTask[]>([]);
-  private _currentIdx  = signal<number>(-1);
-  private _isLocked    = signal<boolean>(false);
+  private _syncQueue  = signal<SyncTask[]>([]);
+  private _currentIdx = signal<number>(-1);
+  private _isLocked   = signal<boolean>(false);
 
-  readonly syncQueue      = this._syncQueue.asReadonly();
-  readonly currentIdx     = this._currentIdx.asReadonly();
-  readonly isLocked       = this._isLocked.asReadonly();
-  readonly isSyncing      = computed(() => this._currentIdx() >= 0 && this._currentIdx() < this._syncQueue().length);
+  readonly syncQueue       = this._syncQueue.asReadonly();
+  readonly currentIdx      = this._currentIdx.asReadonly();
+  readonly isLocked        = this._isLocked.asReadonly();
+  readonly isSyncing       = computed(() => this._currentIdx() >= 0 && this._currentIdx() < this._syncQueue().length);
   readonly isGlobalSyncing = computed(() => this.isSyncing());
 
   readonly progress = computed(() => {
@@ -64,15 +77,43 @@ export class SigefSyncService {
   private autoSyncTimer: any;
 
   constructor() {
-    // Sincronização automática: primeiro ciclo após 2 min, depois a cada 10 min
-    setTimeout(() => {
-      this.runAutomaticSyncCycle();
-    }, 120000);
+    // Verifica o estado do bulk e agenda o ciclo automático apenas se pronto.
+    // O ciclo só começa 5 minutos após o boot, dando tempo ao download inicial.
+    setTimeout(() => { this._initAutoSync(); }, 5 * 60_000);
+  }
+
+  /**
+   * Verifica se o download bulk inicial já tem algum período concluído.
+   * Enquanto false, chamadas individuais à API ficam bloqueadas.
+   */
+  private async _checkBulkReady(): Promise<boolean> {
+    if (this._bulkReady) return true;
+    const { count } = await this.supabase.client
+      .from('sigef_sync_periods')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'completed');
+    this._bulkReady = (count ?? 0) > 0;
+    return this._bulkReady;
+  }
+
+  private async _initAutoSync() {
+    const ready = await this._checkBulkReady();
+    if (!ready) {
+      console.log('[SIGEF SYNC] Espelho não está pronto. Ciclo automático adiado 10 min.');
+      this.autoSyncTimer = setTimeout(() => { this._initAutoSync(); }, 10 * 60_000);
+      return;
+    }
+    this.runAutomaticSyncCycle();
   }
 
   private async runAutomaticSyncCycle() {
     try {
       if (!this.isSyncing()) {
+        const ready = await this._checkBulkReady();
+        if (!ready) {
+          console.log('[SIGEF SYNC] Espelho ainda vazio. Pulando ciclo automático.');
+          return;
+        }
         const selectedYear = this.appContext.anoExercicio();
         console.log(`[SIGEF SYNC] Ciclo automático: exercício ${selectedYear}`);
         await this.syncAllContractsFinance(false, selectedYear);
@@ -80,27 +121,23 @@ export class SigefSyncService {
     } catch (err) {
       console.error('[SIGEF SYNC] Erro no ciclo automático:', err);
     } finally {
-      // Agenda o próximo ciclo para 10 minutos APÓS a finalização deste
       if (this.autoSyncTimer) clearTimeout(this.autoSyncTimer);
-      this.autoSyncTimer = setTimeout(() => {
-        this.runAutomaticSyncCycle();
-      }, 10 * 60 * 1000);
+      this.autoSyncTimer = setTimeout(() => { this.runAutomaticSyncCycle(); }, 10 * 60_000);
     }
   }
 
   startAutomaticSync() {
     if (!this.autoSyncTimer) {
-      this.autoSyncTimer = setTimeout(() => {
-        this.runAutomaticSyncCycle();
-      }, 10 * 60 * 1000);
+      this.autoSyncTimer = setTimeout(() => { this.runAutomaticSyncCycle(); }, 10 * 60_000);
     }
   }
 
   // ─── API pública principal ───────────────────────────────────
 
   /**
-   * Obtém o resumo de uma NE. Busca PRIMEIRO no espelho; só vai à API se forceSync = true.
-   * Este método é chamado pelo dashboard e páginas de contratos para exibir dados.
+   * Obtém o resumo de uma NE.
+   * 1ª tentativa: espelho (import_sigef_ne / import_sigef_ob)
+   * 2ª tentativa (apenas se forceSync=true ou espelho vazio): API individual
    */
   async getNotaEmpenhoWithCache(
     ano: string,
@@ -112,21 +149,32 @@ export class SigefSyncService {
     const ugStr = ug.toString();
 
     // ── Fase 1: Espelho Primeiro ──────────────────────────────
-    if (!forceSync) {
-      const movements = await this.mirrorService.getNeMovementsRaw(neNumber, ugStr);
-      if (movements.length > 0) {
-        console.log(`[SIGEF SYNC] Espelho encontrado para NE ${neNumber}: ${movements.length} registro(s)`);
-        // Garante que as tabelas de cache estruturado também estão populadas (legado)
-        await this._persistFromMirrorToCache(neNumber, ugStr);
-        return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
-      }
+    const movements = await this.mirrorService.getNeMovementsRaw(neNumber, ugStr);
+    if (movements.length > 0) {
+      console.log(`[SIGEF SYNC] Espelho: NE ${neNumber} — ${movements.length} registro(s).`);
+      await this._persistFromMirrorToCache(neNumber, ugStr);
+      return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
     }
 
-    // ── Fase 2: Sincronização via API (forceSync ou espelho vazio) ──
-    console.log(`[SIGEF SYNC] ${forceSync ? 'Sync forçado' : 'Espelho vazio'} – chamando API para NE: ${neNumber}`);
-    await this._syncNeFromApi(ano, neNumber, ugStr, forceSync);
+    // ── Fase 2: Fallback à API ou Saída Graciosa ──────────────────────────
+    
+    // Se NÃO é um sincronismo forçado (clique manual), NUNCA vamos à API.
+    // Isso garante que a navegação entre contratos seja 100% offline/espelho.
+    if (!forceSync) {
+      console.log(`[SIGEF SYNC] NE ${neNumber} ausente do espelho. Modo offline (navegação/auto): ignorando API.`);
+      return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
+    }
 
-    // ── Fase 3: Persistir nas tabelas de cache estruturado (legado) ──
+    // Daqui para baixo, apenas se forceSync === true (Ação Manual)
+    
+    const bulkReady = await this._checkBulkReady();
+    if (!bulkReady) {
+      console.warn(`[SIGEF SYNC] Sync forçado solicitado para NE ${neNumber}, mas o download inicial ainda está em curso.`);
+    }
+
+    // ── Fase 3: Fallback pontual à API (Apenas Ação Manual) ────
+    console.log(`[SIGEF SYNC] NE ${neNumber} não encontrada no espelho. Executando busca manual via API...`);
+    await this._syncNeFromApi(ano, neNumber, ugStr, forceSync);
     await this._persistFromMirrorToCache(neNumber, ugStr);
 
     if (contractId) {
@@ -139,8 +187,8 @@ export class SigefSyncService {
   }
 
   /**
-   * Sincroniza um lote de NEs (chamado pelo botão "Sincronizar SIGEF").
-   * Faz download INCREMENTAL: baixa apenas NEs/OBs que ainda não estão no espelho.
+   * Sincroniza um lote de NEs (chamado pelo botão "Sincronizar SIGEF" no contrato).
+   * Agora usa EXCLUSIVAMENTE o espelho — só chama API se a NE não existe localmente.
    */
   async syncBatch(
     tasks: { ne: string; ug: string; ano: string }[],
@@ -172,9 +220,7 @@ export class SigefSyncService {
           this._updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
         }
 
-        if (i < queue.length - 1) {
-          await this._delay(800);
-        }
+        if (i < queue.length - 1) await this._delay(800);
       }
 
       if (contractId) {
@@ -189,12 +235,24 @@ export class SigefSyncService {
   }
 
   /**
-   * Sincroniza todos os contratos. Chamado automaticamente ou pelo botão global.
+   * Carrega dados financeiros de todos os contratos a partir do espelho.
+   * NÃO faz download — apenas lê do espelho e popula os caches.
    */
   async syncAllContractsFinance(lockUI: boolean = false, year?: number): Promise<void> {
     if (this.isSyncing()) return;
 
-    console.log('[SIGEF SYNC] Iniciando varredura global de contratos...');
+    // Se o espelho não tem dados, não há o que carregar — apenas atualiza a UI local.
+    const ready = await this._checkBulkReady();
+    if (!ready) {
+      console.log('[SIGEF SYNC] Espelho vazio (bulk pendente). Recarregando apenas dados locais.');
+      await Promise.all([
+        this.contractService.loadContracts(),
+        this.financialService.loadAllTransactions(),
+      ]).catch(err => console.error('[SIGEF SYNC] Erro ao recarregar dados locais:', err));
+      return;
+    }
+
+    console.log('[SIGEF SYNC] Carregando dados do espelho para contratos...');
 
     if (this.contractService.contracts().length === 0) {
       await this.contractService.loadContracts();
@@ -222,7 +280,7 @@ export class SigefSyncService {
     }
 
     if (allTasks.length === 0) {
-      console.warn('[SIGEF SYNC] Nenhuma NE encontrada para sincronização global.');
+      console.warn('[SIGEF SYNC] Nenhuma NE encontrada nos contratos.');
       return;
     }
 
@@ -240,63 +298,60 @@ export class SigefSyncService {
         this._updateTaskStatus(i, 'processing');
 
         try {
-          // Sincronização incremental: forceSync = false (usa espelho se já existir)
+          // Mirror-first: forceSync=false usa espelho se disponível
           await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, false);
           this._updateTaskStatus(i, 'completed');
         } catch (err: any) {
-          this._updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
+          this._updateTaskStatus(i, 'error', err.message || 'Falha');
         }
 
-        if (i < queue.length - 1) {
-          await this._delay(500);
-        }
+        if (i < queue.length - 1) await this._delay(300);
       }
 
-      // Persistir tabelas financeiras em lote
+      // Persistir tabelas financeiras
       const affectedContractIds = [...new Set(allTasks.map(t => t.contractId))];
       for (const contractId of affectedContractIds) {
         await this.financialService.syncSigefTransactions(contractId).catch(err =>
-          console.error(`[SIGEF SYNC] Erro ao persistir contrato ${contractId}:`, err)
+          console.error(`[SIGEF SYNC] Erro contrato ${contractId}:`, err)
         );
       }
 
-      // Recarregar os caches locais para que as Dashboards sejam atualizadas instantaneamente
       await Promise.all([
         this.contractService.loadContracts(),
         this.financialService.loadAllTransactions(),
         this.budgetService.loadDotacoes()
       ]);
 
-      console.log('[SIGEF SYNC] Sincronização global concluída e interface atualizada.');
+      console.log('[SIGEF SYNC] Carregamento concluído e interface atualizada.');
     } finally {
       this._isLocked.set(false);
       setTimeout(() => { this._currentIdx.set(-1); }, 5000);
     }
   }
 
-  // ─── Métodos privados ─────────────────────────────────────────
+  // ─── Sincronização pontual via API (fallback) ─────────────────
 
-  /**
-   * Baixa NE + seus movimentos + OBs da API e grava no espelho.
-   * Sincronização INCREMENTAL: para OBs, só baixa as que ainda não existem no espelho.
-   */
   private async _syncNeFromApi(ano: string, neNumber: string, ugStr: string, forceSync: boolean): Promise<void> {
+    // Guard: nunca chama API individual se o bulk ainda não foi concluído.
+    // Isso previne ETIMEDOUT em cascata enquanto o espelho está sendo populado.
+    const ready = await this._checkBulkReady();
+    if (!ready) {
+      console.log(`[SIGEF SYNC] _syncNeFromApi bloqueado para NE ${neNumber} — bulk pendente.`);
+      return;
+    }
+
     const ugNum = parseInt(ugStr, 10);
 
     try {
-      // 1. Baixar a NE original
       const ne = await this._withRetry(() =>
         this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ugStr, forceSync)
       );
 
       if (ne) {
-        // Salva no espelho bruto (import_sigef_ne)
         await this.mirrorService.saveNesBulk([ne as Record<string, any>], ugStr);
-        // Salva também no cache estruturado legado
         await this.cacheService.saveNotaEmpenho(this._mapApiNeToCache(ne, ugNum));
       }
 
-      // 2. Baixar todos os movimentos (reforços/anulações)
       const movements = await this._withRetry(() =>
         this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ugStr, forceSync)
       );
@@ -308,24 +363,26 @@ export class SigefSyncService {
         );
       }
 
-      // 3. Baixar OBs (incremental: só as novas)
-      const nesVinculadas = [...new Set([
-        neNumber,
-        ...movements.map(m => m.nunotaempenho).filter(Boolean)
-      ])] as string[];
+      // IMPORTANTE: Só buscamos OBs individuais via API se for um SYNC FORÇADO (botão manual).
+      // Caso contrário, esperamos o Bulk Sync (Espelho) baixar as OBs em massa.
+      // Isso evita o erro de rede (ETIMEDOUT) nas paginações longas de OBs.
+      if (forceSync) {
+        const nesVinculadas = [...new Set([
+          neNumber,
+          ...movements.map(m => m.nunotaempenho).filter(Boolean)
+        ])] as string[];
 
-      for (const targetNE of nesVinculadas) {
-        await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync);
+        for (const targetNE of nesVinculadas) {
+          await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync);
+        }
+      } else {
+        console.log(`[SIGEF SYNC] NE ${neNumber}: Pulando busca reativa de OBs (Modo Espelho Ativo).`);
       }
     } catch (err) {
       console.error(`[SIGEF SYNC] Erro ao sincronizar NE ${neNumber} via API:`, err);
     }
   }
 
-  /**
-   * Baixa OBs para uma NE específica de forma incremental.
-   * Se forceSync = false, pula OBs que já existem no espelho.
-   */
   private async _syncObsForNe(
     ano: string,
     nunotaempenho: string,
@@ -333,14 +390,20 @@ export class SigefSyncService {
     ugNum: number,
     forceSync: boolean
   ): Promise<void> {
+    // Guard: nunca busca OBs individuais enquanto bulk não completou.
+    const ready = await this._checkBulkReady();
+    if (!ready) {
+      console.log(`[SIGEF SYNC] _syncObsForNe bloqueado para NE ${nunotaempenho} — bulk pendente.`);
+      return;
+    }
+
     const targetNE = nunotaempenho.trim().toUpperCase();
 
-    // Verificar OBs já existentes no espelho (para sincronização incremental)
     const existingObs = forceSync
       ? new Set<string>()
       : await this.mirrorService.getExistingObNumbers(targetNE, ugStr);
 
-    const anoNE = parseInt(ano, 10);
+    const anoNE    = parseInt(ano, 10);
     const anoAtual = new Date().getFullYear();
 
     for (let a = anoNE; a <= anoAtual; a++) {
@@ -358,46 +421,36 @@ export class SigefSyncService {
 
           const filtered = result.data.filter(ob => {
             const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-            const isMesUm = (ob.dtlancamento && ob.dtlancamento.split('-')[1] === '01') || 
-                            (ob.dtpagamento && ob.dtpagamento.split('-')[1] === '01');
+            const isMesUm    = (ob.dtlancamento && ob.dtlancamento.split('-')[1] === '01') ||
+                               (ob.dtpagamento  && ob.dtpagamento.split('-')[1]  === '01');
             return isTargetNe && !isMesUm;
           });
 
-          // Incrementalmente: só salva as que ainda não existem
           const newObs = forceSync
             ? filtered
             : filtered.filter(ob => !existingObs.has((ob.nuordembancaria || '').trim().toUpperCase()));
 
           if (newObs.length > 0) {
-            // Salvar no espelho bruto
             await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
-            // Salvar no cache estruturado legado
             await this.cacheService.saveOrdensBancarias(
               newObs.map(ob => this._mapApiObToCache(ob, ugNum))
             );
-            // Atualizar o set de existentes
             newObs.forEach(ob => existingObs.add((ob.nuordembancaria || '').trim().toUpperCase()));
           }
 
           hasNext = !!result.next;
           page++;
-
           if (hasNext) await this._delay(500);
         }
       } catch (err) {
-        console.warn(`[SIGEF SYNC] Erro ao baixar OBs do ano ${a} para NE ${targetNE}:`, err);
+        console.warn(`[SIGEF SYNC] Erro OBs ano ${a} NE ${targetNE}:`, err);
       }
     }
   }
 
-  /**
-   * Garante que as tabelas de cache estruturado (legado) estão populadas
-   * a partir do espelho bruto. Isso mantém compatibilidade com o restante do sistema.
-   */
   private async _persistFromMirrorToCache(neNumber: string, ugStr: string): Promise<void> {
     const ugNum = parseInt(ugStr, 10);
 
-    // NEs
     const neRaws = await this.mirrorService.getNeMovementsRaw(neNumber, ugStr);
     for (const raw of neRaws) {
       if (raw.nunotaempenho === neNumber || !raw.nuneoriginal) {
@@ -407,7 +460,6 @@ export class SigefSyncService {
       }
     }
 
-    // OBs
     const obRaws = await this.mirrorService.getObsRawByNe(neNumber, ugStr);
     if (obRaws.length > 0) {
       await this.cacheService.saveOrdensBancarias(

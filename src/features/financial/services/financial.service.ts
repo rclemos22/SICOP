@@ -4,6 +4,7 @@ import { SupabaseService } from '../../../core/services/supabase.service';
 import { SigefCacheService } from '../../../core/services/sigef-cache.service';
 import { Transaction, TransactionType } from '../../../shared/models/transaction.model';
 import { BudgetService } from '../../budget/services/budget.service';
+import { ContractService } from '../../contracts/services/contract.service';
 
 @Injectable({
   providedIn: 'root'
@@ -13,6 +14,7 @@ export class FinancialService {
   private errorHandler = inject(ErrorHandlerService);
   private sigefCacheService = inject(SigefCacheService);
   private budgetService = inject(BudgetService);
+  private contractService = inject(ContractService);
 
   private _transactions = signal<Transaction[]>([]);
   private _loading = signal<boolean>(false);
@@ -342,8 +344,56 @@ export class FinancialService {
           if (error) throw error;
         }
       } catch (err) {
-        console.error('[FinancialService] Erro ao sincronizar transações para contrato:', contractId, err);
+        console.error('[FinancialService] Erroao sincronizar transacoes para contrato:', contractId, err);
       }
+    }
+    
+    await this.updateContractTotals(contractId);
+  }
+  
+  private async updateContractTotals(contractId: string): Promise<void> {
+    try {
+      const { data: trans } = await this.supabaseService.client
+        .from('transacoes')
+        .select('type, amount, date')
+        .eq('contract_id', contractId);
+      
+      if (!trans || trans.length === 0) return;
+      
+      let totalEmpenhado = 0;
+      let totalPago = 0;
+      
+      for (const t of trans) {
+        const amt = Math.abs(Number(t.amount) || 0);
+        if (t.type === 'COMMITMENT' || t.type === 'REINFORCEMENT') {
+          totalEmpenhado += amt;
+        } else if (t.type === 'CANCELLATION') {
+          totalEmpenhado -= amt;
+        } else if (t.type === 'LIQUIDATION') {
+          totalPago += amt;
+        }
+      }
+      
+      totalEmpenhado = Math.max(0, totalEmpenhado);
+      const saldoAPagar = Math.max(0, totalEmpenhado - totalPago);
+      
+      const lastPayment = trans
+        .filter(t => t.type === 'LIQUIDATION')
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      
+      await this.supabaseService.client
+        .from('contratos')
+        .update({
+          total_empenhado: totalEmpenhado,
+          total_pago: totalPago,
+          saldo_a_pagar: saldoAPagar,
+          data_ultimo_pagamento: lastPayment?.date || null
+        })
+        .eq('id', contractId);
+      
+      this.contractService.loadContracts();
+    } catch (err) {
+      console.error('[FinancialService] Erro ao atualizar totais do contrato:', contractId, err);
     }
   }
   
