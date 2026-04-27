@@ -41,6 +41,9 @@ export class DashboardPageComponent implements OnInit {
   navigate = output<'contracts' | 'financial' | 'budget'>();
   viewContract = output<string>();
 
+  // Anobase watcher signal
+  private anoBase = signal<number>(0);
+
   // States
   isLoading = computed(() => 
     this.contractService.loading() || 
@@ -58,14 +61,19 @@ export class DashboardPageComponent implements OnInit {
 
 
   ngOnInit() {
+    const currentYear = this.appContext.anoExercicio();
+    this.anoBase.set(currentYear);
     this.loadAllData();
     
-    // Efeito para recarregar dados quando o ano muda
-    effect(() => {
-      const year = this.appContext.anoExercicio();
-      console.log('[DASHBOARD] Ano alterado para', year, '- Recarregando dados...');
-      this.loadAllData();
-    }, { allowSignalWrites: true });
+    // Watch for year changes using setInterval
+    setInterval(() => {
+      const newYear = this.appContext.anoExercicio();
+      if (newYear !== this.anoBase()) {
+        this.anoBase.set(newYear);
+        console.log('[DASHBOARD] Ano alterado para', newYear, '- Recarregando dados...');
+        this.loadAllData();
+      }
+    }, 1000);
   }
 
   async loadAllData() {
@@ -1022,6 +1030,10 @@ export class DashboardPageComponent implements OnInit {
       .attr('height', d => chartHeight - y(d.value))
       .attr('fill', d => colors[d.key as keyof typeof colors])
       .attr('rx', 2)
+      .style('cursor', 'pointer')
+      .on('click', (event, d) => {
+        this.viewContract.emit(d.contract);
+      })
       .on('mouseover', function(event, d) {
         d3.select(this).attr('opacity', 0.8);
         tooltip

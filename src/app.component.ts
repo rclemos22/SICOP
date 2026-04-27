@@ -1,6 +1,6 @@
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localePt from '@angular/common/locales/pt';
-import { Component, signal, LOCALE_ID, inject } from '@angular/core';
+import { Component, signal, LOCALE_ID, inject, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AppContextService } from './core/services/app-context.service';
 import { SigefService } from './core/services/sigef.service';
@@ -47,6 +47,7 @@ export class AppComponent {
   public sigefSyncService  = inject(SigefSyncService);
   public bulkSyncService   = inject(SigefBulkSyncService);
   private contractService  = inject(ContractService);
+  private cdr            = inject(ChangeDetectorRef);
 
   constructor() {
     // Após 3s, verifica se o espelho completo já foi baixado.
@@ -81,6 +82,7 @@ export class AppComponent {
   showDashboard() {
     this.view.set('dashboard');
     this.selectedContractId.set(null);
+    setTimeout(() => this.cdr.detectChanges(), 0);
   }
 
   showForm(contract?: any) {
@@ -127,6 +129,17 @@ export class AppComponent {
     if (target === 'contracts') this.showList();
     if (target === 'financial') this.showFinancial();
     if (target === 'budget') this.showBudget();
+  }
+
+  async handleViewContract(contractNumber: string) {
+    await this.contractService.loadContracts();
+    const contracts = this.contractService.contracts();
+    const contract = contracts.find(c => c.contrato === contractNumber);
+    if (contract) {
+      this.openContractDetails(contract.id);
+    } else {
+      console.warn('[App] Contrato não encontrado:', contractNumber);
+    }
   }
 
   async handleSave(data: any) {

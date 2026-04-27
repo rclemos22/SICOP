@@ -167,7 +167,7 @@
       <app-dashboard-page 
         class="flex-1 min-h-0"
         (navigate)="handleDashboardNavigation($event)"
-        (viewContract)="openContractDetails($event)"
+        (viewContract)="handleViewContract($event)"
       ></app-dashboard-page>
     } @else if (view() === 'list') {
       <app-contracts-page 
