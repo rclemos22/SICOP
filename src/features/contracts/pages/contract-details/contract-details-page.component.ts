@@ -564,7 +564,7 @@ export class ContractDetailsPageComponent {
   /**
    * Atualiza os dados SIGEF (empenhos e OBs) de todas as dotações do contrato
    */
-  async refreshSigefData() {
+  async refreshSigefData(fullScan: boolean = true) {
     const budgets = this.budgets();
     const budgetsComNE = budgets.filter(b => b.nunotaempenho);
     
@@ -588,7 +588,7 @@ export class ContractDetailsPageComponent {
       });
 
       // 2. Executar a sincronização em lote (fila controlada com persistência automática no banco)
-      await this.sigefSyncService.syncBatch(tasks, this.contract()?.id, true);
+      await this.sigefSyncService.syncBatch(tasks, this.contract()?.id, true, !fullScan);
       
       // 3. Atualizar carimbos de data de sincronização local para cada dotação
       const lastSyncMap = new Map(this.sigefLastSync());
@@ -1004,10 +1004,11 @@ export class ContractDetailsPageComponent {
     }
 
     try {
-      console.log(`[ForceSync] Iniciando sincronização em lote de ${tasks.length} NEs para contrato ${this.contractId()}`);
+      console.log(`[ForceSync] Iniciando sincronização em lote (RÁPIDA) de ${tasks.length} NEs para contrato ${this.contractId()}`);
       
       // Utiliza o serviço unificado que gerencia status, retentativas e persistência
-      await this.sigefSyncService.syncBatch(tasks, this.contractId());
+      // recentOnly = true por padrão
+      await this.sigefSyncService.syncBatch(tasks, this.contractId(), false, true);
       
       // Recarregar os dados locais para refletir a persistência
       await this.loadBudgets(this.contractId());

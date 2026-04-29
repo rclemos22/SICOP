@@ -144,7 +144,8 @@ export class SigefSyncService {
     neNumber: string,
     ug: string,
     forceSync: boolean = false,
-    contractId?: string
+    contractId?: string,
+    recentOnly: boolean = true
   ): Promise<NeResumo | null> {
     const ugStr = ug.toString();
 
@@ -173,8 +174,8 @@ export class SigefSyncService {
     }
 
     // ── Fase 3: Fallback pontual à API (Apenas Ação Manual) ────
-    console.log(`[SIGEF SYNC] NE ${neNumber} não encontrada no espelho. Executando busca manual via API...`);
-    await this._syncNeFromApi(ano, neNumber, ugStr, forceSync);
+    console.log(`[SIGEF SYNC] NE ${neNumber} não encontrada no espelho. Executando busca manual via API (recentOnly=${recentOnly})...`);
+    await this._syncNeFromApi(ano, neNumber, ugStr, forceSync, recentOnly);
     await this._persistFromMirrorToCache(neNumber, ugStr);
 
     if (contractId) {
@@ -193,7 +194,8 @@ export class SigefSyncService {
   async syncBatch(
     tasks: { ne: string; ug: string; ano: string }[],
     contractId?: string,
-    lockUI: boolean = false
+    lockUI: boolean = false,
+    recentOnly: boolean = true
   ): Promise<void> {
     if (this.isSyncing()) {
       console.warn('[SIGEF SYNC] Sincronização já em andamento.');
@@ -212,8 +214,8 @@ export class SigefSyncService {
         this._updateTaskStatus(i, 'processing');
 
         try {
-          console.log(`[SIGEF SYNC] ${i + 1}/${queue.length} – NE: ${task.ne}`);
-          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId);
+          console.log(`[SIGEF SYNC] ${i + 1}/${queue.length} – NE: ${task.ne} (recentOnly=${recentOnly})`);
+          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId, recentOnly);
           this._updateTaskStatus(i, 'completed');
         } catch (err: any) {
           console.error(`[SIGEF SYNC] Erro na NE ${task.ne}:`, err);
@@ -331,7 +333,13 @@ export class SigefSyncService {
 
   // ─── Sincronização pontual via API (fallback) ─────────────────
 
-  private async _syncNeFromApi(ano: string, neNumber: string, ugStr: string, forceSync: boolean): Promise<void> {
+  private async _syncNeFromApi(
+    ano: string, 
+    neNumber: string, 
+    ugStr: string, 
+    forceSync: boolean,
+    recentOnly: boolean = true
+  ): Promise<void> {
     // Guard: nunca chama API individual se o bulk ainda não foi concluído.
     // Isso previne ETIMEDOUT em cascata enquanto o espelho está sendo populado.
     const ready = await this._checkBulkReady();
@@ -373,7 +381,7 @@ export class SigefSyncService {
         ])] as string[];
 
         for (const targetNE of nesVinculadas) {
-          await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync);
+          await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync, recentOnly);
         }
       } else {
         console.log(`[SIGEF SYNC] NE ${neNumber}: Pulando busca reativa de OBs (Modo Espelho Ativo).`);
@@ -388,7 +396,8 @@ export class SigefSyncService {
     nunotaempenho: string,
     ugStr: string,
     ugNum: number,
-    forceSync: boolean
+    forceSync: boolean,
+    recentOnly: boolean = true
   ): Promise<void> {
     // Guard: nunca busca OBs individuais enquanto bulk não completou.
     const ready = await this._checkBulkReady();
@@ -403,46 +412,75 @@ export class SigefSyncService {
       ? new Set<string>()
       : await this.mirrorService.getExistingObNumbers(targetNE, ugStr);
 
-    const anoNE    = parseInt(ano, 10);
-    const anoAtual = new Date().getFullYear();
+    if (recentOnly) {
+      // Regra: Para "Atualizar SIGEF" (rápido), baixar apenas os últimos 60 dias.
+      const today = new Date();
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(today.getDate() - 60);
 
-    for (let a = anoNE; a <= anoAtual; a++) {
-      const datainicio = `${a}-01-01`;
-      const datafim    = `${a}-12-31`;
+      const datainicio = sixtyDaysAgo.toISOString().split('T')[0];
+      const datafim    = today.toISOString().split('T')[0];
 
-      try {
-        let page = 1;
-        let hasNext = true;
+      console.log(`[SIGEF SYNC] OBs: Busca rápida (60 dias: ${datainicio} a ${datafim}) para NE ${targetNE}`);
+      await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs);
+    } else {
+      // Regra: Para "Sincronizar SIGEF" (completo), fazer a varredura por anos.
+      const anoNE    = parseInt(ano, 10);
+      const anoAtual = new Date().getFullYear();
 
-        while (hasNext && page <= 10) {
-          const result = await this.sigefService.getOrdemBancaria(
-            datainicio, datafim, page, undefined, targetNE, ugStr, forceSync
-          );
-
-          const filtered = result.data.filter(ob => {
-            const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-            return isTargetNe;
-          });
-
-          const newObs = forceSync
-            ? filtered
-            : filtered.filter(ob => !existingObs.has((ob.nuordembancaria || '').trim().toUpperCase()));
-
-          if (newObs.length > 0) {
-            await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
-            await this.cacheService.saveOrdensBancarias(
-              newObs.map(ob => this._mapApiObToCache(ob, ugNum))
-            );
-            newObs.forEach(ob => existingObs.add((ob.nuordembancaria || '').trim().toUpperCase()));
-          }
-
-          hasNext = !!result.next;
-          page++;
-          if (hasNext) await this._delay(500);
-        }
-      } catch (err) {
-        console.warn(`[SIGEF SYNC] Erro OBs ano ${a} NE ${targetNE}:`, err);
+      for (let a = anoNE; a <= anoAtual; a++) {
+        const datainicio = `${a}-01-01`;
+        const datafim    = `${a}-12-31`;
+        console.log(`[SIGEF SYNC] OBs: Varredura completa ano ${a} para NE ${targetNE}`);
+        await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs);
       }
+    }
+  }
+
+  /**
+   * Helper para buscar OBs paginadas em um período específico
+   */
+  private async _fetchObsForPeriod(
+    datainicio: string,
+    datafim: string,
+    targetNE: string,
+    ugStr: string,
+    ugNum: number,
+    forceSync: boolean,
+    existingObs: Set<string>
+  ): Promise<void> {
+    try {
+      let page = 1;
+      let hasNext = true;
+
+      while (hasNext && page <= 10) {
+        const result = await this.sigefService.getOrdemBancaria(
+          datainicio, datafim, page, undefined, targetNE, ugStr, forceSync
+        );
+
+        const filtered = result.data.filter(ob => {
+          const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
+          return isTargetNe;
+        });
+
+        const newObs = forceSync
+          ? filtered
+          : filtered.filter(ob => !existingObs.has((ob.nuordembancaria || '').trim().toUpperCase()));
+
+        if (newObs.length > 0) {
+          await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
+          await this.cacheService.saveOrdensBancarias(
+            newObs.map(ob => this._mapApiObToCache(ob, ugNum))
+          );
+          newObs.forEach(ob => existingObs.add((ob.nuordembancaria || '').trim().toUpperCase()));
+        }
+
+        hasNext = !!result.next;
+        page++;
+        if (hasNext) await this._delay(500);
+      }
+    } catch (err) {
+      console.warn(`[SIGEF SYNC] Erro ao buscar OBs (${datainicio} - ${datafim}) para NE ${targetNE}:`, err);
     }
   }
 

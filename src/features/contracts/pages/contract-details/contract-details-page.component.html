@@ -85,6 +85,17 @@
           </div>
         </div>
 
+        <!-- Monthly Value (Only for Service) -->
+        @if (c.tipo === 'serviço') {
+          <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-blue-100 dark:border-blue-900/30 shadow-sm animate-in zoom-in duration-300">
+            <span class="text-xs font-bold text-blue-500 uppercase tracking-wider block mb-1">Valor Mensal</span>
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+              {{ (c.valor_mensal || 0) | currency:'BRL':'symbol':'1.2-2' }}
+            </div>
+            <p class="text-[10px] text-blue-400 mt-2">Pagamento Mensal</p>
+          </div>
+        }
+
         <!-- Total Empenhado -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Empenhado</span>
@@ -231,6 +242,17 @@
                            </dd>
                         </div>
                         <div>
+                           <dt class="text-xs text-gray-500 uppercase">Tipo / Classificação</dt>
+                           <dd class="text-sm font-bold text-gray-900 dark:text-white uppercase">
+                             <span class="inline-flex items-center gap-1">
+                               <span class="material-symbols-outlined text-[16px] text-gray-400">
+                                 {{ c.tipo === 'serviço' ? 'construction' : 'inventory_2' }}
+                               </span>
+                               {{ c.tipo || 'Não definido' }}
+                             </span>
+                           </dd>
+                        </div>
+                        <div>
                            <dt class="text-xs text-gray-500 uppercase">Data Início</dt>
                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ c.data_inicio | date:'dd/MM/yyyy' }}</dd>
                         </div>
@@ -269,106 +291,118 @@
                   </div>
                </div>
 
-                <!-- Bottom Section: Payments Schedule -->
-                <div class="space-y-4">
-                  <div class="flex items-center justify-between border-b pb-2">
-                    <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Cronograma de Parcelas</h3>
-                    <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-tight">
-                      <div class="flex items-center gap-1.5 text-green-600">
-                        <span class="h-2 w-2 rounded-full bg-green-500"></span> Pago
-                      </div>
-                      <div class="flex items-center gap-1.5 text-yellow-600">
-                        <span class="h-2 w-2 rounded-full bg-yellow-500"></span> Em Aberto
-                      </div>
-                      <div class="flex items-center gap-1.5 text-red-600">
-                        <span class="h-2 w-2 rounded-full bg-red-500"></span> Atrasado
+                <!-- Bottom Section: Payments Schedule (Only for Service) -->
+                @if (c.tipo === 'serviço') {
+                  <div class="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="flex items-center justify-between border-b pb-2">
+                      <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Cronograma de Parcelas</h3>
+                      <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-tight">
+                        <div class="flex items-center gap-1.5 text-green-600">
+                          <span class="h-2 w-2 rounded-full bg-green-500"></span> Pago
+                        </div>
+                        <div class="flex items-center gap-1.5 text-yellow-600">
+                          <span class="h-2 w-2 rounded-full bg-yellow-500"></span> Em Aberto
+                        </div>
+                        <div class="flex items-center gap-1.5 text-red-600">
+                          <span class="h-2 w-2 rounded-full bg-red-500"></span> Atrasado
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                    @if (paymentSchedule().length > 0) {
-                      @for (p of paymentSchedule(); track p.reference) {
-                        <div 
-                          class="group flex flex-col p-3 rounded-lg border transition-all duration-200"
-                          [class.bg-green-50/30]="p.status === 'PAID'"
-                          [class.border-green-100]="p.status === 'PAID'"
-                          [class.bg-white]="p.status === 'OPEN'"
-                          [class.border-gray-200]="p.status === 'OPEN'"
-                          [class.bg-red-50/30]="p.status === 'OVERDUE'"
-                          [class.border-red-100]="p.status === 'OVERDUE'"
-                        >
-                          <div class="flex justify-between items-start mb-2">
-                            <div>
-                              <p class="text-xs font-bold text-gray-900 dark:text-white uppercase">{{ p.monthLabel }}</p>
-                              <p class="text-[10px] text-gray-500 font-mono">{{ p.reference }}</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                      @if (paymentSchedule().length > 0) {
+                        @for (p of paymentSchedule(); track p.reference) {
+                          <div 
+                            class="group flex flex-col p-3 rounded-lg border transition-all duration-200"
+                            [class.bg-green-50/30]="p.status === 'PAID'"
+                            [class.border-green-100]="p.status === 'PAID'"
+                            [class.bg-white]="p.status === 'OPEN'"
+                            [class.border-gray-200]="p.status === 'OPEN'"
+                            [class.bg-red-50/30]="p.status === 'OVERDUE'"
+                            [class.border-red-100]="p.status === 'OVERDUE'"
+                          >
+                            <div class="flex justify-between items-start mb-2">
+                              <div>
+                                <p class="text-xs font-bold text-gray-900 dark:text-white uppercase">{{ p.monthLabel }}</p>
+                                <p class="text-[10px] text-gray-500 font-mono">{{ p.reference }}</p>
+                              </div>
+                              <div 
+                                class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm"
+                                [class.bg-green-100]="p.status === 'PAID'"
+                                [class.text-green-700]="p.status === 'PAID'"
+                                [class.border-green-200]="p.status === 'PAID'"
+                                [class.bg-yellow-100]="p.status === 'OPEN'"
+                                [class.text-yellow-700]="p.status === 'OPEN'"
+                                [class.border-yellow-200]="p.status === 'OPEN'"
+                                [class.bg-red-100]="p.status === 'OVERDUE'"
+                                [class.text-red-700]="p.status === 'OVERDUE'"
+                                [class.border-red-200]="p.status === 'OVERDUE'"
+                              >
+                                {{ p.status === 'PAID' ? 'Pago' : p.status === 'OVERDUE' ? 'Atrasado' : 'Aberto' }}
+                              </div>
                             </div>
-                            <div 
-                              class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm"
-                              [class.bg-green-100]="p.status === 'PAID'"
-                              [class.text-green-700]="p.status === 'PAID'"
-                              [class.border-green-200]="p.status === 'PAID'"
-                              [class.bg-yellow-100]="p.status === 'OPEN'"
-                              [class.text-yellow-700]="p.status === 'OPEN'"
-                              [class.border-yellow-200]="p.status === 'OPEN'"
-                              [class.bg-red-100]="p.status === 'OVERDUE'"
-                              [class.text-red-700]="p.status === 'OVERDUE'"
-                              [class.border-red-200]="p.status === 'OVERDUE'"
-                            >
-                              {{ p.status === 'PAID' ? 'Pago' : p.status === 'OVERDUE' ? 'Atrasado' : 'Aberto' }}
-                            </div>
-                          </div>
 
-                          <div class="flex justify-between items-end">
-                            <div class="flex flex-col gap-1 w-full">
-                              @if (p.status === 'PAID') {
-                                <div class="flex items-center gap-2 bg-green-50 dark:bg-green-900/10 p-2 rounded-lg border border-green-100 dark:border-green-900/30">
-                                  <div class="flex items-center gap-1.5 text-[10px] font-bold text-green-700 dark:text-green-400">
-                                    <span class="material-symbols-outlined text-[16px]">check_circle</span>
-                                    <span>Pago</span>
+                            <div class="flex justify-between items-end">
+                              <div class="flex flex-col gap-1 w-full">
+                                @if (p.status === 'PAID') {
+                                  <div class="flex items-center gap-2 bg-green-50 dark:bg-green-900/10 p-2 rounded-lg border border-green-100 dark:border-green-900/30">
+                                    <div class="flex items-center gap-1.5 text-[10px] font-bold text-green-700 dark:text-green-400">
+                                      <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                                      <span>Pago</span>
+                                    </div>
+                                    @if (p.paidAt) {
+                                      <span class="text-[9px] text-green-600 dark:text-green-500">{{ p.paidAt | date:'dd/MM/yyyy' }}</span>
+                                    }
                                   </div>
-                                  @if (p.paidAt) {
-                                    <span class="text-[9px] text-green-600 dark:text-green-500">{{ p.paidAt | date:'dd/MM/yyyy' }}</span>
+                                } @else {
+                                  <div class="flex items-center gap-1 text-[11px] text-gray-400">
+                                    <span class="material-symbols-outlined text-[14px]">event</span>
+                                    <span>Venc: {{ p.date | date:'dd/MM/yyyy' }}</span>
+                                  </div>
+                                }
+                                <div class="flex justify-between items-center mt-1">
+                                  <span class="text-sm font-bold text-gray-900 dark:text-white">{{ p.valor | currency:'BRL':'symbol':'1.2-2' }}</span>
+                                  @if (p.status !== 'PAID') {
+                                    <button 
+                                      (click)="openMarkAsPaidModal(p)"
+                                      class="p-1 px-2 rounded-lg bg-green-50 hover:bg-green-100 hover:text-green-700 text-green-600 border border-green-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
+                                    >
+                                      <span class="material-symbols-outlined text-[14px]">check</span>
+                                      Marcar Pago
+                                    </button>
+                                  } @else {
+                                    <button 
+                                      (click)="unmarkInstallmentAsPaid(p)"
+                                      class="p-1 px-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
+                                      title="Desmarcar pagamento"
+                                    >
+                                      <span class="material-symbols-outlined text-[14px]">undo</span>
+                                    </button>
                                   }
                                 </div>
-                              } @else {
-                                <div class="flex items-center gap-1 text-[11px] text-gray-400">
-                                  <span class="material-symbols-outlined text-[14px]">event</span>
-                                  <span>Venc: {{ p.date | date:'dd/MM/yyyy' }}</span>
-                                </div>
-                              }
-                              <div class="flex justify-between items-center mt-1">
-                                <span class="text-sm font-bold text-gray-900 dark:text-white">{{ p.valor | currency:'BRL':'symbol':'1.2-2' }}</span>
-                                @if (p.status !== 'PAID') {
-                                  <button 
-                                    (click)="openMarkAsPaidModal(p)"
-                                    class="p-1 px-2 rounded-lg bg-green-50 hover:bg-green-100 hover:text-green-700 text-green-600 border border-green-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
-                                  >
-                                    <span class="material-symbols-outlined text-[14px]">check</span>
-                                    Marcar Pago
-                                  </button>
-                                } @else {
-                                  <button 
-                                    (click)="unmarkInstallmentAsPaid(p)"
-                                    class="p-1 px-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
-                                    title="Desmarcar pagamento"
-                                  >
-                                    <span class="material-symbols-outlined text-[14px]">undo</span>
-                                  </button>
-                                }
                               </div>
                             </div>
                           </div>
+                        }
+                      } @else {
+                        <div class="col-span-full text-center py-10 text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200">
+                          <span class="material-symbols-outlined text-4xl mb-2 opacity-30">calendar_month</span>
+                          <p class="text-sm">Configure os parâmetros de pagamento do contrato para gerar o cronograma.</p>
                         </div>
                       }
-                    } @else {
-                      <div class="col-span-full text-center py-10 text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200">
-                        <span class="material-symbols-outlined text-4xl mb-2 opacity-30">calendar_month</span>
-                        <p class="text-sm">Configure os parâmetros de pagamento do contrato para gerar o cronograma.</p>
-                      </div>
-                    }
+                    </div>
                   </div>
-                </div>
+                } @else {
+                  <!-- Material Contracts View -->
+                  <div class="p-8 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 text-center animate-in fade-in duration-500">
+                    <span class="material-symbols-outlined text-4xl text-gray-300 mb-3">inventory_2</span>
+                    <h4 class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">Contrato de Material</h4>
+                    <p class="text-xs text-gray-500 max-w-md mx-auto">
+                      Para contratos de aquisição de material, não há cronograma de parcelas mensais fixas. 
+                      Acompanhe as entregas e pagamentos através das abas de Dotações e Lançamentos Financeiros.
+                    </p>
+                  </div>
+                }
             </div>
           }
 

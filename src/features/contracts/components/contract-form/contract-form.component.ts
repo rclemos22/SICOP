@@ -68,9 +68,23 @@ export class ContractFormComponent implements OnInit {
     status: ['ACTIVE']
   });
 
+  // Listener para o campo Tipo
+  private setupTipoListener() {
+    this.contractForm.get('tipo')?.valueChanges.subscribe(tipo => {
+      const monthlyControl = this.contractForm.get('monthlyValue');
+      if (tipo === 'serviço') {
+        monthlyControl?.enable();
+      } else {
+        monthlyControl?.disable();
+        monthlyControl?.setValue('');
+      }
+    });
+  }
+
   ngOnInit() {
     this.supplierService.loadSuppliers();
     this.loadSetores();
+    this.setupTipoListener();
   }
 
   // Effect para preencher o formulário quando em modo edição
@@ -117,8 +131,15 @@ export class ContractFormComponent implements OnInit {
       gestor_contrato: c.gestor_contrato || '',
       fiscal_admin: c.fiscal_admin || '',
       fiscal_tecnico: c.fiscal_tecnico || '',
-      tipo: c.tipo || 'serviço'
+      tipo: c.tipo || ''
     });
+
+    // Se for edição e o tipo for serviço, garante que o campo mensal esteja habilitado
+    if (c.tipo === 'serviço') {
+      this.contractForm.get('monthlyValue')?.enable();
+    } else {
+      this.contractForm.get('monthlyValue')?.disable();
+    }
   }
 
   async loadSetores() {
@@ -172,11 +193,11 @@ export class ContractFormComponent implements OnInit {
     
     // Financial & Classification
     totalValue: ['', [Validators.required, CurrencyUtils.currencyValidator(0.01)]],
-    monthlyValue: [''],
+    monthlyValue: [{ value: '', disabled: true }],
     unid_gestora: ['', Validators.required],
     department: ['', Validators.required],
     status: ['VIGENTE', Validators.required],
-    tipo: ['serviço', Validators.required],
+    tipo: ['', Validators.required],
     
     // Gestores
     gestor_contrato: [''],

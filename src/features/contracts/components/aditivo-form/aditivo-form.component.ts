@@ -22,6 +22,9 @@ export class AditivoFormComponent implements OnInit {
 
   // Tipos de aditivo carregados do banco via Service
   tiposAditivo = this.tipoAditivoService.tipos;
+  
+  // Tipo do contrato pai para lógica condicional
+  contractTipo = signal<'serviço' | 'material' | undefined>(undefined);
 
   // Inputs & Outputs
   contractId = input.required<string>();
@@ -41,12 +44,28 @@ export class AditivoFormComponent implements OnInit {
       data_assinatura: [new Date().toISOString().split('T')[0], Validators.required],
       nova_vigencia: [''],
       valor_aditivo: ['', [CurrencyUtils.currencyValidator(0)]],
-      novo_valor_mensal: ['', [CurrencyUtils.currencyValidator(0)]],
+      novo_valor_mensal: [{ value: '', disabled: true }, [CurrencyUtils.currencyValidator(0)]],
       data_inicio_novo: ['']
     });
   }
 
+  private checkContractType() {
+    const cid = this.contractId();
+    if (cid) {
+      const contract = this.contractService.getContractById(cid);
+      this.contractTipo.set(contract?.tipo);
+      
+      if (contract?.tipo === 'serviço') {
+        this.aditivoForm.get('novo_valor_mensal')?.enable();
+      } else {
+        this.aditivoForm.get('novo_valor_mensal')?.disable();
+        this.aditivoForm.get('novo_valor_mensal')?.setValue('');
+      }
+    }
+  }
+
   ngOnInit(): void {
+    this.checkContractType();
     
     const aditivoData = this.aditivo();
     if (aditivoData) {
