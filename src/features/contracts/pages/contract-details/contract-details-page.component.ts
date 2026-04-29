@@ -202,10 +202,7 @@ export class ContractDetailsPageComponent {
       const month = currentDate.getMonth() + 1; // 1-indexed
       const reference = `${year}-${month.toString().padStart(2, '0')}`;
       
-      // A data de vencimento é no MÊS SEGUINTE (ex: ref Jan (mês 1) vence em Fev (mês 2))
-      // Usamos new Date(year, month, actualDay) -> note que 'month' (1-indexed) como segundo argumento do construtor Date de 0-indexed aponta para o próximo mês.
-      // Ex: Jan (month=1) -> new Date(year, 1, 10) -> 10 de Fevereiro.
-      const dueDateMonth = month; // Se ref é Jan (0), dueDate é Fev (1). Se ref é Dez (11), dueDate é Jan do ano seguinte (12).
+      const dueDateMonth = month;
       const lastDayOfDueMonth = new Date(year, dueDateMonth + 1, 0).getDate();
       const actualDay = Math.min(paymentDay, lastDayOfDueMonth);
       
@@ -213,37 +210,36 @@ export class ContractDetailsPageComponent {
       const isPast = installmentDate < today;
       const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 
-      // Tenta encontrar transações vinculadas a esta parcela
+      // Tenta encontrar transações vinculadas a esta parcela (apenas para exibição de dados SIGEF)
       const matches = transactions.filter(t => 
         t.type === 'LIQUIDATION' && t.parcela_referencia === reference
       );
 
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
       
-      // Marca como PAID se houver transação manual ou transação SIGEF confirmada
-      const hasConfirmedPayment = matches.some(t => {
-        // Pagamento manual sempre confirma
-        if (t.manual_payment === true) return true;
-        // Transação SIGEF só confirma se tiver status de pago
+      // Verifica se está marcada como paga manualmente (sem afetar financeiro)
+      const isManualPaid = c.parcelas_pagas_manual?.includes(reference);
+      
+      // Verifica se há transação SIGEF confirmada
+      const hasSigefPayment = matches.some(t => {
         if (!t.sigef_id) return false;
         const desc = t.description.toLowerCase();
         return SIGEF_PAID_STATUSES.some(s => desc.includes(s.toLowerCase()));
       });
 
-      if (hasConfirmedPayment) {
+      if (isManualPaid || hasSigefPayment) {
         status = 'PAID';
       } else if (isPast) {
         status = 'OVERDUE';
       }
 
-      // Encontrar data do pagamento manual
-      const manualPayment = matches.find(t => t.manual_payment === true);
-      const paidAt = manualPayment?.parcela_pago_em;
+      // Data de pagamento manual é a data em que foi marcada
+      const paidAt = isManualPaid ? new Date() : undefined;
 
       payments.push({
-        monthLabel, // Exibe o mês de REFERÊNCIA (Jan 2026)
+        monthLabel,
         reference,
-        date: installmentDate, // A data do objeto será o VENCIMENTO (10/02/2026)
+        date: installmentDate,
         valor: monthlyValue,
         daysUntil: Math.ceil((installmentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
         isPast,
@@ -911,65 +907,75 @@ export class ContractDetailsPageComponent {
     this.selectedInstallment.set(null);
   }
 
-  async markInstallmentAsPaid() {
-    const installment = this.selectedInstallment();
-    if (!installment) return;
-
-    try {
-      // Criar uma transação manual de pagamento para marcar como pago
-      const { data, error } = await this.supabaseService.client
-        .from('transacoes')
-        .insert({
-          contract_id: this.contractId(),
-          description: `Pagamento Parcela ${installment.reference} - Registro Manual`,
-          type: 'LIQUIDATION' as const,
-          amount: installment.valor,
-          date: new Date().toISOString().split('T')[0],
-          parcela_referencia: installment.reference,
-          parcela_valor: installment.valor,
-          parcela_pago_em: new Date().toISOString(),
-          manual_payment: true
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Recarregar dados
-      await this.loadTransactions(this.contractId());
-      await this.loadBudgets(this.contractId());
-      await this.contractService.loadContracts();
-
-      this.closeMarkAsPaidModal();
-      
-    } catch (err: any) {
-      console.error('[ContractDetails] Erro ao marcar como pago:', err);
-      alert('Erro ao registrar pagamento: ' + (err.message || 'Erro desconhecido'));
-    }
-  }
-
   async unmarkInstallmentAsPaid(installment: PaymentSchedule) {
     if (!confirm('Deseja remover a marcação de pago desta parcela?')) return;
 
     try {
-      // Remover transações manuais vinculadas a esta parcela
+      console.log('[ContractDetails] Desmarcar pagamento:', installment.reference);
+      const c = this.contract();
+      if (!c) throw new Error('Contrato não encontrado');
+
+      const parcelasAtuais = c.parcelas_pagas_manual || [];
+      const novasParcelas = parcelasAtuais.filter(ref => ref !== installment.reference);
+      
+      console.log('[ContractDetails] Atualizando banco. Novas parcelas:', novasParcelas);
+      
+      // Atualização Otimista
+      this.contractService.updateContractInSignal(c.id, { parcelas_pagas_manual: novasParcelas });
+
       const { error } = await this.supabaseService.client
-        .from('transacoes')
-        .delete()
-        .eq('contract_id', this.contractId())
-        .eq('parcela_referencia', installment.reference)
-        .eq('manual_payment', true);
+        .from('contratos')
+        .update({ parcelas_pagas_manual: novasParcelas })
+        .eq('id', c.id);
 
-      if (error) throw error;
+      if (error) {
+        this.contractService.updateContractInSignal(c.id, { parcelas_pagas_manual: parcelasAtuais });
+        throw error;
+      }
 
-      // Recarregar dados
-      await this.loadTransactions(this.contractId());
-      await this.loadBudgets(this.contractId());
+      console.log('[ContractDetails] Sucesso no banco. Sincronizando dados...');
       await this.contractService.loadContracts();
 
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao desmarcar pagamento:', err);
       alert('Erro ao remover pagamento: ' + (err.message || 'Erro desconhecido'));
+    }
+  }
+
+  // Função direta para marcar como pago (sem modal)
+  async markInstallmentAsPaidDirectly(installment: PaymentSchedule) {
+    console.log('[ContractDetails] Marcar como pago diretamente:', installment.reference);
+    try {
+      const c = this.contract();
+      if (!c) throw new Error('Contrato não encontrado');
+
+      // Adicionar referência da parcela ao array de pagas manualmente
+      const parcelasAtuais = c.parcelas_pagas_manual || [];
+      if (!parcelasAtuais.includes(installment.reference)) {
+        const novasParcelas = [...parcelasAtuais, installment.reference];
+        
+        console.log('[ContractDetails] Atualizando banco. Novas parcelas:', novasParcelas);
+        
+        // Atualização Otimista: Muda o sinal imediatamente para resposta visual instantânea
+        this.contractService.updateContractInSignal(c.id, { parcelas_pagas_manual: novasParcelas });
+
+        const { error } = await this.supabaseService.client
+          .from('contratos')
+          .update({ parcelas_pagas_manual: novasParcelas })
+          .eq('id', c.id);
+
+        if (error) {
+          // Reverter em caso de erro
+          this.contractService.updateContractInSignal(c.id, { parcelas_pagas_manual: parcelasAtuais });
+          throw error;
+        }
+
+        console.log('[ContractDetails] Sucesso no banco. Sincronizando dados...');
+        await this.contractService.loadContracts();
+      }
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro ao marcar como pago:', err);
+      alert('Erro ao registrar pagamento: ' + (err.message || 'Erro desconhecido'));
     }
   }
   

@@ -51,10 +51,23 @@ export class ContractService {
 
   private async fetchContracts(year: number) {
     try {
-      return await this.supabaseService.client
-        .rpc('rpc_contratos_por_ano', { p_ano: year });
+      console.log(`[ContractService] Buscando contratos para o ano ${year}...`);
+      // Consultamos a tabela contratos diretamente para garantir acesso a todos os relacionamentos
+      // sem depender de views que podem estar desatualizadas ou sem as colunas financeiras.
+      const { data, error } = await this.supabaseService.client
+        .from('contratos')
+        .select(`
+          *,
+          fornecedores:fornecedor_id(razao_social),
+          setores:setor_id(nome),
+          dotacoes(*)
+        `)
+        .neq('status', 'EXCLUIDO');
+
+      if (error) throw error;
+      return { data, error: null };
     } catch (err) {
-      console.warn('Erro na query de contratos:', err);
+      console.error('[ContractService] Erro na query de contratos:', err);
       return { data: [], error: null };
     }
   }
@@ -103,7 +116,7 @@ export class ContractService {
 
       const contracts = rawContracts.map((raw: any) => {
         const aditivosDoContrato = aditivosMap.get(raw.id) || [];
-        return this.mapRawToContract(raw, aditivosDoContrato);
+        return this.mapRawToContract(raw, aditivosDoContrato, targetYear);
       });
 
       this._contracts.set(contracts);
@@ -118,6 +131,15 @@ export class ContractService {
 
   getContractById(id: string): Contract | undefined {
     return this.contracts().find(c => c.id === id || c.contrato === id);
+  }
+
+  /**
+   * Atualiza um contrato específico no sinal local para refletir mudanças instantaneamente na UI.
+   */
+  updateContractInSignal(contractId: string, updates: Partial<Contract>) {
+    this._contracts.update(current => 
+      current.map(c => c.id === contractId ? { ...c, ...updates } : c)
+    );
   }
 
   /**
@@ -202,8 +224,35 @@ export class ContractService {
 
   // ── Mappers Privados ────────────────────────
 
-  private mapRawToContract(raw: any, aditivos: Aditivo[] = []): Contract {
+  private mapRawToContract(raw: any, aditivos: Aditivo[] = [], selectedYear?: number): Contract {
     const dataFimOriginal = this.parseDate(raw.data_fim);
+
+    // Agregar valores das dotações (filtrando por ano se fornecido)
+    let totalEmpenhado = 0;
+    let totalPago = 0;
+    let dataUltimoPagamento: Date | undefined = undefined;
+
+    if (raw.dotacoes && Array.isArray(raw.dotacoes)) {
+      raw.dotacoes.forEach((d: any) => {
+        // As dotações podem vir da tabela dotacoes via join
+        const budgetYear = d.ano || (d.data_disponibilidade ? new Date(d.data_disponibilidade).getFullYear() : null);
+        
+        // Se temos um ano selecionado, só somamos as dotações daquele ano
+        // Caso contrário, somamos tudo (all-time) para consistência histórica
+        if (!selectedYear || budgetYear === selectedYear) {
+          totalEmpenhado += Number(d.total_empenhado) || 0;
+          totalPago += Number(d.total_pago) || 0;
+          
+          const upDate = d.updated_at || d.data_ultimo_pagamento;
+          if (upDate) {
+            const up = new Date(upDate);
+            if (!dataUltimoPagamento || up > dataUltimoPagamento) {
+              dataUltimoPagamento = up;
+            }
+          }
+        }
+      });
+    }
     
     // Filtrar aditivos que alteram vigência (Prorrogação/Prazo)
     const aditivosComVigencia = aditivos
@@ -264,10 +313,10 @@ export class ContractService {
       contrato: raw.contrato ?? '',
       processo_sei: raw.processo_sei ?? undefined,
       link_sei: raw.link_sei ?? undefined,
-      contratada: raw.contratada ?? raw.razao_social ?? raw.nome_fornecedor ?? raw.nome_contratada ?? '',
+      contratada: raw.contratada ?? raw.fornecedores?.razao_social ?? raw.razao_social ?? '',
       cnpj_contratada: raw.cnpj_contratada ?? raw.cnpj ?? undefined,
       fornecedor_id: raw.fornecedor_id ?? undefined,
-      fornecedor_nome: raw.fornecedor_nome ?? undefined,
+      fornecedor_nome: raw.fornecedores?.razao_social ?? raw.fornecedor_nome ?? undefined,
       data_inicio: this.parseDate(raw.data_inicio),
       data_fim: dataFimOriginal,
       data_pagamento: raw.data_pagamento != null ? Number(raw.data_pagamento) : undefined,
@@ -275,7 +324,7 @@ export class ContractService {
       status: (raw.status as ContractStatus) || ContractStatus.VIGENTE,
       tipo: raw.tipo as 'serviço' | 'material' | undefined,
       setor_id: raw.setor_id ?? raw.setor ?? undefined,
-      setor_nome: raw.setor_nome ?? undefined,
+      setor_nome: raw.setores?.nome ?? raw.setor_nome ?? undefined,
       unid_gestora: raw.unid_gestora ?? undefined,
       objeto: raw.objeto ?? raw.descricao ?? undefined,
       gestor_contrato: raw.gestor_contrato ?? raw.gestor ?? undefined,
@@ -284,13 +333,15 @@ export class ContractService {
       data_fim_efetiva: dataFimEfetiva,
       dias_restantes: diasRestantes,
       status_efetivo: statusEfetivo,
-      total_empenhado: this.parseNumeric(raw.total_empenhado),
-      total_pago: this.parseNumeric(raw.total_pago),
-      saldo_a_pagar: this.parseNumeric(raw.saldo_a_pagar),
-      data_ultimo_pagamento: raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined,
+      total_empenhado: totalEmpenhado,
+      total_pago: totalPago,
+      saldo_a_pagar: totalEmpenhado - totalPago,
+      data_ultimo_pagamento: dataUltimoPagamento || (raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined),
       valor_mensal: raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined,
       valor_global_atualizado: valorGlobalAtualizado,
-      total_aditivos_valor: totalAditivosValor
+      total_aditivos_valor: totalAditivosValor,
+      parcelas_pagas_manual: Array.isArray(raw.parcelas_pagas_manual) ? raw.parcelas_pagas_manual : 
+                            (raw.parcelas_pagas_manual ? [raw.parcelas_pagas_manual] : [])
     };
   }
 
