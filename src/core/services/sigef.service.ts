@@ -630,7 +630,7 @@ export class SigefService implements OnDestroy {
       }
       
       if (nunotaempenho) {
-        const cachedList = await this.cacheService.getRawMirrorList('OB', 'nunotaempenho', nunotaempenho);
+        const cachedList = await this.cacheService.getRawMirrorList('OB', 'nunotaempenho', nunotaempenho, cdunidadegestora);
         if (cachedList && cachedList.length > 0) {
           console.log(`[SIGEF RAW MIRROR] OB_LIST para ${nunotaempenho} encontrada no espelho (${cachedList.length} itens).`);
           return { data: cachedList, count: cachedList.length, next: null, previous: null };

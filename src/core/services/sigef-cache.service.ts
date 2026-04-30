@@ -461,13 +461,19 @@ export class SigefCacheService {
    * Recupera uma lista de registros do espelho baseada em um campo do JSON.
    * Útil para buscar todas as OBs de uma NE, por exemplo.
    */
-  async getRawMirrorList(type: string, fieldName: string, value: string): Promise<any[]> {
+  async getRawMirrorList(type: string, fieldName: string, value: string, cdunidadegestora?: string): Promise<any[]> {
     try {
-      const { data, error } = await this.supabaseService.client
+      let query = this.supabaseService.client
         .from('import_sigef')
         .select('raw_data')
         .eq('type', type)
         .eq(`raw_data->>${fieldName}`, value.trim().toUpperCase());
+
+      if (cdunidadegestora) {
+        query = query.eq('raw_data->>cdunidadegestora', cdunidadegestora.toString());
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.warn(`[SigefCache] Erro ao buscar lista no espelho (${type}.${fieldName}):`, error);

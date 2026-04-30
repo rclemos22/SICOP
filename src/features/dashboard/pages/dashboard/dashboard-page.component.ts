@@ -499,26 +499,31 @@ export class DashboardPageComponent implements OnInit {
         // Ex: parcela 01→vence em 02, se estamos em 03 ou posterior, está atrasado
         const isOverdue = currentYear > dueYear || (currentYear === dueYear && currentMonth > dueMonthAdjusted);
 
-        if (isOverdue) {
-           // Verifica se tem transação VINCOLADA a esta parcela (não apenas no mesmo mês)
-           const isPaid = allTransactions.some(t => 
-             t.contract_id === c.id && 
-             t.type === TransactionType.LIQUIDATION && 
-             t.parcela_referencia === reference
-           );
+         if (isOverdue) {
+            // Verifica se tem transação VINCOLADA a esta parcela (não apenas no mesmo mês)
+            const isPaidByTransaction = allTransactions.some(t => 
+              t.contract_id === c.id && 
+              t.type === TransactionType.LIQUIDATION && 
+              t.parcela_referencia === reference
+            );
 
-           if (!isPaid) {
-             alerts.push({
-               contractId: c.id,
-               contractName: c.contrato,
-               supplier: c.contratada,
-               reference: reference,
-               monthLabel: new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-               dueDate: installmentDate,
-               amount: c.valor_mensal
-             });
-           }
-        }
+            // Verifica se foi marcada como paga manualmente
+            const isPaidByManual = c.parcelas_pagas_manual?.includes(reference) || false;
+
+            const isPaid = isPaidByTransaction || isPaidByManual;
+
+            if (!isPaid) {
+              alerts.push({
+                contractId: c.id,
+                contractName: c.contrato,
+                supplier: c.contratada,
+                reference: reference,
+                monthLabel: new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+                dueDate: installmentDate,
+                amount: c.valor_mensal
+              });
+            }
+         }
         currentDate.setMonth(currentDate.getMonth() + 1);
       }
     });

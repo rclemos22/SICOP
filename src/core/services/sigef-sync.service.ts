@@ -460,7 +460,8 @@ export class SigefSyncService {
 
         const filtered = result.data.filter(ob => {
           const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-          return isTargetNe;
+          const isTargetUg = !ugStr || (ob.cdunidadegestora?.toString() === ugStr);
+          return isTargetNe && isTargetUg;
         });
 
         const newObs = forceSync
