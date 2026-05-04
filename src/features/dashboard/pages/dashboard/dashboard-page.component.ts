@@ -42,7 +42,7 @@ export class DashboardPageComponent implements OnInit {
   viewContract = output<string>();
 
   // Anobase watcher signal
-  private anoBase = signal<number>(0);
+  private anoBase = signal<number>(this.appContext.anoExercicio());
 
   // States
   isLoading = computed(() => 
@@ -59,21 +59,57 @@ export class DashboardPageComponent implements OnInit {
     this.loadAllData();
   }
 
-
   ngOnInit() {
-    const currentYear = this.appContext.anoExercicio();
-    this.anoBase.set(currentYear);
     this.loadAllData();
-    
-    // Watch for year changes using setInterval
-    setInterval(() => {
+  }
+
+  constructor() {
+    // Watch for year changes reactively
+    effect(() => {
       const newYear = this.appContext.anoExercicio();
-      if (newYear !== this.anoBase()) {
+      const oldYear = this.anoBase();
+      if (newYear !== oldYear) {
         this.anoBase.set(newYear);
         console.log('[DASHBOARD] Ano alterado para', newYear, '- Recarregando dados...');
         this.loadAllData();
       }
-    }, 1000);
+    });
+
+    // Reactively render status chart when contracts change
+    effect(() => {
+      const statusData = this.contractsByStatus();
+      const container = this.statusChartContainer()?.nativeElement;
+      if (container) {
+        this.renderStatusChart(container, statusData);
+      }
+    });
+
+    // Reactively render monthly execution bar chart
+    effect(() => {
+      const data = this.monthlyExecution();
+      const container = this.monthlyExecutionChartContainer()?.nativeElement;
+      if (container) {
+        this.renderMonthlyExecutionChart(container, data);
+      }
+    });
+
+    // Reactively render payment comparison chart
+    effect(() => {
+      const data = this.paymentComparisonByMonth();
+      const container = this.paymentComparisonChartContainer()?.nativeElement;
+      if (container) {
+        this.renderPaymentComparisonChart(container, data);
+      }
+    });
+
+    // Reactively render contract comparison chart
+    effect(() => {
+      const data = this.paymentComparisonByContract();
+      const container = this.contractComparisonChartContainer()?.nativeElement;
+      if (container) {
+        this.renderContractComparisonChart(container, data);
+      }
+    });
   }
 
   async loadAllData() {
@@ -555,43 +591,21 @@ export class DashboardPageComponent implements OnInit {
     return this.recentPaymentsList().slice(0, 8);
   });
 
-  constructor() {
-    // Reactively render status chart when contracts change
-    effect(() => {
-      const statusData = this.contractsByStatus();
-      const container = this.statusChartContainer()?.nativeElement;
-      if (container) {
-        this.renderStatusChart(container, statusData);
-      }
-    });
-
-    // Reactively render monthly execution bar chart
-    effect(() => {
-      const data = this.monthlyExecution();
-      const container = this.monthlyExecutionChartContainer()?.nativeElement;
-      if (container) {
-        this.renderMonthlyExecutionChart(container, data);
-      }
-    });
-
-    // Reactively render payment comparison chart
-    effect(() => {
-      const data = this.paymentComparisonByMonth();
-      const container = this.paymentComparisonChartContainer()?.nativeElement;
-      if (container) {
-        this.renderPaymentComparisonChart(container, data);
-      }
-    });
-
-    // Reactively render contract comparison chart
-    effect(() => {
-      const data = this.paymentComparisonByContract();
-      const container = this.contractComparisonChartContainer()?.nativeElement;
-      if (container) {
-        this.renderContractComparisonChart(container, data);
-      }
-    });
+  getLinkedObsForInstallment(contractId: string, reference: string) {
+    const transactions = this.financialService.transactions();
+    return transactions.filter(t => 
+      t.contract_id === contractId &&
+      t.type === TransactionType.LIQUIDATION &&
+      t.parcela_referencia === reference
+    );
   }
+
+  // --- Actions ---
+  goToContracts() { this.navigate.emit('contracts'); }
+  goToFinancial() { this.navigate.emit('financial'); }
+  goToBudget() { this.navigate.emit('budget'); }
+
+  // --- D3 Chart Rendering Methods ---
 
   private renderStatusChart(container: HTMLElement, data: { vigentes: number; finalizando: number; rescindidos: number; encerrados: number; total: number }) {
     d3.select(container).selectAll('*').remove();
@@ -1054,18 +1068,4 @@ export class DashboardPageComponent implements OnInit {
         tooltip.classed('hidden', true);
       });
   }
-
-  getLinkedObsForInstallment(contractId: string, reference: string) {
-    const transactions = this.financialService.transactions();
-    return transactions.filter(t => 
-      t.contract_id === contractId &&
-      t.type === TransactionType.LIQUIDATION &&
-      t.parcela_referencia === reference
-    );
-  }
-
-  // --- Actions ---
-  goToContracts() { this.navigate.emit('contracts'); }
-  goToFinancial() { this.navigate.emit('financial'); }
-  goToBudget() { this.navigate.emit('budget'); }
 }
