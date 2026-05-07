@@ -28,32 +28,39 @@ export class FinancialService {
     this.loadAllTransactions();
   }
 
-  private async fetchFromProvider() {
-    return this.supabaseService.client
-      .from('transacoes')
-      .select('*, contratos(contrato)')
-      .order('date', { ascending: false });
-  }
-
   async loadAllTransactions(): Promise<void> {
     this._loading.set(true);
     this._error.set(null);
 
     try {
-      const { data, error } = await this.fetchFromProvider();
+      // 1. Buscar apenas transações vinculadas a contratos cadastrados E que possuem Nota de Empenho (NE)
+      const { data, error } = await this.supabaseService.client
+        .from('transacoes')
+        .select('*, contratos!inner(id, contrato)')
+        .not('commitment_id', 'is', null)
+        .neq('commitment_id', '')
+        .order('date', { ascending: false });
 
       if (error) {
         throw error;
       }
 
-      const transactions = (data || []).map(this.mapRawToTransaction);
-      
-      const allTransactions = [...transactions];
+      // 2. Mapear e filtrar dados inválidos
+      const transactions = (data || [])
+        .filter(raw => {
+          // Remover transações sem contrato válido ou com dados essenciais faltando
+          if (!raw.contract_id) return false;
+          if (!raw.contratos?.contrato) return false;
+          if (!raw.date || isNaN(new Date(raw.date).getTime())) return false;
+          if (isNaN(Number(raw.amount)) || Number(raw.amount) <= 0) return false;
+          return true;
+        })
+        .map(this.mapRawToTransaction);
 
-      // Ordenar por data decrescente
-      allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // 3. Ordenar por data decrescente
+      transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
-      this._transactions.set(allTransactions);
+      this._transactions.set(transactions);
     } catch (err: any) {
       this.errorHandler.handle(err, 'FinancialService.loadAllTransactions');
       this._error.set(err.message || 'Erro desconhecido');
@@ -67,14 +74,16 @@ export class FinancialService {
     // Acessa o signal de dotações do BudgetService
     const budgets = this.budgetService.dotacoes();
     
+    // Filtrar apenas dotações vinculadas a contratos cadastrados
+    const validBudgets = budgets.filter(b => b.contract_id && b.nunotaempenho);
+    
     const EVENTO_LABELS: Record<number, string> = {
       400010: 'Empenho Inicial',
       400011: 'Reforço de Empenho',
       400012: 'Anulação de Empenho'
     };
 
-    for (const budget of budgets) {
-      if (!budget.nunotaempenho) continue;
+    for (const budget of validBudgets) {
 
       const neValue = budget.nunotaempenho.trim();
       const ug = budget.unid_gestora || '080101';

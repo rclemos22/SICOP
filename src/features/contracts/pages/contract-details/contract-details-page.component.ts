@@ -374,19 +374,46 @@ export class ContractDetailsPageComponent {
   getIconClass = getTransactionIconBgClass;
   getBadgeClass = getUnidadeBadgeClass;
 
+  /** Armazena o queryId atual para permitir cancelamento */
+  private currentQueryId: string | null = null;
+
   constructor() {
     /**
      * Efeito reativo: carrega aditivos, orçamentos e transações
      * automaticamente quando o contrato é selecionado.
+     * Cancela consultas anteriores ao mudar de contrato.
      */
     effect(() => {
       const c = this.contract();
       if (c) {
+        // Cancela consultas pendentes do contrato anterior
+        this.cancelCurrentQueries();
+        
+        // Gera novo queryId para este contrato
+        this.currentQueryId = `contract-${c.id}-${Date.now()}`;
+        this.sigefService.enqueueQuery(this.currentQueryId);
+        
         this.loadAditivos(c.id);
         this.loadBudgets(c.id);
         this.loadTransactions(c.id);
       }
     });
+  }
+
+  /**
+   * Cancela todas as consultas pendentes deste componente.
+   */
+  private cancelCurrentQueries(): void {
+    if (this.currentQueryId) {
+      this.sigefService.cancelQuery(this.currentQueryId);
+      this.currentQueryId = null;
+    }
+    // Cancela todas as consultas pendentes no serviço
+    this.sigefService.cancelAllQueries();
+  }
+
+  ngOnDestroy(): void {
+    this.cancelCurrentQueries();
   }
 
   private async loadBudgets(contractId: string): Promise<void> {
@@ -559,6 +586,7 @@ export class ContractDetailsPageComponent {
   
   /**
    * Atualiza os dados SIGEF (empenhos e OBs) de todas as dotações do contrato
+   * Usa queryId para permitir cancelamento.
    */
   async refreshSigefData(fullScan: boolean = true) {
     const budgets = this.budgets();
@@ -568,6 +596,11 @@ export class ContractDetailsPageComponent {
       console.log('[ContractDetails] Nenhuma dotação com NE para atualizar');
       return;
     }
+    
+    // Cancela consultas anteriores e gera novo queryId
+    this.cancelCurrentQueries();
+    this.currentQueryId = `refresh-${this.contractId()}-${Date.now()}`;
+    this.sigefService.enqueueQuery(this.currentQueryId);
     
     console.log('[ContractDetails] Atualizando dados SIGEF via Batch Sync...');
     
@@ -585,6 +618,12 @@ export class ContractDetailsPageComponent {
 
       // 2. Executar a sincronização em lote (fila controlada com persistência automática no banco)
       await this.sigefSyncService.syncBatch(tasks, this.contract()?.id, true, !fullScan);
+      
+      // Verifica se foi cancelado
+      if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+        console.log('[ContractDetails] Atualização cancelada.');
+        return;
+      }
       
       // 3. Atualizar carimbos de data de sincronização local para cada dotação
       const lastSyncMap = new Map(this.sigefLastSync());
@@ -605,8 +644,13 @@ export class ContractDetailsPageComponent {
       this.lastSyncDate.set(new Date());
       console.log('[ContractDetails] Dados SIGEF atualizados com sucesso');
     } catch (err: any) {
+      if (err.message === 'Query cancelled') {
+        console.log('[ContractDetails] Sincronização cancelada.');
+        return;
+      }
       console.error('[ContractDetails] Erro na sincronização batch:', err);
     } finally {
+      this.currentQueryId = null;
     }
   }
 

@@ -29,6 +29,7 @@ export interface SyncTask {
  *      2. Gerencia a fila de tarefas e o estado de progresso da UI.
  *      3. Chama a API individual somente quando uma NE não existe no espelho
  *         (fallback pontual para casos que escaparam do bulk).
+ *  - Implementa fila de consultas para evitar concorrência na navegação.
  */
 @Injectable({
   providedIn: 'root'
@@ -42,6 +43,9 @@ export class SigefSyncService {
   private budgetService    = inject(BudgetService);
   private appContext       = inject(AppContextService);
   private supabase         = inject(SupabaseService);
+
+  /** Armazena o queryId atual para permitir cancelamento */
+  private currentQueryId: string | null = null;
 
   /**
    * Flag: true quando o download bulk inicial já tem ao menos UM período concluído.
@@ -138,6 +142,7 @@ export class SigefSyncService {
    * Obtém o resumo de uma NE.
    * 1ª tentativa: espelho (import_sigef_ne / import_sigef_ob)
    * 2ª tentativa (apenas se forceSync=true ou espelho vazio): API individual
+   * Suporta cancelamento via currentQueryId.
    */
   async getNotaEmpenhoWithCache(
     ano: string,
@@ -166,6 +171,12 @@ export class SigefSyncService {
       return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
     }
 
+    // Verifica se foi cancelado antes de prosseguir
+    if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+      console.log(`[SIGEF SYNC] Consulta cancelada para NE ${neNumber} antes da API.`);
+      return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
+    }
+
     // Daqui para baixo, apenas se forceSync === true (Ação Manual)
     
     const bulkReady = await this._checkBulkReady();
@@ -190,6 +201,7 @@ export class SigefSyncService {
   /**
    * Sincroniza um lote de NEs (chamado pelo botão "Sincronizar SIGEF" no contrato).
    * Agora usa EXCLUSIVAMENTE o espelho — só chama API se a NE não existe localmente.
+   * Suporta cancelamento via currentQueryId.
    */
   async syncBatch(
     tasks: { ne: string; ug: string; ano: string }[],
@@ -202,6 +214,12 @@ export class SigefSyncService {
       return;
     }
 
+    // Verifica se foi cancelado antes de começar
+    if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+      console.log('[SIGEF SYNC] syncBatch cancelado antes de iniciar.');
+      return;
+    }
+
     const queue: SyncTask[] = tasks.map(t => ({ ...t, status: 'pending' }));
     this._syncQueue.set(queue);
     this._currentIdx.set(0);
@@ -209,6 +227,12 @@ export class SigefSyncService {
 
     try {
       for (let i = 0; i < queue.length; i++) {
+        // Verifica se foi cancelado
+        if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+          console.log(`[SIGEF SYNC] syncBatch cancelado durante processamento da NE ${queue[i].ne}.`);
+          break;
+        }
+
         this._currentIdx.set(i);
         const task = queue[i];
         this._updateTaskStatus(i, 'processing');
@@ -218,11 +242,22 @@ export class SigefSyncService {
           await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId, recentOnly);
           this._updateTaskStatus(i, 'completed');
         } catch (err: any) {
+          if (err.message === 'Query cancelled') {
+            console.log(`[SIGEF SYNC] syncBatch cancelado na NE ${task.ne}.`);
+            break;
+          }
           console.error(`[SIGEF SYNC] Erro na NE ${task.ne}:`, err);
           this._updateTaskStatus(i, 'error', err.message || 'Falha na comunicação');
         }
 
-        if (i < queue.length - 1) await this._delay(800);
+        if (i < queue.length - 1) {
+          // Verifica se foi cancelado antes do delay
+          if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+            console.log(`[SIGEF SYNC] syncBatch cancelado após NE ${task.ne}.`);
+            break;
+          }
+          await this._delay(800);
+        }
       }
 
       if (contractId) {
@@ -348,12 +383,24 @@ export class SigefSyncService {
       return;
     }
 
+    // Verifica se foi cancelado
+    if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+      console.log(`[SIGEF SYNC] _syncNeFromApi cancelado para NE ${neNumber}.`);
+      return;
+    }
+
     const ugNum = parseInt(ugStr, 10);
 
     try {
       const ne = await this._withRetry(() =>
-        this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ugStr, forceSync)
+        this.sigefService.getNotaEmpenhoByNumber(ano, neNumber, ugStr, forceSync, this.currentQueryId)
       );
+
+      // Verifica se foi cancelado após a chamada
+      if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+        console.log(`[SIGEF SYNC] _syncNeFromApi cancelado após busca da NE ${neNumber}.`);
+        return;
+      }
 
       if (ne) {
         await this.mirrorService.saveNesBulk([ne as Record<string, any>], ugStr);
@@ -361,8 +408,14 @@ export class SigefSyncService {
       }
 
       const movements = await this._withRetry(() =>
-        this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ugStr, forceSync)
+        this.sigefService.getNotaEmpenhoMovements(ano, neNumber, ugStr, forceSync, this.currentQueryId)
       );
+
+      // Verifica se foi cancelado após busca de movimentos
+      if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+        console.log(`[SIGEF SYNC] _syncNeFromApi cancelado após movimentos da NE ${neNumber}.`);
+        return;
+      }
 
       if (movements.length > 0) {
         await this.mirrorService.saveNesBulk(movements as Record<string, any>[], ugStr);
@@ -381,12 +434,21 @@ export class SigefSyncService {
         ])] as string[];
 
         for (const targetNE of nesVinculadas) {
+          // Verifica se foi cancelado antes de cada NE vinculada
+          if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+            console.log(`[SIGEF SYNC] _syncNeFromApi cancelado antes de OBs da NE ${targetNE}.`);
+            return;
+          }
           await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync, recentOnly);
         }
       } else {
         console.log(`[SIGEF SYNC] NE ${neNumber}: Pulando busca reativa de OBs (Modo Espelho Ativo).`);
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.message === 'Query cancelled') {
+        console.log(`[SIGEF SYNC] _syncNeFromApi cancelado para NE ${neNumber}.`);
+        return;
+      }
       console.error(`[SIGEF SYNC] Erro ao sincronizar NE ${neNumber} via API:`, err);
     }
   }
@@ -397,12 +459,19 @@ export class SigefSyncService {
     ugStr: string,
     ugNum: number,
     forceSync: boolean,
-    recentOnly: boolean = true
+    recentOnly: boolean = true,
+    queryId?: string
   ): Promise<void> {
     // Guard: nunca busca OBs individuais enquanto bulk não completou.
     const ready = await this._checkBulkReady();
     if (!ready) {
       console.log(`[SIGEF SYNC] _syncObsForNe bloqueado para NE ${nunotaempenho} — bulk pendente.`);
+      return;
+    }
+
+    // Verifica se foi cancelado
+    if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
+      console.log(`[SIGEF SYNC] _syncObsForNe cancelado para NE ${nunotaempenho}.`);
       return;
     }
 
@@ -422,17 +491,23 @@ export class SigefSyncService {
       const datafim    = today.toISOString().split('T')[0];
 
       console.log(`[SIGEF SYNC] OBs: Busca rápida (60 dias: ${datainicio} a ${datafim}) para NE ${targetNE}`);
-      await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs);
+      await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
     } else {
       // Regra: Para "Sincronizar SIGEF" (completo), fazer a varredura por anos.
       const anoNE    = parseInt(ano, 10);
       const anoAtual = new Date().getFullYear();
 
       for (let a = anoNE; a <= anoAtual; a++) {
+        // Verifica se foi cancelado
+        if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
+          console.log(`[SIGEF SYNC] _syncObsForNe cancelado durante varredura de anos para NE ${targetNE}.`);
+          return;
+        }
+
         const datainicio = `${a}-01-01`;
         const datafim    = `${a}-12-31`;
         console.log(`[SIGEF SYNC] OBs: Varredura completa ano ${a} para NE ${targetNE}`);
-        await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs);
+        await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
       }
     }
   }
@@ -447,15 +522,22 @@ export class SigefSyncService {
     ugStr: string,
     ugNum: number,
     forceSync: boolean,
-    existingObs: Set<string>
+    existingObs: Set<string>,
+    queryId?: string
   ): Promise<void> {
     try {
       let page = 1;
       let hasNext = true;
 
       while (hasNext && page <= 10) {
+        // Verifica se foi cancelado
+        if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
+          console.log(`[SIGEF SYNC] _fetchObsForPeriod cancelado para NE ${targetNE}.`);
+          return;
+        }
+
         const result = await this.sigefService.getOrdemBancaria(
-          datainicio, datafim, page, undefined, targetNE, ugStr, forceSync
+          datainicio, datafim, page, undefined, targetNE, ugStr, forceSync, queryId
         );
 
         const filtered = result.data.filter(ob => {
@@ -478,9 +560,20 @@ export class SigefSyncService {
 
         hasNext = !!result.next;
         page++;
+
+        // Verifica se foi cancelado antes da próxima página
+        if (hasNext && queryId && !this.sigefService.hasPendingQuery(queryId)) {
+          console.log(`[SIGEF SYNC] _fetchObsForPeriod cancelado durante paginação para NE ${targetNE}.`);
+          return;
+        }
+
         if (hasNext) await this._delay(500);
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.message === 'Query cancelled') {
+        console.log(`[SIGEF SYNC] _fetchObsForPeriod cancelado para NE ${targetNE}.`);
+        return;
+      }
       console.warn(`[SIGEF SYNC] Erro ao buscar OBs (${datainicio} - ${datafim}) para NE ${targetNE}:`, err);
     }
   }

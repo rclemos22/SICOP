@@ -1,12 +1,18 @@
-import { Injectable, inject, signal, computed } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { SigefService } from './sigef.service';
 import { SigefMirrorService } from './sigef-mirror.service';
 import { SupabaseService } from './supabase.service';
 
+interface RegisteredNE {
+  nunotaempenho: string;
+  ug: string;
+  ano: number;
+}
+
 export interface SyncPeriod {
   id?: string;
-  periodo_inicio: string; // ISO date: '2025-01-01'
-  periodo_fim: string;    // ISO date: '2025-01-31'
+  periodo_inicio: string;
+  periodo_fim: string;
   tipo: 'NE' | 'OB';
   total_registros: number;
   status: 'pending' | 'running' | 'completed' | 'error';
@@ -26,36 +32,17 @@ export interface BulkSyncProgress {
   errors: string[];
 }
 
-/**
- * SigefBulkSyncService
- *
- * ARQUITETURA "ESPELHO COMPLETO POR PERÍODO":
- *
- *  Em vez de baixar NE/OB individualmente conforme são acessadas,
- *  este serviço faz um DOWNLOAD EM MASSA de todos os dados do SIGEF
- *  para um intervalo de datas — mês a mês, sequencialmente.
- *
- *  Fluxo inicial:
- *    1. Download de 2025 completo   (01/01/2025 → 31/12/2025)
- *    2. Download de 2026 até hoje   (01/01/2026 → hoje)
- *
- *  Fluxo de atualização (botão "Atualizar SIGEF"):
- *    - Baixa os últimos 60 dias     (hoje - 60 dias → hoje)
- *
- *  Após o download, o sistema consulta SOMENTE o espelho local
- *  (import_sigef_ne / import_sigef_ob) sem consumir a API oficial.
- */
 @Injectable({
   providedIn: 'root'
 })
 export class SigefBulkSyncService {
-  private sigefService  = inject(SigefService);
+  private sigefService = inject(SigefService);
   private mirrorService = inject(SigefMirrorService);
-  private supabase      = inject(SupabaseService);
+  private supabase = inject(SupabaseService);
 
   private get client() { return this.supabase.client; }
 
-  // ─── Estado reativo ───────────────────────────────────────────
+  // Estado reativo
   private _progress = signal<BulkSyncProgress>({
     phase: 'idle',
     currentLabel: '',
@@ -69,25 +56,63 @@ export class SigefBulkSyncService {
 
   private _isRunning = signal<boolean>(false);
 
-  readonly progress   = this._progress.asReadonly();
-  readonly isRunning  = this._isRunning.asReadonly();
+  readonly progress = this._progress.asReadonly();
+  readonly isRunning = this._isRunning.asReadonly();
 
-  // ─── Constantes ────────────────────────────────────────────────
-  private readonly UG = '080901'; // Unidade Gestora padrão
-  private readonly PAGE_DELAY_MS = 600; // Delay entre páginas
-  private readonly MONTH_DELAY_MS = 1000; // Delay entre meses
+  // Constantes
+  private readonly UG = '080901';
+  private readonly PAGE_DELAY_MS = 600;
+  private readonly MONTH_DELAY_MS = 1000;
 
-  // =================================================================
-  // API PÚBLICA
-  // =================================================================
+  // Métodos auxiliares para progresso
+  private _resetProgress(): void {
+    this._progress.set({
+      phase: 'idle',
+      currentLabel: 'Iniciando...',
+      current: 0,
+      total: 0,
+      percent: 0,
+      totalNeSaved: 0,
+      totalObSaved: 0,
+      errors: []
+    });
+  }
 
-  /**
-   * Executa o download inicial completo:
-   *   1. Todos os dados de 2025 (NE + OB)
-   *   2. Todos os dados de 2026 até hoje (NE + OB)
-   *
-   * Pula períodos que já foram baixados com sucesso (idempotente).
-   */
+  private _setPhase(
+    phase: BulkSyncProgress['phase'],
+    current: number,
+    total: number,
+    totalNe: number,
+    totalOb: number,
+    errors: string[],
+    label: string
+  ): void {
+    this._setProgress(phase, current, total, totalNe, totalOb, errors, label);
+  }
+
+  private _setProgress(
+    phase: BulkSyncProgress['phase'],
+    current: number,
+    total: number,
+    totalNe: number,
+    totalOb: number,
+    errors: string[],
+    label: string
+  ): void {
+    this._progress.set({
+      phase,
+      currentLabel: label,
+      current,
+      total,
+      percent: total > 0 ? Math.round((current / total) * 100) : 0,
+      totalNeSaved: totalNe,
+      totalObSaved: totalOb,
+      errors: [...errors]
+    });
+  }
+
+  // API Pública
+
   async downloadInitialData(): Promise<void> {
     if (this._isRunning()) {
       console.warn('[BulkSync] Download já em andamento.');
@@ -98,91 +123,79 @@ export class SigefBulkSyncService {
     this._resetProgress();
 
     try {
-      const hoje = new Date();
-      const anoAtual = hoje.getFullYear();
+      const registeredNEs = await this._getRegisteredNEs();
 
-      // Montar lista de meses a baixar
-      const meses: { inicio: string; fim: string; label: string }[] = [];
-
-      // 2025: janeiro a dezembro completo
-      for (let m = 1; m <= 12; m++) {
-        const inicio = this._formatDate(new Date(2025, m - 1, 1));
-        const fim    = this._formatDate(this._lastDayOfMonth(2025, m));
-        meses.push({ inicio, fim, label: `2025/${String(m).padStart(2, '0')}` });
+      if (registeredNEs.length === 0) {
+        console.warn('[BulkSync] Nenhuma NE cadastrada. Encerrando.');
+        this._setProgress('done', 0, 0, 0, 0, [], 'Nenhuma NE cadastrada.');
+        return;
       }
 
-      // 2026: janeiro até o mês atual (inclusive)
-      if (anoAtual >= 2026) {
-        const mesAtual = hoje.getMonth() + 1; // 1-indexed
-        for (let m = 1; m <= mesAtual; m++) {
-          const inicio = this._formatDate(new Date(2026, m - 1, 1));
-          const fim    = m === mesAtual
-            ? this._formatDate(hoje)
-            : this._formatDate(this._lastDayOfMonth(2026, m));
-          meses.push({ inicio, fim, label: `2026/${String(m).padStart(2, '0')}` });
-        }
-      }
-
-      const total = meses.length * 2; // NE + OB por mês
+      const total = registeredNEs.length * 2;
       let current = 0;
       let totalNe = 0;
       let totalOb = 0;
       const errors: string[] = [];
 
-      // ── Fase NE ──────────────────────────────────────────────
-      this._setPhase('ne', current, total, totalNe, totalOb, errors, 'Baixando Notas de Empenho...');
+      // Fase NE
+      this._setPhase('ne', current, total, totalNe, totalOb, errors, 'Baixando Notas de Empenho cadastradas...');
 
-      for (const { inicio, fim, label } of meses) {
+      for (const { nunotaempenho, ug, ano } of registeredNEs) {
         current++;
-        this._setProgress(
-          'ne', current, total, totalNe, totalOb, errors,
-          `NE ${label}`
-        );
+        const label = `NE ${nunotaempenho} (${ano})`;
+        this._setProgress('ne', current, total, totalNe, totalOb, errors, label);
 
-        // Pular se já baixado com sucesso
-        if (await this._isPeriodComplete(inicio, fim, 'NE')) {
-          console.log(`[BulkSync] NE ${label} já sincronizado. Pulando.`);
+        const neYear = parseInt(ano.toString(), 10);
+        const inicioNE = `${neYear}-01-01`;
+        const fimNE = `${neYear}-12-31`;
+
+        if (await this._isPeriodComplete(inicioNE, fimNE, 'NE')) {
+          console.log(`[BulkSync] ${label} já sincronizado. Pulando.`);
+          totalNe++;
           continue;
         }
 
         try {
-          const count = await this._downloadNePeriod(inicio, fim, label);
+          const count = await this._downloadSpecificNE(nunotaempenho, ug, ano);
           totalNe += count;
-          await this._markPeriodComplete(inicio, fim, 'NE', count);
+          await this._markPeriodComplete(inicioNE, fimNE, 'NE', count);
         } catch (err: any) {
-          const msg = `NE ${label}: ${err?.message || 'Erro desconhecido'}`;
+          const msg = `${label}: ${err?.message || 'Erro desconhecido'}`;
           errors.push(msg);
           console.error('[BulkSync]', msg);
-          await this._markPeriodError(inicio, fim, 'NE', msg);
+          await this._markPeriodError(inicioNE, fimNE, 'NE', msg);
         }
 
         await this._delay(this.MONTH_DELAY_MS);
       }
 
-      // ── Fase OB ──────────────────────────────────────────────
-      this._setPhase('ob', current, total, totalNe, totalOb, errors, 'Baixando Ordens Bancárias...');
+      // Fase OB
+      this._setPhase('ob', current, total, totalNe, totalOb, errors, 'Baixando Ordens Bancárias das NEs cadastradas...');
 
-      for (const { inicio, fim, label } of meses) {
+      for (const { nunotaempenho, ug, ano } of registeredNEs) {
         current++;
-        this._setProgress(
-          'ob', current, total, totalNe, totalOb, errors,
-          `OB ${label}`
-        );
+        const label = `OB ${nunotaempenho} (${ano})`;
+        this._setProgress('ob', current, total, totalNe, totalOb, errors, label);
 
-        if (await this._isPeriodComplete(inicio, fim, 'OB')) {
-          console.log(`[BulkSync] OB ${label} já sincronizado. Pulando.`);
+        const neYear = parseInt(ano.toString(), 10);
+        const inicioNE = `${neYear}-01-01`;
+        const fimNE = `${neYear}-12-31`;
+
+        if (await this._isPeriodComplete(inicioNE, fimNE, 'OB')) {
+          console.log(`[BulkSync] OBs de ${label} já sincronizados. Pulando.`);
+          totalOb++;
           continue;
         }
 
         try {
-          const count = await this._downloadObPeriod(inicio, fim, label);
+          const count = await this._downloadObsForNE(nunotaempenho, ug, ano);
           totalOb += count;
-          await this._markPeriodComplete(inicio, fim, 'OB', count);
+          await this._markPeriodComplete(inicioNE, fimNE, 'OB', count);
         } catch (err: any) {
-          const msg = `OB ${label}: ${err?.message || 'Erro desconhecido'}`;
+          const msg = `${label}: ${err?.message || 'Erro desconhecido'}`;
           errors.push(msg);
           console.error('[BulkSync]', msg);
-          await this._markPeriodError(inicio, fim, 'OB', msg);
+          await this._markPeriodError(inicioNE, fimNE, 'OB', msg);
         }
 
         await this._delay(this.MONTH_DELAY_MS);
@@ -196,10 +209,6 @@ export class SigefBulkSyncService {
     }
   }
 
-  /**
-   * Atualização incremental dos últimos 60 dias (botão "Atualizar SIGEF").
-   * Força o re-download do período mesmo que já exista no controle.
-   */
   async downloadLast60Days(): Promise<void> {
     if (this._isRunning()) {
       console.warn('[BulkSync] Download já em andamento.');
@@ -210,41 +219,71 @@ export class SigefBulkSyncService {
     this._resetProgress();
 
     try {
-      const hoje  = new Date();
+      const hoje = new Date();
       const inicio60 = new Date(hoje);
       inicio60.setDate(hoje.getDate() - 60);
 
       const inicioStr = this._formatDate(inicio60);
-      const fimStr    = this._formatDate(hoje);
+      const fimStr = this._formatDate(hoje);
 
       const label = `últimos 60 dias (${inicioStr} → ${fimStr})`;
       console.log(`[BulkSync] Atualizando ${label}...`);
 
+      const registeredNEs = await this._getRegisteredNEs();
+
+      if (registeredNEs.length === 0) {
+        console.warn('[BulkSync] Nenhuma NE cadastrada. Encerrando.');
+        this._setProgress('done', 0, 0, 0, 0, [], 'Nenhuma NE cadastrada.');
+        return;
+      }
+
+      const total = registeredNEs.length * 2;
+      let current = 0;
       let totalNe = 0;
       let totalOb = 0;
       const errors: string[] = [];
 
-      // NE
-      this._setProgress('ne', 0, 2, 0, 0, errors, `NE ${label}`);
-      try {
-        totalNe = await this._downloadNePeriod(inicioStr, fimStr, label, true);
-        await this._markPeriodComplete(inicioStr, fimStr, 'NE', totalNe);
-      } catch (err: any) {
-        errors.push(`NE: ${err?.message}`);
-        await this._markPeriodError(inicioStr, fimStr, 'NE', err?.message);
+      // Fase NE
+      this._setPhase('ne', current, total, totalNe, totalOb, errors, `Atualizando NEs (${label})...`);
+
+      for (const { nunotaempenho, ug, ano } of registeredNEs) {
+        current++;
+        const neLabel = `NE ${nunotaempenho} (${ano})`;
+        this._setProgress('ne', current, total, totalNe, totalOb, errors, neLabel);
+
+        try {
+          const count = await this._downloadSpecificNE(nunotaempenho, ug, ano);
+          totalNe += count;
+        } catch (err: any) {
+          const msg = `${neLabel}: ${err?.message || 'Erro desconhecido'}`;
+          errors.push(msg);
+          console.error('[BulkSync]', msg);
+        }
+
+        await this._delay(this.MONTH_DELAY_MS);
       }
 
-      // OB
-      this._setProgress('ob', 1, 2, totalNe, 0, errors, `OB ${label}`);
-      try {
-        totalOb = await this._downloadObPeriod(inicioStr, fimStr, label, true);
-        await this._markPeriodComplete(inicioStr, fimStr, 'OB', totalOb);
-      } catch (err: any) {
-        errors.push(`OB: ${err?.message}`);
-        await this._markPeriodError(inicioStr, fimStr, 'OB', err?.message);
+      // Fase OB
+      this._setPhase('ob', current, total, totalNe, totalOb, errors, `Atualizando OBs (${label})...`);
+
+      for (const { nunotaempenho, ug, ano } of registeredNEs) {
+        current++;
+        const obLabel = `OB ${nunotaempenho} (${ano})`;
+        this._setProgress('ob', current, total, totalNe, totalOb, errors, obLabel);
+
+        try {
+          const count = await this._downloadObsForNE(nunotaempenho, ug, ano);
+          totalOb += count;
+        } catch (err: any) {
+          const msg = `${obLabel}: ${err?.message || 'Erro desconhecido'}`;
+          errors.push(msg);
+          console.error('[BulkSync]', msg);
+        }
+
+        await this._delay(this.MONTH_DELAY_MS);
       }
 
-      this._setProgress('done', 2, 2, totalNe, totalOb, errors,
+      this._setProgress('done', total, total, totalNe, totalOb, errors,
         `Concluído. NEs: ${totalNe}, OBs: ${totalOb}`);
 
       console.log(`[BulkSync] Atualização concluída. NEs: ${totalNe}, OBs: ${totalOb}`);
@@ -254,9 +293,6 @@ export class SigefBulkSyncService {
     }
   }
 
-  /**
-   * Verifica se o download inicial já foi concluído (ambas as fases 2025 e 2026).
-   */
   async isInitialDownloadComplete(): Promise<boolean> {
     const { count } = await this.client
       .from('sigef_sync_periods')
@@ -265,9 +301,6 @@ export class SigefBulkSyncService {
     return (count ?? 0) > 0;
   }
 
-  /**
-   * Retorna resumo dos períodos sincronizados.
-   */
   async getSyncSummary(): Promise<SyncPeriod[]> {
     const { data } = await this.client
       .from('sigef_sync_periods')
@@ -276,132 +309,151 @@ export class SigefBulkSyncService {
     return (data || []) as SyncPeriod[];
   }
 
-  // =================================================================
-  // Download de NEs por período
-  // =================================================================
+  // Métodos privados
 
-  private async _downloadNePeriod(
-    datainicio: string,
-    datafim: string,
-    label: string,
-    forceUpdate: boolean = false
+  private async _getRegisteredNEs(): Promise<RegisteredNE[]> {
+    const { data, error } = await this.client
+      .from('dotacoes')
+      .select('nunotaempenho, unid_gestora, data_disponibilidade')
+      .not('nunotaempenho', 'is', null);
+
+    if (error) {
+      console.error('[BulkSync] Erro ao buscar NEs cadastradas:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      console.warn('[BulkSync] Nenhuma NE cadastrada no sistema. Nada para sincronizar.');
+      return [];
+    }
+
+    const neMap = new Map<string, RegisteredNE>();
+
+    for (const item of data) {
+      if (!item.nunotaempenho) continue;
+      const ne = item.nunotaempenho.trim().toUpperCase();
+      const ug = item.unid_gestora || '080901';
+      const ano = new Date(item.data_disponibilidade).getFullYear();
+      const key = `${ne}-${ug}-${ano}`;
+      if (!neMap.has(key)) {
+        neMap.set(key, { nunotaempenho: ne, ug, ano });
+      }
+    }
+
+    const registered = Array.from(neMap.values());
+    console.log(`[BulkSync] Encontradas ${registered.length} NEs cadastradas no sistema.`);
+    return registered;
+  }
+
+  private async _downloadSpecificNE(
+    nunotaempenho: string,
+    ug: string,
+    ano: number
   ): Promise<number> {
-    await this._upsertPeriodRunning(datainicio, datafim, 'NE');
+    console.log(`[BulkSync] Baixando NE específica: ${nunotaempenho} (${ano})...`);
 
     let totalSaved = 0;
-    let page = 1;
-    let hasNext = true;
-    const MAX_PAGES = 50; // Segurança contra loop infinito
 
-    console.log(`[BulkSync] Baixando NEs de ${datainicio} até ${datafim}...`);
+    try {
+      const ne = await this._withRetry(() =>
+        this.sigefService.getNotaEmpenhoByNumber(ano.toString(), nunotaempenho, ug, true)
+      );
 
-    while (hasNext && page <= MAX_PAGES) {
-      try {
-        const result = await this._withRetry(() =>
-          this.sigefService.getNotaEmpenhoByPeriod(datainicio, datafim, page, this.UG)
+      if (ne) {
+        await this.mirrorService.saveNesBulk(
+          [ne as Record<string, any>],
+          ug,
+          `${ano}-01-01`
         );
+        totalSaved = 1;
+        console.log(`[BulkSync] NE ${nunotaempenho} baixada com sucesso.`);
+      }
 
-        if (result.data.length > 0) {
-          await this.mirrorService.saveNesBulk(
-            result.data as Record<string, any>[],
-            this.UG,
-            datainicio
+      const movements = await this._withRetry(() =>
+        this.sigefService.getNotaEmpenhoMovements(ano.toString(), nunotaempenho, ug, true)
+      );
+
+      if (movements && movements.length > 0) {
+        await this.mirrorService.saveNesBulk(
+          movements as Record<string, any>[],
+          ug,
+          `${ano}-01-01`
+        );
+        totalSaved += movements.length;
+        console.log(`[BulkSync] +${movements.length} movimentos para NE ${nunotaempenho}.`);
+      }
+
+    } catch (err: any) {
+      console.error(`[BulkSync] Erro ao baixar NE ${nunotaempenho}:`, err?.message);
+      throw err;
+    }
+
+    return totalSaved;
+  }
+
+  private async _downloadObsForNE(
+    nunotaempenho: string,
+    ug: string,
+    ano: number
+  ): Promise<number> {
+    console.log(`[BulkSync] Baixando OBs da NE: ${nunotaempenho}...`);
+
+    let totalSaved = 0;
+    const anoAtual = new Date().getFullYear();
+
+    for (let a = ano; a <= anoAtual; a++) {
+      const inicio = `${a}-01-01`;
+      const fim = a === anoAtual
+        ? this._formatDate(new Date())
+        : `${a}-12-31`;
+
+      let page = 1;
+      let hasNext = true;
+      const MAX_PAGES = 20;
+
+      while (hasNext && page <= MAX_PAGES) {
+        try {
+          const result = await this._withRetry(() =>
+            this.sigefService.getOrdemBancaria(
+              inicio,
+              fim,
+              page,
+              undefined,
+              nunotaempenho,
+              ug,
+              true
+            )
           );
-          totalSaved += result.data.length;
-          console.log(`[BulkSync] NE ${label} pág.${page}: +${result.data.length} (total: ${totalSaved})`);
-        }
 
-        hasNext = !!result.next;
-        page++;
+          if (result.data.length > 0) {
+            await this.mirrorService.saveObsBulk(
+              result.data as Record<string, any>[],
+              ug
+            );
+            totalSaved += result.data.length;
+            console.log(`[BulkSync] NE ${nunotaempenho} (${a}) pág.${page}: +${result.data.length} OBs`);
+          }
 
-        if (hasNext) {
-          await this._delay(this.PAGE_DELAY_MS);
-        }
-      } catch (err: any) {
-        const isNet = this._isNetworkError(err);
-        console.error(`[BulkSync] Erro pág.${page} NE ${label}:`, err?.message);
-        if (isNet && totalSaved > 0) {
-          // Salva parcial e encerra graciosamente
-          console.warn(`[BulkSync] Encerrando NE ${label} após erro de rede. Salvos: ${totalSaved}`);
-          hasNext = false;
-        } else {
-          hasNext = false;
-          throw err;
+          hasNext = !!result.next;
+          page++;
+
+          if (hasNext) {
+            await this._delay(this.PAGE_DELAY_MS);
+          }
+        } catch (err: any) {
+          const isNet = this._isNetworkError(err);
+          if (isNet && totalSaved > 0) {
+            console.warn(`[BulkSync] Encerrando OBs ${nunotaempenho} após erro de rede. Salvos: ${totalSaved}`);
+            hasNext = false;
+          } else {
+            throw err;
+          }
         }
       }
     }
 
     return totalSaved;
   }
-
-  // =================================================================
-  // Download de OBs por período
-  // =================================================================
-
-  private async _downloadObPeriod(
-    datainicio: string,
-    datafim: string,
-    label: string,
-    forceUpdate: boolean = false
-  ): Promise<number> {
-    await this._upsertPeriodRunning(datainicio, datafim, 'OB');
-
-    let totalSaved = 0;
-    let page = 1;
-    let hasNext = true;
-    const MAX_PAGES = 50;
-
-    console.log(`[BulkSync] Baixando OBs de ${datainicio} até ${datafim}...`);
-
-    while (hasNext && page <= MAX_PAGES) {
-      try {
-        const result = await this._withRetry(() =>
-          this.sigefService.getOrdemBancaria(
-            datainicio,
-            datafim,
-            page,
-            undefined,    // nuordembancaria: não filtra
-            undefined,    // nunotaempenho: não filtra — download total
-            this.UG,
-            true          // bypassMirror: força download da API
-          )
-        );
-
-        if (result.data.length > 0) {
-          await this.mirrorService.saveObsBulk(
-            result.data as Record<string, any>[],
-            this.UG
-          );
-          totalSaved += result.data.length;
-          console.log(`[BulkSync] OB ${label} pág.${page}: +${result.data.length} (total: ${totalSaved})`);
-        }
-
-        hasNext = !!result.next;
-        page++;
-
-        if (hasNext) {
-          await this._delay(this.PAGE_DELAY_MS);
-        }
-      } catch (err: any) {
-        const isNet = this._isNetworkError(err);
-        console.error(`[BulkSync] Erro pág.${page} OB ${label}:`, err?.message);
-        if (isNet && totalSaved > 0) {
-          // Salva parcial e encerra graciosamente
-          console.warn(`[BulkSync] Encerrando OB ${label} após erro de rede. Salvos: ${totalSaved}`);
-          hasNext = false;
-        } else {
-          hasNext = false;
-          throw err;
-        }
-      }
-    }
-
-    return totalSaved;
-  }
-
-  // =================================================================
-  // Controle de períodos sincronizados
-  // =================================================================
 
   private async _isPeriodComplete(inicio: string, fim: string, tipo: 'NE' | 'OB'): Promise<boolean> {
     const { data } = await this.client
@@ -454,10 +506,6 @@ export class SigefBulkSyncService {
       }, { onConflict: 'periodo_inicio,periodo_fim,tipo' });
   }
 
-  // =================================================================
-  // Utilitários
-  // =================================================================
-
   private _formatDate(date: Date): string {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -466,7 +514,7 @@ export class SigefBulkSyncService {
   }
 
   private _lastDayOfMonth(year: number, month: number): Date {
-    return new Date(year, month, 0); // Dia 0 do mês seguinte = último do atual
+    return new Date(year, month, 0);
   }
 
   private _isNetworkError(err: any): boolean {
@@ -495,53 +543,5 @@ export class SigefBulkSyncService {
 
   private _delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // ─── Progress helpers ──────────────────────────────────────────
-
-  private _resetProgress(): void {
-    this._progress.set({
-      phase: 'idle',
-      currentLabel: 'Iniciando...',
-      current: 0,
-      total: 0,
-      percent: 0,
-      totalNeSaved: 0,
-      totalObSaved: 0,
-      errors: []
-    });
-  }
-
-  private _setPhase(
-    phase: BulkSyncProgress['phase'],
-    current: number,
-    total: number,
-    totalNe: number,
-    totalOb: number,
-    errors: string[],
-    label: string
-  ): void {
-    this._setProgress(phase, current, total, totalNe, totalOb, errors, label);
-  }
-
-  private _setProgress(
-    phase: BulkSyncProgress['phase'],
-    current: number,
-    total: number,
-    totalNe: number,
-    totalOb: number,
-    errors: string[],
-    label: string
-  ): void {
-    this._progress.set({
-      phase,
-      currentLabel: label,
-      current,
-      total,
-      percent: total > 0 ? Math.round((current / total) * 100) : 0,
-      totalNeSaved: totalNe,
-      totalObSaved: totalOb,
-      errors: [...errors]
-    });
   }
 }

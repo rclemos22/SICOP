@@ -118,8 +118,11 @@ export class SigefService implements OnDestroy {
   private cacheService = inject(forwardRef(() => SigefCacheService));
   private authPromise: Promise<void> | null = null;
 
-  // Semáforo para controle de concorrência global (apenas 1 requisição por vez na API do SIGEF)
-  private apiQueue: Promise<any> = Promise.resolve();
+  // ─── Fila Global de Consultas ────────────────────────────────
+  // Controla concorrência: apenas 1 requisição por vez na API do SIGEF
+  private queryQueue: Promise<any> = Promise.resolve();
+  private pendingQueries: Map<string, { cancel: () => void }> = new Map();
+  private currentQueryId: string | null = null;
 
   private readonly ACCESS_TOKEN_KEY = 'sigef_access_token';
   private readonly REFRESH_TOKEN_KEY = 'sigef_refresh_token';
@@ -349,11 +352,41 @@ export class SigefService implements OnDestroy {
     await this.ensureAuthenticated(false);
   }
 
-  private async callApi(url: string, options: RequestInit = {}, retries: number = 5, backoff: number = 5000): Promise<Response> {
+  /**
+   * Executa uma chamada à API com enfileiramento global e suporte a cancelamento.
+   * @param url - URL da requisição
+   * @param options - Opções do fetch
+   * @param retries - Número de tentativas
+   * @param backoff - Tempo inicial de backoff em ms
+   * @param queryId - ID opcional para permitir cancelamento
+   */
+  async callApi(url: string, options: RequestInit = {}, retries: number = 5, backoff: number = 5000, queryId?: string): Promise<Response> {
+    // Se esta consulta foi cancelada antes de começar, aborta silenciosamente
+    if (queryId && !this.pendingQueries.has(queryId)) {
+      return new Response(null, { status: 499, statusText: 'Query cancelled' });
+    }
+
     // Enfileiramento global: cada nova chamada espera a anterior terminar
-    return this.apiQueue = this.apiQueue.then(async () => {
+    return this.queryQueue = this.queryQueue.then(async () => {
+      // Verifica novamente se foi cancelada durante a espera na fila
+      if (queryId && !this.pendingQueries.has(queryId)) {
+        return new Response(null, { status: 499, statusText: 'Query cancelled' });
+      }
+
+      this.currentQueryId = queryId || null;
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 180000); // 180 segundos de timeout individual
+
+      // Armazena o controller para permitir cancelamento externo
+      if (queryId) {
+        const pending = this.pendingQueries.get(queryId);
+        if (pending) {
+          pending.cancel = () => {
+            controller.abort();
+            this.pendingQueries.delete(queryId);
+          };
+        }
+      }
 
       try {
         const response = await fetch(url, { ...options, signal: controller.signal });
@@ -363,14 +396,14 @@ export class SigefService implements OnDestroy {
         if (response.status === 401 || response.status === 403) {
           await this.handleUnauthorized();
           const newOptions = { ...options, headers: this.getHeaders() };
-          return await this.callApi(url, newOptions, retries);
+          return await this.callApi(url, newOptions, retries, backoff, queryId);
         }
 
         // Erros transientes de Gateway/Server
         if ([500, 502, 503, 504].includes(response.status) && retries > 0) {
           console.warn(`[SIGEF] Gateway Error (${response.status}). Backoff ${backoff}ms...`);
           await new Promise(resolve => setTimeout(resolve, backoff));
-          return this.callApi(url, options, retries - 1, Math.min(backoff * 2, 60000));
+          return this.callApi(url, options, retries - 1, Math.min(backoff * 2, 60000), queryId);
         }
         
         // Pequeno delay "de cortesia" após cada sucesso para não bombardear a API
@@ -379,6 +412,12 @@ export class SigefService implements OnDestroy {
         return response;
       } catch (err: any) {
         clearTimeout(id);
+        
+        // Se foi cancelada (isso inclui AbortError do cancelamento), retorna resposta vazia
+        if (queryId && !this.pendingQueries.has(queryId)) {
+          return new Response(null, { status: 499, statusText: 'Query cancelled' });
+        }
+
         const errLower = (err.message || '').toLowerCase();
         const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout');
         const isNetworkError = isTimeout ||
@@ -394,14 +433,75 @@ export class SigefService implements OnDestroy {
           const infraBackoff = backoff * (errLower.includes('tls') || errLower.includes('socket') || isTimeout ? 2 : 1.5);
           console.warn(`[SIGEF] Infra Error (${err.message}). Backoff ${infraBackoff}ms, retries: ${retries}`);
           await new Promise(resolve => setTimeout(resolve, infraBackoff));
-          return this.callApi(url, options, retries - 1, Math.min(infraBackoff * 2, 120000));
+          return this.callApi(url, options, retries - 1, Math.min(infraBackoff * 2, 120000), queryId);
         }
         throw err;
+      } finally {
+        if (queryId) {
+          this.pendingQueries.delete(queryId);
+          if (this.currentQueryId === queryId) {
+            this.currentQueryId = null;
+          }
+        }
       }
     });
   }
 
-  async getNotaEmpenho(ano: string, search?: string, page: number = 1, cdunidadegestora?: string, bypassMirror: boolean = false): Promise<SigefResponse<NotaEmpenho>> {
+  /**
+   * Adiciona uma consulta à fila com um ID único.
+   * Retorna o ID da consulta para permitir cancelamento posterior.
+   */
+  enqueueQuery(queryId: string): void {
+    if (!this.pendingQueries.has(queryId)) {
+      this.pendingQueries.set(queryId, { cancel: () => {} });
+    }
+  }
+
+  /**
+   * Cancela uma consulta específica na fila.
+   */
+  cancelQuery(queryId: string): void {
+    const pending = this.pendingQueries.get(queryId);
+    if (pending) {
+      pending.cancel();
+      this.pendingQueries.delete(queryId);
+      console.log(`[SIGEF] Consulta ${queryId} cancelada.`);
+    }
+  }
+
+  /**
+   * Cancela todas as consultas pendentes (útil ao navegar entre contratos).
+   */
+  cancelAllQueries(): void {
+    const queryIds = Array.from(this.pendingQueries.keys());
+    queryIds.forEach(id => this.cancelQuery(id));
+    console.log(`[SIGEF] ${queryIds.length} consulta(s) cancelada(s).`);
+  }
+
+  /**
+   * Verifica se uma consulta está pendente.
+   */
+  hasPendingQuery(queryId: string): boolean {
+    return this.pendingQueries.has(queryId);
+  }
+
+  /**
+   * Busca notas de empenho com suporte a fila de consultas e cancelamento.
+   * @param ano - Ano da consulta
+   * @param search - Termo de busca (número da NE)
+   * @param page - Página
+   * @param cdunidadegestora - Unidade gestora
+   * @param bypassMirror - Se deve ignorar o espelho
+   * @param queryId - ID opcional para cancelamento
+   */
+  async getNotaEmpenho(
+    ano: string, 
+    search?: string, 
+    page: number = 1, 
+    cdunidadegestora?: string, 
+    bypassMirror: boolean = false,
+    queryId?: string
+  ): Promise<SigefResponse<NotaEmpenho>> {
     this._loading.set(true);
     this._error.set(null);
 
@@ -434,7 +534,7 @@ export class SigefService implements OnDestroy {
       const response = await this.callApi(fullUrl, {
         method: 'GET',
         headers: this.getHeaders(),
-      });
+      }, 5, 5000, queryId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -535,11 +635,20 @@ export class SigefService implements OnDestroy {
     }
   }
 
-  async getNotaEmpenhoByNumber(ano: string, numeroNE: string, cdunidadegestora?: string, bypassMirror: boolean = false): Promise<NotaEmpenho | null> {
-    console.log('[SIGEF] Buscando NE específica via busca:', numeroNE, 'ano:', ano, 'bypassMirror:', bypassMirror);
+  /**
+   * Busca uma NE específica pelo número com suporte a cancelamento.
+   */
+  async getNotaEmpenhoByNumber(
+    ano: string, 
+    numeroNE: string, 
+    cdunidadegestora?: string, 
+    bypassMirror: boolean = false,
+    queryId?: string
+  ): Promise<NotaEmpenho | null> {
+    console.log('[SIGEF] Buscando NE específica via busca:', numeroNE, 'ano:', ano, 'bypassMirror:', bypassMirror, 'queryId:', queryId);
     
     // Otimização: Usar search=numeroNE para evitar varredura de páginas
-    const result = await this.getNotaEmpenho(ano, numeroNE, 1, cdunidadegestora, bypassMirror);
+    const result = await this.getNotaEmpenho(ano, numeroNE, 1, cdunidadegestora, bypassMirror, queryId);
     
     let found = result.data.find(ne => 
       ne.nunotaempenho === numeroNE && 
@@ -553,9 +662,15 @@ export class SigefService implements OnDestroy {
       let page = 2;
       const MAX_SCAN = 5; // Máximo 5 páginas de scan para evitar sobrecarga
       while (page <= MAX_SCAN) {
+        // Verifica se a consulta foi cancelada
+        if (queryId && !this.pendingQueries.has(queryId)) {
+          console.log(`[SIGEF] Busca da NE ${numeroNE} cancelada durante scan.`);
+          return null;
+        }
+        
         console.log(`[SIGEF] Scan Fallback - Pagina ${page}...`);
         await new Promise(resolve => setTimeout(resolve, 2000)); // Delay longo entre páginas de scan
-        const pResult = await this.getNotaEmpenho(ano, undefined, page, cdunidadegestora);
+        const pResult = await this.getNotaEmpenho(ano, undefined, page, cdunidadegestora, bypassMirror, queryId);
         
         found = pResult.data.find(ne => 
           ne.nunotaempenho === numeroNE && 
@@ -570,9 +685,18 @@ export class SigefService implements OnDestroy {
     return null;
   }
 
-  async getNotaEmpenhoMovements(ano: string, numeroNE: string, cdunidadegestora: string, bypassMirror: boolean = false): Promise<NotaEmpenho[]> {
+  /**
+   * Busca movimentações de uma NE com suporte a cancelamento.
+   */
+  async getNotaEmpenhoMovements(
+    ano: string, 
+    numeroNE: string, 
+    cdunidadegestora: string, 
+    bypassMirror: boolean = false,
+    queryId?: string
+  ): Promise<NotaEmpenho[]> {
     console.log('=== [SIGEF SERVICE] getNotaEmpenhoMovements (GENERAL MIRROR) ===');
-    console.log('[SIGEF] Buscando movimentações - ano:', ano, 'numeroNE:', numeroNE, 'UG:', cdunidadegestora, 'bypassMirror:', bypassMirror);
+    console.log('[SIGEF] Buscando movimentações - ano:', ano, 'numeroNE:', numeroNE, 'UG:', cdunidadegestora, 'bypassMirror:', bypassMirror, 'queryId:', queryId);
     
     // 1. Tentar carregar do Espelho Geral (General Mirror)
     if (!bypassMirror) {
@@ -588,9 +712,15 @@ export class SigefService implements OnDestroy {
     let page = 1;
     
     while (true) {
+      // Verifica se a consulta foi cancelada
+      if (queryId && !this.pendingQueries.has(queryId)) {
+        console.log(`[SIGEF] Busca de movimentações para NE ${numeroNE} cancelada.`);
+        return movements; // Retorna o que já temos
+      }
+
       try {
         // Usamos o numeroNE no search para a API filtrar registros relevantes
-        const result = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora, bypassMirror);
+        const result = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora, bypassMirror, queryId);
         
         const filtered = result.data.filter(ne => 
           (ne.nunotaempenho === numeroNE || ne.nuneoriginal === numeroNE) && 
@@ -603,7 +733,11 @@ export class SigefService implements OnDestroy {
         page++;
         // Delay de cortesia entre páginas
         await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (err) {
+      } catch (err: any) {
+        if (err.message === 'Query cancelled') {
+          console.log(`[SIGEF] Busca de movimentações cancelada para NE ${numeroNE}.`);
+          return movements;
+        }
         console.warn(`[SIGEF] Falha ao carregar página ${page} de movimentos para ${numeroNE}. Retornando dados parciais.`, err);
         break;
       }
@@ -614,9 +748,18 @@ export class SigefService implements OnDestroy {
   }
 
   /**
-   * Consulta ordens bancárias filtradas por período.
+   * Consulta ordens bancárias filtradas por período com suporte a cancelamento.
    */
-  async getOrdemBancaria(datainicio: string, datafim: string, page: number = 1, nuordembancaria?: string, nunotaempenho?: string, cdunidadegestora?: string, bypassMirror: boolean = false): Promise<SigefResponse<OrdemBancaria>> {
+  async getOrdemBancaria(
+    datainicio: string, 
+    datafim: string, 
+    page: number = 1, 
+    nuordembancaria?: string, 
+    nunotaempenho?: string, 
+    cdunidadegestora?: string, 
+    bypassMirror: boolean = false,
+    queryId?: string
+  ): Promise<SigefResponse<OrdemBancaria>> {
     this._loading.set(true);
     this._error.set(null);
 
@@ -667,7 +810,7 @@ export class SigefService implements OnDestroy {
       const response = await this.callApi(fullUrl, {
         method: 'GET',
         headers: this.getHeaders(),
-      });
+      }, 5, 5000, queryId);
 
       // Retornar array vazio em vez de lançar erro para erros 5xx
       if (!response.ok) {
@@ -699,7 +842,12 @@ export class SigefService implements OnDestroy {
         previous: data.previous
       };
     } catch (err: any) {
-      // Em caso de erro de rede ou outro, retornar vazio em vez de quebrar
+      // Em caso de erro de rede ou cancelamento, retornar vazio em vez de quebrar
+      if (err.message === 'Query cancelled') {
+        console.log(`[SIGEF OB] Consulta cancelada: ${queryId}`);
+        return { data: [], count: 0, next: null, previous: null };
+      }
+
       const networkErrors = ['Failed to fetch', 'NetworkError', 'socket disconnected', 'TLS', 'ECONNRESET'];
       const isNetworkError = networkErrors.some(e => err.message?.includes(e));
       
@@ -714,133 +862,170 @@ export class SigefService implements OnDestroy {
     }
   }
 
-  /**
-   * Busca todas as ordens bancárias confirmadas vinculadas a uma lista de notas de empenho (original + reforços).
-   * IMPLEMENTAÇÃO OTIMIZADA COM ESPELHO:
-   * 1. Busca no cache local primeiro.
-   * 2. Busca na API apenas o período que pode ter novos dados (incremental).
-   */
-  async getOrdemBancariaMovements(ano: string, numeroNEs: string[], cdunidadegestora: string, bypassMirror: boolean = false): Promise<OrdemBancaria[]> {
-    console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements (MIRROR OPTIMIZED) ===', { ano, numeroNEs, ug: cdunidadegestora, bypassMirror });
-    
-    const allOBs: OrdemBancaria[] = [];
-    const ugNum = parseInt(cdunidadegestora, 10);
+   /**
+    * Busca todas as ordens bancárias confirmadas vinculadas a uma lista de notas de empenho (original + reforços).
+    * IMPLEMENTAÇÃO OTIMIZADA COM ESPELHO:
+    * 1. Busca no cache local primeiro.
+    * 2. Busca na API apenas o período que pode ter novos dados (incremental).
+    */
+   async getOrdemBancariaMovements(
+     ano: string, 
+     numeroNEs: string[], 
+     cdunidadegestora: string, 
+     bypassMirror: boolean = false,
+     queryId?: string
+   ): Promise<OrdemBancaria[]> {
+     console.log('=== [SIGEF SERVICE] getOrdemBancariaMovements (MIRROR OPTIMIZED) ===', { ano, numeroNEs, ug: cdunidadegestora, bypassMirror, queryId });
+     
+     const allOBs: OrdemBancaria[] = [];
+     const ugNum = parseInt(cdunidadegestora, 10);
 
-    for (const neNumber of numeroNEs) {
-      if (!neNumber) continue;
-      const targetNE = neNumber.trim().toUpperCase();
-      
-      // 1. Tentar carregar do espelho bruto (Raw Mirror)
-      if (!bypassMirror) {
-        const rawMirrorList = await this.cacheService.getRawMirrorList('OB', 'nunotaempenho', targetNE);
-        if (rawMirrorList && rawMirrorList.length > 0) {
-           console.log(`[SIGEF RAW MIRROR] Usando dados brutos do espelho para OB_LIST da NE ${targetNE} (${rawMirrorList.length} itens)`);
-           allOBs.push(...rawMirrorList);
-           continue; 
-        }
-      }
+     for (const neNumber of numeroNEs) {
+       if (!neNumber) continue;
+       
+       // Verifica se a consulta foi cancelada
+       if (queryId && !this.pendingQueries.has(queryId)) {
+         console.log(`[SIGEF OB] Consulta cancelada durante processamento da NE ${neNumber}`);
+         break;
+       }
 
-      // 2. Tentar carregar o "espelho" processado (cache local legado)
-      const cachedOBs = await this.cacheService.getOrdensBancariasPorNe(ugNum, targetNE);
-      
-      // Mapear para o tipo OrdemBancaria da API
-      const mappedCached = cachedOBs.map(ob => ({
-        nuordembancaria: ob.nuordembancaria,
-        cdunidadegestora: ob.cdunidadegestora,
-        cdgestao: ob.cdgestao || null,
-        cdevento: ob.cdevento || null,
-        nudocumento: ob.nudocumento || null,
-        nunotaempenho: ob.nunotaempenho || null,
-        cdcredor: ob.cdcredor || null,
-        cdtipocredor: ob.cdtipocredor || null,
-        cdugfavorecida: ob.cdugfavorecida || null,
-        cdorgao: ob.cdorgao || null,
-        cdsubacao: ob.cdsubacao || null,
-        cdfuncao: ob.cdfuncao || null,
-        cdsubfuncao: ob.cdsubfuncao || null,
-        cdprograma: ob.cdprograma || null,
-        cdacao: ob.cdacao || null,
-        localizagasto: ob.localizagasto || null,
-        cdnaturezadespesa: ob.cdnaturezadespesa || null,
-        cdfonte: ob.cdfonte || null,
-        cdmodalidade: ob.cdmodalidade || null,
-        vltotal: ob.vltotal || null,
-        dtlancamento: ob.dtlancamento || null,
-        dtpagamento: ob.dtpagamento || null,
-        definalidade: ob.definalidade || null,
-        nuguiarecebimento: ob.nuguiarecebimento || null,
-        vlguiarecebimento: ob.vlguiarecebimento ? ob.vlguiarecebimento.toString() : null,
-        nunotalancamento: ob.nunotalancamento || null,
-        numns: ob.numns || null,
-        deobservacao: ob.deobservacao || null,
-        domicilio_origem: ob.domicilio_origem || null,
-        domicilio_destino: ob.domicilio_destino || null,
-        cdsituacaoordembancaria: ob.cdsituacaoordembancaria || null,
-        situacaopreparacaopagamento: ob.situacaopreparacaopagamento || null,
-        tipoordembancaria: ob.tipoordembancaria || null,
-        tipopreparacaopagamento: ob.tipopreparacaopagamento || null,
-        usuario_responsavel: ob.usuario_responsavel || null
-      } as OrdemBancaria));
+       const targetNE = neNumber.trim().toUpperCase();
+       
+       // 1. Tentar carregar do espelho bruto (Raw Mirror)
+       if (!bypassMirror) {
+         const rawMirrorList = await this.cacheService.getRawMirrorList('OB', 'nunotaempenho', targetNE);
+         if (rawMirrorList && rawMirrorList.length > 0) {
+            console.log(`[SIGEF RAW MIRROR] Usando dados brutos do espelho para OB_LIST da NE ${targetNE} (${rawMirrorList.length} itens)`);
+            allOBs.push(...rawMirrorList);
+            continue; 
+         }
+       }
 
-      allOBs.push(...mappedCached);
+       // 2. Tentar carregar o "espelho" processado (cache local legado)
+       const cachedOBs = await this.cacheService.getOrdensBancariasPorNe(ugNum, targetNE);
+       
+       // Mapear para o tipo OrdemBancaria da API
+       const mappedCached = cachedOBs.map(ob => ({
+         nuordembancaria: ob.nuordembancaria,
+         cdunidadegestora: ob.cdunidadegestora,
+         cdgestao: ob.cdgestao || null,
+         cdevento: ob.cdevento || null,
+         nudocumento: ob.nudocumento || null,
+         nunotaempenho: ob.nunotaempenho || null,
+         cdcredor: ob.cdcredor || null,
+         cdtipocredor: ob.cdtipocredor || null,
+         cdugfavorecida: ob.cdugfavorecida || null,
+         cdorgao: ob.cdorgao || null,
+         cdsubacao: ob.cdsubacao || null,
+         cdfuncao: ob.cdfuncao || null,
+         cdsubfuncao: ob.cdsubfuncao || null,
+         cdprograma: ob.cdprograma || null,
+         cdacao: ob.cdacao || null,
+         localizagasto: ob.localizagasto || null,
+         cdnaturezadespesa: ob.cdnaturezadespesa || null,
+         cdfonte: ob.cdfonte || null,
+         cdmodalidade: ob.cdmodalidade || null,
+         vltotal: ob.vltotal || null,
+         dtlancamento: ob.dtlancamento || null,
+         dtpagamento: ob.dtpagamento || null,
+         definalidade: ob.definalidade || null,
+         nuguiarecebimento: ob.nuguiarecebimento || null,
+         vlguiarecebimento: ob.vlguiarecebimento ? ob.vlguiarecebimento.toString() : null,
+         nunotalancamento: ob.nunotalancamento || null,
+         numns: ob.numns || null,
+         deobservacao: ob.deobservacao || null,
+         domicilio_origem: ob.domicilio_origem || null,
+         domicilio_destino: ob.domicilio_destino || null,
+         cdsituacaoordembancaria: ob.cdsituacaoordembancaria || null,
+         situacaopreparacaopagamento: ob.situacaopreparacaopagamento || null,
+         tipoordembancaria: ob.tipoordembancaria || null,
+         tipopreparacaopagamento: ob.tipopreparacaopagamento || null,
+         usuario_responsavel: ob.usuario_responsavel || null
+       } as OrdemBancaria));
 
-      // 3. Determinar se precisamos buscar na API (Sincronização Incremental)
-      const anoNE = parseInt(ano, 10);
-      const anoAtual = new Date().getFullYear();
+       allOBs.push(...mappedCached);
 
-      for (let a = anoNE; a <= anoAtual; a++) {
-        const datainicio = `${a}-01-01`;
-        const datafim = `${a}-12-31`;
-        
-        try {
-          const result = await this.getOrdemBancaria(datainicio, datafim, 1, undefined, targetNE, cdunidadegestora, bypassMirror);
-          
-          if (result.data.length > 0) {
-            const filteredMatches = result.data.filter(ob => {
-              const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-              return isTargetNe;
-            });
-            for (const apiOb of filteredMatches) {
-              const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
-              if (!alreadyHas) allOBs.push(apiOb);
-            }
-          }
+       // 3. Determinar se precisamos buscar na API (Sincronização Incremental)
+       const anoNE = parseInt(ano, 10);
+       const anoAtual = new Date().getFullYear();
 
-          let page = 2;
-          let nextUrl = result.next;
-          while (nextUrl && page <= 10) {
-const nextResult = await this.getOrdemBancaria(datainicio, datafim, page, undefined, targetNE, cdunidadegestora, bypassMirror);
-              const nextMatches = nextResult.data.filter(ob => {
-                const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-                return isTargetNe;
-              });
-             for (const apiOb of nextMatches) {
-                const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
-                if (!alreadyHas) allOBs.push(apiOb);
+       for (let a = anoNE; a <= anoAtual; a++) {
+         // Verifica se a consulta foi cancelada
+         if (queryId && !this.pendingQueries.has(queryId)) {
+           console.log(`[SIGEF OB] Consulta cancelada durante busca incremental da NE ${targetNE}`);
+           break;
+         }
+
+         const datainicio = `${a}-01-01`;
+         const datafim = `${a}-12-31`;
+         
+         try {
+           const result = await this.getOrdemBancaria(datainicio, datafim, 1, undefined, targetNE, cdunidadegestora, bypassMirror, queryId);
+           
+           if (result.data.length > 0) {
+             const filteredMatches = result.data.filter(ob => {
+               const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
+               return isTargetNe;
+             });
+             for (const apiOb of filteredMatches) {
+               const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
+               if (!alreadyHas) allOBs.push(apiOb);
              }
-             nextUrl = nextResult.next;
-             page++;
-          }
-        } catch (err) {
-          console.warn(`[SIGEF OB] Erro no ano ${a} para NE ${targetNE}. Pulando...`, err);
-        }
-      }
-    }
-    
-    // Deduplicação final
-    const uniqueMap = new Map<string, OrdemBancaria>();
-    allOBs.forEach(ob => {
-      const key = `${ob.nuordembancaria}-${ob.cdunidadegestora}-${ob.nudocumento || ''}-${ob.vltotal}`;
-      uniqueMap.set(key, ob);
-    });
-    
-    return Array.from(uniqueMap.values());
-  }
+           }
+
+           let page = 2;
+           let nextUrl = result.next;
+           while (nextUrl && page <= 10) {
+             if (queryId && !this.pendingQueries.has(queryId)) {
+               console.log(`[SIGEF OB] Consulta cancelada durante paginação da NE ${targetNE}`);
+               break;
+             }
+
+             const nextResult = await this.getOrdemBancaria(datainicio, datafim, page, undefined, targetNE, cdunidadegestora, bypassMirror, queryId);
+               const nextMatches = nextResult.data.filter(ob => {
+                 const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
+                 return isTargetNe;
+               });
+              for (const apiOb of nextMatches) {
+                 const alreadyHas = allOBs.some(c => c.nuordembancaria === apiOb.nuordembancaria && c.nudocumento === apiOb.nudocumento);
+                 if (!alreadyHas) allOBs.push(apiOb);
+              }
+              nextUrl = nextResult.next;
+              page++;
+           }
+         } catch (err: any) {
+           if (err.message === 'Query cancelled') {
+             console.log(`[SIGEF OB] Consulta cancelada para NE ${targetNE}`);
+             break;
+           }
+           console.warn(`[SIGEF OB] Erro no ano ${a} para NE ${targetNE}. Pulando...`, err);
+         }
+       }
+
+       if (queryId && !this.pendingQueries.has(queryId)) {
+         break; // Sai do loop de NEs se cancelado
+       }
+     }
+     
+     // Deduplicação final
+     const uniqueMap = new Map<string, OrdemBancaria>();
+     allOBs.forEach(ob => {
+       const key = `${ob.nuordembancaria}-${ob.cdunidadegestora}-${ob.nudocumento || ''}-${ob.vltotal}`;
+       uniqueMap.set(key, ob);
+     });
+     
+     return Array.from(uniqueMap.values());
+   }
 
   /**
    * Busca uma Ordem Bancária específica pelo número, usando lógica de espelho (Cache-First).
+   * Suporta cancelamento via queryId.
    */
-  async getOrdemBancariaByNumberWithMirror(nuOB: string, ug: string): Promise<OrdemBancaria | null> {
+  async getOrdemBancariaByNumberWithMirror(
+    nuOB: string, 
+    ug: string, 
+    queryId?: string
+  ): Promise<OrdemBancaria | null> {
     const ugNum = parseInt(ug, 10);
     const cleanOB = nuOB.trim().toUpperCase();
 
@@ -858,7 +1043,14 @@ const nextResult = await this.getOrdemBancaria(datainicio, datafim, page, undefi
     const datafim = `${ano}-12-31`;
 
     try {
-      const result = await this.getOrdemBancaria(datainicio, datafim, 1, cleanOB, undefined, ug);
+      const result = await this.getOrdemBancaria(datainicio, datafim, 1, cleanOB, undefined, ug, false, queryId);
+      
+      // Verifica se a consulta foi cancelada
+      if (queryId && !this.pendingQueries.has(queryId)) {
+        console.log(`[SIGEF MIRROR] Consulta da OB ${cleanOB} cancelada.`);
+        return null;
+      }
+
       const found = result.data.find(ob => 
         (ob.nuordembancaria?.toUpperCase() === cleanOB || ob.nudocumento?.toUpperCase() === cleanOB) && 
         Number(ob.cdunidadegestora) === ugNum
@@ -869,7 +1061,11 @@ const nextResult = await this.getOrdemBancaria(datainicio, datafim, page, undefi
         await this.cacheService.saveOrdemBancaria(this.mapApiObToCache(found, ugNum));
         return found;
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.message === 'Query cancelled') {
+        console.log(`[SIGEF MIRROR] Consulta da OB ${cleanOB} cancelada.`);
+        return null;
+      }
       console.error(`[SIGEF MIRROR] Erro ao buscar OB ${cleanOB} na API:`, err);
     }
 
