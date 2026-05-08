@@ -247,8 +247,11 @@ ALTER TABLE public.sigef_ne_movimentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sigef_ordens_bancarias ENABLE ROW LEVEL SECURITY;
 
 -- Policy para permitir tudo (ajuste em produção)
+DROP POLICY IF EXISTS "Allow all for sigef_notas_empenho" ON public.sigef_notas_empenho;
 CREATE POLICY "Allow all for sigef_notas_empenho" ON public.sigef_notas_empenho FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for sigef_ne_movimentos" ON public.sigef_ne_movimentos;
 CREATE POLICY "Allow all for sigef_ne_movimentos" ON public.sigef_ne_movimentos FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for sigef_ordens_bancarias" ON public.sigef_ordens_bancarias;
 CREATE POLICY "Allow all for sigef_ordens_bancarias" ON public.sigef_ordens_bancarias FOR ALL USING (true);
 
 -- ============================================
@@ -263,4 +266,4 @@ CREATE TABLE IF NOT EXISTS public.sigef_sync_log (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sigef_sync_log_tabela ON public.sigef_sync_log(tabela, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sigef_sync_log_tabela ON public.sigef_sync_log(tabela, created_at DESC);

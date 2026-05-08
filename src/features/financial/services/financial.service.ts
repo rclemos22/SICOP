@@ -36,7 +36,7 @@ export class FinancialService {
       // 1. Buscar apenas transações vinculadas a contratos cadastrados E que possuem Nota de Empenho (NE)
       const { data, error } = await this.supabaseService.client
         .from('transacoes')
-        .select('*, contratos!inner(id, contrato)')
+        .select('*, contratos!contract_id!inner(id, contrato)')
         .not('commitment_id', 'is', null)
         .neq('commitment_id', '')
         .order('date', { ascending: false });
