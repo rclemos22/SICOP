@@ -192,35 +192,46 @@ export class ContractDetailsPageComponent {
 
     const startDate = new Date(c.data_inicio);
     const endDate = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
-    const monthlyValue = Number(c.valor_mensal);
+
+    // Aditivos que alteram o valor mensal, ordenados por data de início
+    const aditivosReajuste = this.aditivos()
+      .filter(a => a.novo_valor_mensal != null && a.data_inicio_novo != null)
+      .sort((a, b) => new Date(a.data_inicio_novo!).getTime() - new Date(b.data_inicio_novo!).getTime());
+
+    function valorParaMes(ano: number, mes: number): number {
+      let valor = Number(c.valor_mensal);
+      for (const ad of aditivosReajuste) {
+        const inicio = new Date(ad.data_inicio_novo!);
+        if (ano > inicio.getFullYear() || (ano === inicio.getFullYear() && mes >= inicio.getMonth() + 1)) {
+          valor = Number(ad.novo_valor_mensal);
+        }
+      }
+      return valor;
+    }
 
     let currentDate = new Date(startDate);
-    currentDate.setDate(1); // Começar do dia 1 para iterar meses corretamente
+    currentDate.setDate(1);
 
     while (currentDate <= endDate) {
       const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1; // 1-indexed
+      const month = currentDate.getMonth() + 1;
       const reference = `${year}-${month.toString().padStart(2, '0')}`;
-      
-      const dueDateMonth = month;
-      const lastDayOfDueMonth = new Date(year, dueDateMonth + 1, 0).getDate();
+
+      const lastDayOfDueMonth = new Date(year, month + 1, 0).getDate();
       const actualDay = Math.min(paymentDay, lastDayOfDueMonth);
-      
-      const installmentDate = new Date(year, dueDateMonth, actualDay);
+
+      const installmentDate = new Date(year, month, actualDay);
       const isPast = installmentDate < today;
       const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 
-      // Tenta encontrar transações vinculadas a esta parcela (apenas para exibição de dados SIGEF)
-      const matches = transactions.filter(t => 
+      const matches = transactions.filter(t =>
         t.type === 'LIQUIDATION' && t.parcela_referencia === reference
       );
 
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
-      
-      // Verifica se está marcada como paga manualmente (sem afetar financeiro)
+
       const isManualPaid = c.parcelas_pagas_manual?.includes(reference);
-      
-      // Verifica se há transação SIGEF confirmada
+
       const hasSigefPayment = matches.some(t => {
         if (!t.sigef_id) return false;
         const desc = t.description.toLowerCase();
@@ -233,14 +244,13 @@ export class ContractDetailsPageComponent {
         status = 'OVERDUE';
       }
 
-      // Data de pagamento manual é a data em que foi marcada
       const paidAt = isManualPaid ? new Date() : undefined;
 
       payments.push({
         monthLabel,
         reference,
         date: installmentDate,
-        valor: monthlyValue,
+        valor: valorParaMes(year, month),
         daysUntil: Math.ceil((installmentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
         isPast,
         status,

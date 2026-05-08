@@ -173,10 +173,6 @@ export class ContractService {
 
       if (error) throw error;
 
-      if (aditivo.novo_valor_mensal != null && aditivo.contract_id) {
-        await this._syncValorMensalFromAditivos(aditivo.contract_id);
-      }
-
       await this.loadContracts();
 
       const newAditivo = this.mapRawToAditivo(data);
@@ -198,10 +194,6 @@ export class ContractService {
 
       if (error) throw error;
 
-      if (aditivo.novo_valor_mensal != null || aditivo.novo_valor_mensal === null) {
-        await this._syncValorMensalFromAditivos(data.contract_id);
-      }
-
       await this.loadContracts();
 
       const updatedAditivo = this.mapRawToAditivo(data);
@@ -214,22 +206,12 @@ export class ContractService {
 
   async deleteAditivo(id: string): Promise<Result<null>> {
     try {
-      const { data: aditivo } = await this.supabaseService.client
-        .from('aditivos')
-        .select('contract_id')
-        .eq('id', id)
-        .single();
-
       const { error } = await this.supabaseService.client
         .from('aditivos')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
-
-      if (aditivo?.contract_id) {
-        await this._syncValorMensalFromAditivos(aditivo.contract_id);
-      }
 
       await this.loadContracts();
 
@@ -291,17 +273,6 @@ export class ContractService {
       .reduce((acc, current) => acc + (current.valor_aditivo || 0), 0);
 
     const valorGlobalAtualizado = this.parseNumeric(raw.valor_anual) + totalAditivosValor;
-
-    // Usar o novo_valor_mensal do aditivo mais recente como valor_mensal do contrato
-    const aditivoValorMensal = aditivos
-      .filter(a => a.novo_valor_mensal != null)
-      .sort((a, b) => {
-        const dateA = a.data_inicio_novo || a.data_assinatura || new Date(0);
-        const dateB = b.data_inicio_novo || b.data_assinatura || new Date(0);
-        return dateB.getTime() - dateA.getTime();
-      })[0]?.novo_valor_mensal;
-
-    const valorMensal = aditivoValorMensal ?? (raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined);
 
     let dataFimEfetiva: Date;
     let diasRestantes: number;
@@ -366,7 +337,7 @@ export class ContractService {
       total_pago: totalPago,
       saldo_a_pagar: totalEmpenhado - totalPago,
       data_ultimo_pagamento: dataUltimoPagamento || (raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined),
-      valor_mensal: valorMensal,
+      valor_mensal: raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined,
       valor_global_atualizado: valorGlobalAtualizado,
       total_aditivos_valor: totalAditivosValor,
       parcelas_pagas_manual: Array.isArray(raw.parcelas_pagas_manual) ? raw.parcelas_pagas_manual : 
@@ -453,35 +424,6 @@ export class ContractService {
       console.error('[ContractService.updateContract] Caught error:', err);
       this.errorHandler.handle(err, 'ContractService.updateContract');
       return fail(err.message || 'Erro ao atualizar contrato');
-    }
-  }
-
-  /**
-   * Atualiza o valor_mensal do contrato no banco com base no aditivo mais recente
-   * que define novo_valor_mensal. Se nenhum aditivo definiu, mantém o valor atual.
-   */
-  private async _syncValorMensalFromAditivos(contractId: string): Promise<void> {
-    try {
-      const { data: aditivos } = await this.supabaseService.client
-        .from('aditivos')
-        .select('novo_valor_mensal, data_inicio_novo, data_assinatura')
-        .eq('contract_id', contractId)
-        .not('novo_valor_mensal', 'is', null)
-        .order('data_assinatura', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      const novoValor = (aditivos && aditivos.length > 0)
-        ? aditivos[0].novo_valor_mensal
-        : undefined;
-
-      if (novoValor !== undefined) {
-        await this.supabaseService.client
-          .from('contratos')
-          .update({ valor_mensal: novoValor })
-          .eq('id', contractId);
-      }
-    } catch (err) {
-      console.warn('[ContractService] Erro ao sincronizar valor_mensal do contrato:', err);
     }
   }
 
