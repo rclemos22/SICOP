@@ -676,20 +676,19 @@ export class SigefService implements OnDestroy {
 
     if (found) return found;
 
-    // Se não achou na busca direta (comportamento inconsistente da API às vezes), tenta scan limitado
+    // Se não achou na página 1, tenta páginas seguintes MANTENDO O FILTRO
     if (result.count > result.data.length) {
       let page = 2;
-      const MAX_SCAN = 5; // Máximo 5 páginas de scan para evitar sobrecarga
+      const MAX_SCAN = 3;
       while (page <= MAX_SCAN) {
-        // Verifica se a consulta foi cancelada
         if (queryId && !this.pendingQueries.has(queryId)) {
           console.log(`[SIGEF] Busca da NE ${numeroNE} cancelada durante scan.`);
           return null;
         }
         
-        console.log(`[SIGEF] Scan Fallback - Pagina ${page}...`);
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Delay longo entre páginas de scan
-        const pResult = await this.getNotaEmpenho(ano, undefined, page, cdunidadegestora, bypassMirror, queryId);
+        console.log(`[SIGEF] Scan pag.${page} para NE ${numeroNE}...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const pResult = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora, bypassMirror, queryId);
         
         found = pResult.data.find(ne => 
           ne.nunotaempenho === numeroNE && 

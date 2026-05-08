@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS public.sigef_ordens_bancarias (
   last_sync TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
   -- Constraints
-  CONSTRAINT uk_sigef_ob UNIQUE (nuordembancaria, cdunidadegestora)
+  CONSTRAINT uk_sigef_ob UNIQUE (nuordembancaria, cdunidadegestora, nudocumento)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sigef_ob_ug ON public.sigef_ordens_bancarias(cdunidadegestora);

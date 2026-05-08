@@ -159,6 +159,26 @@ export class SigefSyncService {
     if (movements.length > 0) {
       console.log(`[SIGEF SYNC] Espelho: NE ${neNumber} — ${movements.length} registro(s).`);
       await this._persistFromMirrorToCache(neNumber, ugStr);
+
+      // Se for ação manual (forceSync), verifica se OBs estão no espelho
+      // e busca da API caso estejam ausentes
+      if (forceSync) {
+        const obRaws = await this.mirrorService.getObsRawByNe(neNumber, ugStr);
+        if (obRaws.length === 0) {
+          console.log(`[SIGEF SYNC] NE ${neNumber} no espelho, mas OBs ausentes. Buscando via API (recentOnly=${recentOnly})...`);
+          const ugNum = parseInt(ugStr, 10);
+          await this._syncObsForNe(ano, neNumber, ugStr, ugNum, forceSync, recentOnly, this.currentQueryId || undefined);
+        } else {
+          console.log(`[SIGEF SYNC] NE ${neNumber} — ${obRaws.length} OB(s) já no espelho.`);
+        }
+
+        if (contractId) {
+          await this.financialService.syncSigefTransactions(contractId).catch(err =>
+            console.error('[SIGEF SYNC] Erro ao persistir transações:', err)
+          );
+        }
+      }
+
       return this.cacheService.getNeResumo(parseInt(ugStr, 10), neNumber);
     }
 

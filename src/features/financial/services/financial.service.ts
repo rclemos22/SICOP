@@ -355,6 +355,28 @@ export class FinancialService {
 
           if (error) throw error;
         }
+
+        // === Atualizar totais financeiros da dotação ===
+        const dotacaoTotalEmpenhado = this.sigefCacheService.calcularValorEmpenhado(movimentosCache);
+        const dotacaoTotalCancelado = movimentosCache
+          .filter(m => m.cdevento === 400012)
+          .reduce((sum, m) => sum + Math.abs(Number(m.vlnotaempenho) || 0), 0);
+        const dotacaoTotalPago = this.sigefCacheService.calcularValorPago(obsCache);
+        const dotacaoSaldoDisponivel = Math.max(0, Number(budget.valor_dotacao) - dotacaoTotalEmpenhado);
+
+        const { error: dotError } = await this.supabaseService.client
+          .from('dotacoes')
+          .update({
+            total_empenhado: dotacaoTotalEmpenhado,
+            total_cancelado: dotacaoTotalCancelado,
+            total_pago: dotacaoTotalPago,
+            saldo_disponivel: dotacaoSaldoDisponivel
+          })
+          .eq('id', budget.id);
+
+        if (dotError) {
+          console.warn(`[FinancialService] Erro ao atualizar dotação ${budget.id}:`, dotError);
+        }
       } catch (err) {
         console.error('[FinancialService] Erroao sincronizar transacoes para contrato:', contractId, err);
       }

@@ -253,6 +253,12 @@ export class ContractService {
         }
       });
     }
+
+    // Fallback: se a soma das dotações for zero, usar os totais calculados da tabela contratos
+    if (totalEmpenhado === 0 && totalPago === 0) {
+      totalEmpenhado = Number(raw.total_empenhado) || 0;
+      totalPago = Number(raw.total_pago) || 0;
+    }
     
     // Filtrar aditivos que alteram vigência (Prorrogação/Prazo)
     const aditivosComVigencia = aditivos
