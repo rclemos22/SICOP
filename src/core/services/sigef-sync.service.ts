@@ -607,10 +607,9 @@ export class SigefSyncService {
         return await fn();
       } catch (err: any) {
         lastError = err;
-        const isNet = /Failed to fetch|NetworkError|TLS|disconnected/i.test(err?.message || '');
-        if (isNet && attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1);
-          console.log(`[SIGEF SYNC] Retry ${attempt}/${maxRetries} em ${delay}ms...`);
+        if (this._isNetworkError(err) && attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+          console.warn(`[SIGEF SYNC] Retry ${attempt}/${maxRetries} em ${Math.round(delay)}ms... (${this._extractErrorMsg(err)})`);
           await this._delay(delay);
         } else {
           throw err;
@@ -618,6 +617,26 @@ export class SigefSyncService {
       }
     }
     throw lastError;
+  }
+
+  private _isNetworkError(err: any): boolean {
+    const patterns = /ETIMEDOUT|ECONNREFUSED|ECONNRESET|Failed to fetch|NetworkError|TLS|disconnected|timeout|socket|handshake|connection reset|abort|enotfound|eai_again/i;
+    if (patterns.test(err?.message || '')) return true;
+    if (patterns.test(err?.cause?.message || '')) return true;
+    if (patterns.test(String(err) || '')) return true;
+    if (err?.name === 'AbortError' || err?.name === 'AggregateError') return true;
+    if (err instanceof AggregateError && err.errors?.length > 0) {
+      return err.errors.some((e: any) => patterns.test(e?.message || String(e)));
+    }
+    return false;
+  }
+
+  private _extractErrorMsg(err: any): string {
+    if (typeof err === 'string') return err;
+    if (err instanceof AggregateError && err.errors?.length > 0) {
+      return err.errors.map((e: any) => e?.message || String(e)).join('; ');
+    }
+    return err?.message || err?.cause?.message || String(err) || 'Erro desconhecido';
   }
 
   private _delay(ms: number) {

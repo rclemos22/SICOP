@@ -354,97 +354,114 @@ export class SigefService implements OnDestroy {
 
   /**
    * Executa uma chamada à API com enfileiramento global e suporte a cancelamento.
-   * @param url - URL da requisição
-   * @param options - Opções do fetch
-   * @param retries - Número de tentativas
-   * @param backoff - Tempo inicial de backoff em ms
-   * @param queryId - ID opcional para permitir cancelamento
+   * Usa loop interno para retry em vez de recursão, evitando perda do queryId
+   * entre tentativas e crescimento da fila.
    */
   async callApi(url: string, options: RequestInit = {}, retries: number = 5, backoff: number = 5000, queryId?: string): Promise<Response> {
-    // Se esta consulta foi cancelada antes de começar, aborta silenciosamente
     if (queryId && !this.pendingQueries.has(queryId)) {
       return new Response(null, { status: 499, statusText: 'Query cancelled' });
     }
 
-    // Enfileiramento global: cada nova chamada espera a anterior terminar
     return this.queryQueue = this.queryQueue.then(async () => {
-      // Verifica novamente se foi cancelada durante a espera na fila
       if (queryId && !this.pendingQueries.has(queryId)) {
         return new Response(null, { status: 499, statusText: 'Query cancelled' });
       }
 
       this.currentQueryId = queryId || null;
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 180000); // 180 segundos de timeout individual
+      let currentRetries = retries;
+      let currentBackoff = backoff;
 
-      // Armazena o controller para permitir cancelamento externo
-      if (queryId) {
-        const pending = this.pendingQueries.get(queryId);
-        if (pending) {
-          pending.cancel = () => {
-            controller.abort();
-            this.pendingQueries.delete(queryId);
-          };
-        }
-      }
+      while (true) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 120000);
 
-      try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(id);
-        
-        // Auto-reautenticação em caso de expiração
-        if (response.status === 401 || response.status === 403) {
-          await this.handleUnauthorized();
-          const newOptions = { ...options, headers: this.getHeaders() };
-          return await this.callApi(url, newOptions, retries, backoff, queryId);
-        }
-
-        // Erros transientes de Gateway/Server
-        if ([500, 502, 503, 504].includes(response.status) && retries > 0) {
-          console.warn(`[SIGEF] Gateway Error (${response.status}). Backoff ${backoff}ms...`);
-          await new Promise(resolve => setTimeout(resolve, backoff));
-          return this.callApi(url, options, retries - 1, Math.min(backoff * 2, 60000), queryId);
-        }
-        
-        // Pequeno delay "de cortesia" após cada sucesso para não bombardear a API
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        return response;
-      } catch (err: any) {
-        clearTimeout(id);
-        
-        // Se foi cancelada (isso inclui AbortError do cancelamento), retorna resposta vazia
-        if (queryId && !this.pendingQueries.has(queryId)) {
-          return new Response(null, { status: 499, statusText: 'Query cancelled' });
-        }
-
-        const errLower = (err.message || '').toLowerCase();
-        const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout');
-        const isNetworkError = isTimeout ||
-                               errLower.includes('network') || 
-                               errLower.includes('socket') || 
-                               errLower.includes('disconnected') ||
-                               errLower.includes('tls') ||
-                               errLower.includes('handshake') ||
-                               errLower.includes('connection reset') ||
-                               errLower.includes('failed to fetch');
-        
-        if (isNetworkError && retries > 0) {
-          const infraBackoff = backoff * (errLower.includes('tls') || errLower.includes('socket') || isTimeout ? 2 : 1.5);
-          console.warn(`[SIGEF] Infra Error (${err.message}). Backoff ${infraBackoff}ms, retries: ${retries}`);
-          await new Promise(resolve => setTimeout(resolve, infraBackoff));
-          return this.callApi(url, options, retries - 1, Math.min(infraBackoff * 2, 120000), queryId);
-        }
-        throw err;
-      } finally {
         if (queryId) {
-          this.pendingQueries.delete(queryId);
-          if (this.currentQueryId === queryId) {
-            this.currentQueryId = null;
+          const pending = this.pendingQueries.get(queryId);
+          if (pending) {
+            pending.cancel = () => {
+              controller.abort();
+              this.pendingQueries.delete(queryId);
+            };
           }
+        }
+
+        try {
+          const response = await fetch(url, { ...options, signal: controller.signal });
+          clearTimeout(id);
+
+          if (response.status === 401 || response.status === 403) {
+            await this.handleUnauthorized();
+            options = { ...options, headers: this.getHeaders() };
+            continue;
+          }
+
+          if ([500, 502, 503, 504].includes(response.status) && currentRetries > 0) {
+            console.warn(`[SIGEF] Gateway Error (${response.status}). Backoff ${currentBackoff}ms...`);
+            await new Promise(resolve => setTimeout(resolve, currentBackoff));
+            currentBackoff = Math.min(currentBackoff * 2, 60000);
+            currentRetries--;
+            continue;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 300));
+          return response;
+        } catch (err: any) {
+          clearTimeout(id);
+
+          if (queryId && !this.pendingQueries.has(queryId)) {
+            return new Response(null, { status: 499, statusText: 'Query cancelled' });
+          }
+
+          if (this._isRetryableError(err) && currentRetries > 0) {
+            currentBackoff = this._calcBackoff(err, currentBackoff);
+            console.warn(`[SIGEF] Infra Error (${this._extractErrorMessage(err)}). Backoff ${Math.round(currentBackoff)}ms, retries: ${currentRetries}`);
+            await new Promise(resolve => setTimeout(resolve, currentBackoff));
+            currentRetries--;
+            continue;
+          }
+
+          this._cleanupQuery(queryId);
+          throw err;
         }
       }
     });
+  }
+
+  private _extractErrorMessage(err: any): string {
+    if (typeof err === 'string') return err;
+    if (err instanceof AggregateError && err.errors?.length > 0) {
+      return err.errors.map((e: any) => e?.message || String(e)).join('; ');
+    }
+    return err?.message || err?.cause?.message || String(err) || 'Erro desconhecido';
+  }
+
+  private _isRetryableError(err: any): boolean {
+    const patterns = /ETIMEDOUT|ECONNREFUSED|ECONNRESET|Failed to fetch|NetworkError|TLS|disconnected|timeout|socket|handshake|connection reset|abort|enotfound|eai_again/i;
+    if (patterns.test(err?.message || '')) return true;
+    if (patterns.test(err?.cause?.message || '')) return true;
+    if (patterns.test(String(err) || '')) return true;
+    if (err?.name === 'AbortError' || err?.name === 'AggregateError') return true;
+    if (err instanceof AggregateError && err.errors?.length > 0) {
+      return err.errors.some((e: any) => patterns.test(e?.message || String(e)));
+    }
+    return false;
+  }
+
+  private _calcBackoff(err: any, currentBackoff: number): number {
+    const errStr = (err?.message || err?.cause?.message || String(err) || '').toLowerCase();
+    const isSlow = /tls|socket|timeout|etimedout/.test(errStr);
+    const multiplier = isSlow ? 2 : 1.5;
+    const jitter = 0.8 + Math.random() * 0.4;
+    return Math.min(currentBackoff * multiplier * jitter, 120000);
+  }
+
+  private _cleanupQuery(queryId?: string): void {
+    if (queryId) {
+      this.pendingQueries.delete(queryId);
+      if (this.currentQueryId === queryId) {
+        this.currentQueryId = null;
+      }
+    }
   }
 
   /**
@@ -539,6 +556,9 @@ export class SigefService implements OnDestroy {
       if (!response.ok) {
         const errorText = await response.text();
         this._apiStatus.set('error');
+        if (response.status === 499) {
+          throw new Error('Query cancelled');
+        }
         throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
       }
 
@@ -623,9 +643,8 @@ export class SigefService implements OnDestroy {
         previous: data.previous
       };
     } catch (err: any) {
-      const isNet = /Failed to fetch|NetworkError|TLS|disconnected/i.test(err?.message || '');
-      if (isNet) {
-        console.warn('[SIGEF NE PERIOD] Erro de rede:', err.message);
+      if (this._isRetryableError(err)) {
+        console.warn('[SIGEF NE PERIOD] Erro de rede:', this._extractErrorMessage(err));
         return { data: [], count: 0, next: null, previous: null };
       }
       this._error.set(err.message || 'Erro ao buscar NEs por período');
@@ -812,9 +831,11 @@ export class SigefService implements OnDestroy {
         headers: this.getHeaders(),
       }, 5, 5000, queryId);
 
-      // Retornar array vazio em vez de lançar erro para erros 5xx
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 499) {
+          throw new Error('Query cancelled');
+        }
         if (response.status >= 500) {
           console.warn('[SIGEF OB] Erro 5xx da API, retornando vazio:', response.status);
           return { data: [], count: 0, next: null, previous: null };
@@ -842,17 +863,8 @@ export class SigefService implements OnDestroy {
         previous: data.previous
       };
     } catch (err: any) {
-      // Em caso de erro de rede ou cancelamento, retornar vazio em vez de quebrar
-      if (err.message === 'Query cancelled') {
-        console.log(`[SIGEF OB] Consulta cancelada: ${queryId}`);
-        return { data: [], count: 0, next: null, previous: null };
-      }
-
-      const networkErrors = ['Failed to fetch', 'NetworkError', 'socket disconnected', 'TLS', 'ECONNRESET'];
-      const isNetworkError = networkErrors.some(e => err.message?.includes(e));
-      
-      if (isNetworkError) {
-        console.warn('[SIGEF OB] Erro de rede, retornando vazio:', err.message);
+      if (this._isRetryableError(err)) {
+        console.warn('[SIGEF OB] Erro de rede, retornando vazio:', this._extractErrorMessage(err));
         return { data: [], count: 0, next: null, previous: null };
       }
       this._error.set(err.message || 'Erro ao buscar ordem bancária');

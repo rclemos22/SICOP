@@ -518,8 +518,15 @@ export class SigefBulkSyncService {
   }
 
   private _isNetworkError(err: any): boolean {
-    return /ETIMEDOUT|ECONNREFUSED|ECONNRESET|Failed to fetch|NetworkError|TLS|disconnected|timeout/i
-      .test(err?.message || err?.cause?.message || String(err) || '');
+    const patterns = /ETIMEDOUT|ECONNREFUSED|ECONNRESET|Failed to fetch|NetworkError|TLS|disconnected|timeout|socket|handshake|connection reset|abort|enotfound|eai_again/i;
+    if (patterns.test(err?.message || '')) return true;
+    if (patterns.test(err?.cause?.message || '')) return true;
+    if (patterns.test(String(err) || '')) return true;
+    if (err?.name === 'AbortError' || err?.name === 'AggregateError') return true;
+    if (err instanceof AggregateError && err.errors?.length > 0) {
+      return err.errors.some((e: any) => patterns.test(e?.message || String(e)));
+    }
+    return false;
   }
 
   private async _withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 3000): Promise<T> {
@@ -530,8 +537,8 @@ export class SigefBulkSyncService {
       } catch (err: any) {
         lastError = err;
         if (this._isNetworkError(err) && attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1);
-          console.warn(`[BulkSync] Retry ${attempt}/${maxRetries} em ${delay}ms... (${err?.message})`);
+          const delay = baseDelay * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+          console.warn(`[BulkSync] Retry ${attempt}/${maxRetries} em ${Math.round(delay)}ms... (${err?.message || ''})`);
           await this._delay(delay);
         } else {
           throw err;
