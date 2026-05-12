@@ -3,6 +3,7 @@ import { ErrorHandlerService } from '../../../core/services/error-handler.servic
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { SigefCacheService } from '../../../core/services/sigef-cache.service';
 import { Transaction, TransactionType } from '../../../shared/models/transaction.model';
+import { getUnidadeLabel } from '../../../shared/models/budget.model';
 import { BudgetService } from '../../budget/services/budget.service';
 import { ContractService } from '../../contracts/services/contract.service';
 
@@ -212,6 +213,8 @@ export class FinancialService {
     
     if (contractBudgets.length === 0) return;
 
+    const syncErrors: string[] = [];
+
     for (const budget of contractBudgets) {
       if (!budget.nunotaempenho) continue;
 
@@ -253,6 +256,7 @@ export class FinancialService {
             amount: Math.abs(Number(m.vlnotaempenho) || 0),
             department: budget.dotacao,
             budget_description: budget.dotacao,
+            unidade_gestora_label: getUnidadeLabel(ug),
             document_number: neValue,
             ob_number: 'N/A'
           });
@@ -323,8 +327,11 @@ export class FinancialService {
             amount: totalAmount,
             department: budget.dotacao,
             budget_description: budget.dotacao,
+            unidade_gestora_label: getUnidadeLabel(ug),
             document_number: allDocs,
             ob_number: allObs,
+            payment_month: paymentMonth,
+            parcela_pago_em: groupObs[0].dtpagamento || null,
             ...(linkedParcela ? { parcela_referencia: linkedParcela } : {})
           });
 
@@ -333,27 +340,26 @@ export class FinancialService {
             const obNumero = ob.nuordembancaria || 'S/N';
             const docNumero = ob.nudocumento || obNumero;
             const singleId = `cache-ob-${obNumero}-${docNumero}`;
-            // Remove o antigo e também remove se for igual ao novo id, exceto que o novo ID começa com 'aggr' então nunca vai ser igual
             oldSigefIdsToDelete.add(singleId);
           });
         }
 
-        // Limpar transações legadas parciais (Ex: exclusões de impostos que foram fundidos)
-        if (oldSigefIdsToDelete.size > 0) {
-          const idsToDelete = Array.from(oldSigefIdsToDelete);
-          await this.supabaseService.client
-            .from('transacoes')
-            .delete()
-            .in('sigef_id', idsToDelete);
-        }
-
-        // Fazer Upsert da carga super-agregada
+        // UPSERT primeiro (seguro: se falhar, os registros antigos ainda existem)
         if (transactionsToUpsert.length > 0) {
           const { error } = await this.supabaseService.client
             .from('transacoes')
             .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
 
           if (error) throw error;
+        }
+
+        // DEPOIS limpar transações legadas parciais (apenas se o upsert acima tiver sucesso)
+        if (oldSigefIdsToDelete.size > 0) {
+          const idsToDelete = Array.from(oldSigefIdsToDelete);
+          await this.supabaseService.client
+            .from('transacoes')
+            .delete()
+            .in('sigef_id', idsToDelete);
         }
 
         // === Atualizar totais financeiros da dotação ===
@@ -377,9 +383,15 @@ export class FinancialService {
         if (dotError) {
           console.warn(`[FinancialService] Erro ao atualizar dotação ${budget.id}:`, dotError);
         }
-      } catch (err) {
-        console.error('[FinancialService] Erroao sincronizar transacoes para contrato:', contractId, err);
+      } catch (err: any) {
+        const msg = `NE ${neValue}: ${err.message || 'Erro desconhecido'}`;
+        console.error('[FinancialService] Erro ao sincronizar transacoes para contrato:', contractId, msg);
+        syncErrors.push(msg);
       }
+    }
+    
+    if (syncErrors.length > 0) {
+      console.warn(`[FinancialService] ${syncErrors.length} erro(s) na sincronização de ${contractBudgets.length} dotações para contrato ${contractId}`);
     }
     
     await this.updateContractTotals(contractId);

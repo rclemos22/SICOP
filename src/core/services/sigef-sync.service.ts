@@ -160,17 +160,14 @@ export class SigefSyncService {
       console.log(`[SIGEF SYNC] Espelho: NE ${neNumber} — ${movements.length} registro(s).`);
       await this._persistFromMirrorToCache(neNumber, ugStr);
 
-      // Se for ação manual (forceSync), verifica se OBs estão no espelho
-      // e busca da API caso estejam ausentes
+      // Se for ação manual (forceSync), busca OBs mais recentes da API
+      // (sempre consulta a API mesmo se OBs já existem no espelho,
+      //  para capturar novos pagamentos emitidos desde a última sincronia)
       if (forceSync) {
+        const ugNum = parseInt(ugStr, 10);
         const obRaws = await this.mirrorService.getObsRawByNe(neNumber, ugStr);
-        if (obRaws.length === 0) {
-          console.log(`[SIGEF SYNC] NE ${neNumber} no espelho, mas OBs ausentes. Buscando via API (recentOnly=${recentOnly})...`);
-          const ugNum = parseInt(ugStr, 10);
-          await this._syncObsForNe(ano, neNumber, ugStr, ugNum, forceSync, recentOnly, this.currentQueryId || undefined);
-        } else {
-          console.log(`[SIGEF SYNC] NE ${neNumber} — ${obRaws.length} OB(s) já no espelho.`);
-        }
+        console.log(`[SIGEF SYNC] NE ${neNumber} — ${obRaws.length} OB(s) no espelho. Buscando novas da API (recentOnly=${recentOnly})...`);
+        await this._syncObsForNe(ano, neNumber, ugStr, ugNum, forceSync, recentOnly, this.currentQueryId || undefined);
 
         if (contractId) {
           await this.financialService.syncSigefTransactions(contractId).catch(err =>

@@ -496,6 +496,13 @@ export class ContractDetailsPageComponent {
   }
 
   /**
+   * Verifica se o aditivo altera a vigência (prazo/prorrogação).
+   */
+  isAditivoDePrazo(tipo: string): boolean {
+    return tipo.includes('PRAZO') || tipo.includes('PRORROGACAO');
+  }
+
+  /**
    * Retorna a classe CSS para o badge de tipo de aditivo.
    */
   getAditivoTipoBadge(tipo: string): string {
@@ -1034,12 +1041,10 @@ export class ContractDetailsPageComponent {
   }
   
   /**
-   * Força a sincronização SIGEF para todas as notas de engajamento do contrato
-   */
-  /**
    * Força a sincronização SIGEF para todas as notas de empenho do contrato
+   * @param quickSync Se true, busca apenas OBs dos últimos 60 dias (padrão: false = varredura completa)
    */
-  async forceSyncSigef() {
+  async forceSyncSigef(quickSync: boolean = false) {
     const budgetsData = this.budgets();
     if (budgetsData.length === 0) {
       alert('Nenhuma dotação encontrada para forçar sincronização.');
@@ -1064,21 +1069,19 @@ export class ContractDetailsPageComponent {
     }
 
     try {
-      console.log(`[ForceSync] Iniciando sincronização em lote (RÁPIDA) de ${tasks.length} NEs para contrato ${this.contractId()}`);
+      const scanType = quickSync ? 'RÁPIDA (60 dias)' : 'COMPLETA (todos os anos)';
+      console.log(`[ForceSync] Iniciando sincronização ${scanType} de ${tasks.length} NEs para contrato ${this.contractId()}`);
       
-      // Utiliza o serviço unificado que gerencia status, retentativas e persistência
-      // recentOnly = true por padrão
-      await this.sigefSyncService.syncBatch(tasks, this.contractId(), false, true);
+      await this.sigefSyncService.syncBatch(tasks, this.contractId(), false, !quickSync);
       
       // Recarregar os dados locais para refletir a persistência
       await this.loadBudgets(this.contractId());
       await this.loadTransactions(this.contractId());
       
-      alert('Sincronização e atualização do banco de dados concluídas com sucesso!');
+      alert(`Sincronização ${scanType} concluída com sucesso!`);
     } catch (err: any) {
       console.error('[ForceSync] Erro:', err);
       alert('Erro na sincronização: ' + (err.message || 'Erro desconhecido'));
-    } finally {
     }
   }
 }

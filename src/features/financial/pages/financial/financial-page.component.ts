@@ -1,5 +1,5 @@
-import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
-import { Component, signal, computed, inject } from '@angular/core';
+import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { Component, signal, computed, inject, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   Transaction,
@@ -9,21 +9,52 @@ import {
   getTransactionIcon,
   getTransactionIconBgClass
 } from '../../../../shared/models/transaction.model';
+import { getUnidadeLabel } from '../../../../shared/models/budget.model';
 
 import { FinancialService } from '../../services/financial.service';
+import { BudgetService } from '../../../budget/services/budget.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 import { SigefBulkSyncService } from '../../../../core/services/sigef-bulk-sync.service';
+
+const PAGE_SIZE = 20;
 
 @Component({
   selector: 'app-financial-page',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule],
+  imports: [CommonModule, DatePipe, DecimalPipe, FormsModule],
   templateUrl: './financial-page.component.html'
 })
 export class FinancialPageComponent {
   public financialService  = inject(FinancialService);
+  public budgetService     = inject(BudgetService);
   public sigefSyncService  = inject(SigefSyncService);
   public bulkSyncService   = inject(SigefBulkSyncService);
+
+  // Mapa: Nota de Empenho -> Código Unidade Gestora
+  private neToUgMap = computed(() => {
+    const map = new Map<string, string>();
+    for (const d of this.budgetService.allDotacoes()) {
+      if (d.nunotaempenho && d.unid_gestora) {
+        map.set(d.nunotaempenho, d.unid_gestora);
+      }
+    }
+    return map;
+  });
+
+  // Resolve o label da unidade gestora para uma transação
+  resolveUnidadeGestora(item: Transaction): string {
+    // 1. Se já tem o label definido, usa
+    if (item.unidade_gestora_label) {
+      return item.unidade_gestora_label;
+    }
+    // 2. Senão, procura no mapa de dotações pelo commitment_id (NE)
+    const ugCode = this.neToUgMap().get(item.commitment_id);
+    if (ugCode) {
+      return getUnidadeLabel(ugCode);
+    }
+    // 3. Se não encontrar, retorna --- (NÃO mostra mais o número da dotação)
+    return '---';
+  }
 
   // Signals
   searchQuery = signal('');
@@ -37,6 +68,10 @@ export class FinancialPageComponent {
   filterContract = signal<string>('');
   filterCommitment = signal<string>('');
 
+  // Pagination State
+  currentPage = signal(1);
+  pageSize = signal(PAGE_SIZE);
+
   // Expose Enum to Template
   TransactionType = TransactionType;
 
@@ -46,7 +81,26 @@ export class FinancialPageComponent {
   getIcon = getTransactionIcon;
   getIconClass = getTransactionIconBgClass;
 
-  // Logic
+  constructor() {
+    // Carregar dotações para o mapa de Unidade Gestora
+    this.budgetService.loadDotacoes();
+
+    // Reset to page 1 when filters change
+    effect(() => {
+      // Just accessing these signals to trigger the effect when they change
+      this.searchQuery();
+      this.activeTab();
+      this.filterStartDate();
+      this.filterEndDate();
+      this.filterType();
+      this.filterContract();
+      this.filterCommitment();
+      
+      this.currentPage.set(1);
+    });
+  }
+
+  // Logic - Filtered transactions
   filteredTransactions = computed(() => {
     // 1. Get Base Data
     const transactions = this.financialService.transactions();
@@ -76,7 +130,6 @@ export class FinancialPageComponent {
 
       // Advanced Filter: Date Range
       if (startDate) {
-        // Create date at midnight local time to compare strictly by day
         const start = new Date(startDate);
         const tDate = new Date(t.date);
         tDate.setHours(0, 0, 0, 0);
@@ -108,6 +161,55 @@ export class FinancialPageComponent {
       return true;
     });
   });
+
+  // Pagination - Paginated slice
+  paginatedTransactions = computed(() => {
+    const all = this.filteredTransactions();
+    const start = (this.currentPage() - 1) * this.pageSize();
+    return all.slice(start, start + this.pageSize());
+  });
+
+  // Pagination helpers
+  totalPages = computed(() => Math.ceil(this.filteredTransactions().length / this.pageSize()));
+  
+  startIndex = computed(() => {
+    if (this.filteredTransactions().length === 0) return 0;
+    return (this.currentPage() - 1) * this.pageSize() + 1;
+  });
+  
+  endIndex = computed(() => {
+    const end = this.currentPage() * this.pageSize();
+    return Math.min(end, this.filteredTransactions().length);
+  });
+
+  hasPrevPage = computed(() => this.currentPage() > 1);
+  hasNextPage = computed(() => this.currentPage() < this.totalPages());
+
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.totalPages()) {
+      this.currentPage.set(page);
+    }
+  }
+
+  prevPage() {
+    if (this.hasPrevPage()) {
+      this.currentPage.update(p => p - 1);
+    }
+  }
+
+  nextPage() {
+    if (this.hasNextPage()) {
+      this.currentPage.update(p => p + 1);
+    }
+  }
+
+  // Page size change handler
+  onPageSizeChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const newSize = Number(select.value);
+    this.pageSize.set(newSize);
+    this.currentPage.set(1);
+  }
 
   // Actions
   setTab(tab: 'ALL' | 'PAYMENTS' | 'COMMITMENTS') {

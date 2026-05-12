@@ -1,196 +1,197 @@
-<div class="flex-1 overflow-y-auto p-6 md:px-10 md:py-8 h-full">
+<div class="flex flex-col h-full bg-gray-50 dark:bg-gray-900/40">
   
   <!-- Header & Controls -->
-  <div class="flex flex-col gap-6 mb-8">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <!-- Title -->
-      <div>
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Lançamentos Financeiros</h1>
-        <p class="text-sm text-gray-500 mt-1">Histórico completo de transações e movimentações.</p>
-      </div>
-      
-      <!-- Tabs (Right Side) -->
-      <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700 shadow-inner self-start md:self-auto">
-        <button 
-          (click)="setTab('ALL')"
-          class="px-5 py-1.5 text-sm font-medium rounded-md transition-all duration-200"
-          [class]="activeTab() === 'ALL' 
-            ? 'bg-white dark:bg-gray-700 text-sco-blue dark:text-white shadow-sm' 
-            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'"
-        >
-          Tudo
-        </button>
-        <button 
-          (click)="setTab('PAYMENTS')"
-          class="px-5 py-1.5 text-sm font-medium rounded-md transition-all duration-200"
-          [class]="activeTab() === 'PAYMENTS' 
-            ? 'bg-white dark:bg-gray-700 text-sco-blue dark:text-white shadow-sm' 
-            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'"
-        >
-          Pagamentos
-        </button>
-        <button 
-          (click)="setTab('COMMITMENTS')"
-          class="px-5 py-1.5 text-sm font-medium rounded-md transition-all duration-200"
-          [class]="activeTab() === 'COMMITMENTS' 
-            ? 'bg-white dark:bg-gray-700 text-sco-blue dark:text-white shadow-sm' 
-            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'"
-        >
-          Empenhos
-        </button>
-      </div>
-    </div>
-
-    <!-- Toolbar -->
-    <div class="flex flex-col sm:flex-row gap-4">
-      <div class="relative flex-1 max-w-lg">
-        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">search</span>
-        <input 
-          (input)="updateSearch($event)"
-          [value]="searchQuery()"
-          class="w-full pl-10 pr-4 py-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all shadow-sm" 
-          placeholder="Buscar lançamento..." 
-          type="text"
-        />
-      </div>
-      
-      <button 
-        (click)="toggleFilterPanel()"
-        class="flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all shadow-sm"
-        [class]="isFilterPanelOpen() || filterType() || filterContract() || filterCommitment() || filterStartDate() || filterEndDate()
-          ? 'bg-blue-50 border-blue-200 text-sco-blue dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300' 
-          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'"
-      >
-        <span class="material-symbols-outlined text-[20px]">filter_list</span>
-        Filtros
-        @if (filterType() || filterContract() || filterCommitment() || filterStartDate() || filterEndDate()) {
-          <span class="flex h-2 w-2 rounded-full bg-sco-blue"></span>
-        }
-      </button>
-
-      <div class="flex-1"></div> <!-- Spacer -->
-
-      <!-- Botão Atualizar SIGEF (últimos 60 dias) -->
-      <div class="flex flex-col gap-1">
-        <button 
-          id="btn-atualizar-sigef"
-          (click)="syncGlobal()"
-          [disabled]="isAnySyncing"
-          class="flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-xl transition-all shadow-sm border"
-          [class]="isAnySyncing
-            ? 'bg-blue-50 border-blue-200 text-sco-blue dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300 cursor-wait'
-            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'"
-        >
-          <span class="material-symbols-outlined text-[20px]" [class.animate-spin]="isAnySyncing">
-            {{ isAnySyncing ? 'sync' : 'cloud_download' }}
-          </span>
-          {{ syncButtonLabel }}
-        </button>
-
-        <!-- Barra de progresso do download bulk -->
-        @if (bulkSyncService.isRunning()) {
-          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
-            <div
-              class="h-1.5 rounded-full bg-sco-blue transition-all duration-500"
-              [style.width.%]="bulkSyncService.progress().percent"
-            ></div>
-          </div>
-          <span class="text-xs text-gray-400">
-            {{ bulkSyncService.progress().totalNeSaved }} NEs · {{ bulkSyncService.progress().totalObSaved }} OBs baixadas
-          </span>
-        }
-      </div>
-
-      <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm">
-        <span class="material-symbols-outlined text-[20px]">download</span>
-        Exportar
-      </button>
-    </div>
-
-    <!-- Filter Panel -->
-    @if (isFilterPanelOpen()) {
-      <div class="p-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-4 duration-200">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <span class="material-symbols-outlined text-sco-blue">tune</span>
-            Filtros Avançados
-          </h3>
-          <button (click)="clearFilters()" class="text-xs text-red-500 hover:text-red-700 font-medium hover:underline">
-            Limpar Filtros
-          </button>
+  <div class="flex-shrink-0 p-6 md:px-10 md:py-8">
+    <div class="flex flex-col gap-6 mb-2">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <!-- Title -->
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Lançamentos Financeiros</h1>
+          <p class="text-sm text-gray-500 mt-1">Histórico completo de transações e movimentações.</p>
         </div>
         
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          
-          <!-- Date Start -->
-          <div class="space-y-1.5">
-             <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">De</label>
-             <input 
-                type="date"
-                [ngModel]="filterStartDate()"
-                (ngModelChange)="filterStartDate.set($event)"
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
-             >
-          </div>
-
-          <!-- Date End -->
-          <div class="space-y-1.5">
-             <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Até</label>
-             <input 
-                type="date" 
-                [ngModel]="filterEndDate()"
-                (ngModelChange)="filterEndDate.set($event)"
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
-             >
-          </div>
-
-          <!-- Type -->
-          <div class="space-y-1.5">
-             <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo</label>
-             <select 
-                [ngModel]="filterType()"
-                (ngModelChange)="filterType.set($event)"
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
-             >
-                <option value="">Todos</option>
-                <option [value]="TransactionType.LIQUIDATION">Pagamento (Liquidado)</option>
-                <option [value]="TransactionType.COMMITMENT">Empenho</option>
-                <option [value]="TransactionType.REINFORCEMENT">Reforço</option>
-                <option [value]="TransactionType.CANCELLATION">Cancelamento</option>
-             </select>
-          </div>
-
-          <!-- Contract -->
-          <div class="space-y-1.5">
-             <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Contrato</label>
-             <input 
-                type="text" 
-                [ngModel]="filterContract()"
-                (ngModelChange)="filterContract.set($event)"
-                placeholder="Ex: 124/2024"
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
-             >
-          </div>
-
-          <!-- Commitment Note -->
-          <div class="space-y-1.5">
-             <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nota de Empenho</label>
-             <input 
-                type="text" 
-                [ngModel]="filterCommitment()"
-                (ngModelChange)="filterCommitment.set($event)"
-                placeholder="Ex: 2025NE..."
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
-             >
-          </div>
-
+        <!-- Tabs (Right Side) -->
+        <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700 shadow-inner self-start md:self-auto">
+          <button 
+            (click)="setTab('ALL')"
+            class="px-5 py-1.5 text-sm font-medium rounded-md transition-all duration-200"
+            [class]="activeTab() === 'ALL' 
+              ? 'bg-white dark:bg-gray-700 text-sco-blue dark:text-white shadow-sm' 
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'"
+          >
+            Tudo
+          </button>
+          <button 
+            (click)="setTab('PAYMENTS')"
+            class="px-5 py-1.5 text-sm font-medium rounded-md transition-all duration-200"
+            [class]="activeTab() === 'PAYMENTS' 
+              ? 'bg-white dark:bg-gray-700 text-sco-blue dark:text-white shadow-sm' 
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'"
+          >
+            Pagamentos
+          </button>
+          <button 
+            (click)="setTab('COMMITMENTS')"
+            class="px-5 py-1.5 text-sm font-medium rounded-md transition-all duration-200"
+            [class]="activeTab() === 'COMMITMENTS' 
+              ? 'bg-white dark:bg-gray-700 text-sco-blue dark:text-white shadow-sm' 
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'"
+          >
+            Empenhos
+          </button>
         </div>
       </div>
-    }
+
+      <!-- Toolbar -->
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="relative flex-1 max-w-lg">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">search</span>
+          <input 
+            (input)="updateSearch($event)"
+            [value]="searchQuery()"
+            class="w-full pl-10 pr-4 py-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sco-blue focus:border-sco-blue outline-none transition-all shadow-sm" 
+            placeholder="Buscar lançamento..." 
+            type="text"
+          />
+        </div>
+        
+        <button 
+          (click)="toggleFilterPanel()"
+          class="flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all shadow-sm"
+          [class]="isFilterPanelOpen() || filterType() || filterContract() || filterCommitment() || filterStartDate() || filterEndDate()
+            ? 'bg-blue-50 border-blue-200 text-sco-blue dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300' 
+            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'"
+        >
+          <span class="material-symbols-outlined text-[20px]">filter_list</span>
+          Filtros
+          @if (filterType() || filterContract() || filterCommitment() || filterStartDate() || filterEndDate()) {
+            <span class="flex h-2 w-2 rounded-full bg-sco-blue"></span>
+          }
+        </button>
+
+        <div class="flex-1"></div> <!-- Spacer -->
+
+        <!-- Botão Atualizar SIGEF -->
+        <div class="flex flex-col gap-1">
+          <button 
+            id="btn-atualizar-sigef"
+            (click)="syncGlobal()"
+            [disabled]="isAnySyncing"
+            class="flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-xl transition-all shadow-sm border"
+            [class]="isAnySyncing
+              ? 'bg-blue-50 border-blue-200 text-sco-blue dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300 cursor-wait'
+              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'"
+          >
+            <span class="material-symbols-outlined text-[20px]" [class.animate-spin]="isAnySyncing">
+              {{ isAnySyncing ? 'sync' : 'cloud_download' }}
+            </span>
+            {{ syncButtonLabel }}
+          </button>
+
+          @if (bulkSyncService.isRunning()) {
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+              <div
+                class="h-1.5 rounded-full bg-sco-blue transition-all duration-500"
+                [style.width.%]="bulkSyncService.progress().percent"
+              ></div>
+            </div>
+            <span class="text-xs text-gray-400">
+              {{ bulkSyncService.progress().totalNeSaved }} NEs · {{ bulkSyncService.progress().totalObSaved }} OBs baixadas
+            </span>
+          }
+        </div>
+
+        <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-[20px]">download</span>
+          Exportar
+        </button>
+      </div>
+
+      <!-- Filter Panel -->
+      @if (isFilterPanelOpen()) {
+        <div class="p-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-4 duration-200">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <span class="material-symbols-outlined text-sco-blue">tune</span>
+              Filtros Avançados
+            </h3>
+            <button (click)="clearFilters()" class="text-xs text-red-500 hover:text-red-700 font-medium hover:underline">
+              Limpar Filtros
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            
+            <!-- Date Start -->
+            <div class="space-y-1.5">
+               <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">De</label>
+               <input 
+                  type="date"
+                  [ngModel]="filterStartDate()"
+                  (ngModelChange)="filterStartDate.set($event)"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
+               >
+            </div>
+
+            <!-- Date End -->
+            <div class="space-y-1.5">
+               <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Até</label>
+               <input 
+                  type="date" 
+                  [ngModel]="filterEndDate()"
+                  (ngModelChange)="filterEndDate.set($event)"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
+               >
+            </div>
+
+            <!-- Type -->
+            <div class="space-y-1.5">
+               <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo</label>
+               <select 
+                  [ngModel]="filterType()"
+                  (ngModelChange)="filterType.set($event)"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
+               >
+                  <option value="">Todos</option>
+                  <option [value]="TransactionType.LIQUIDATION">Pagamento (Liquidado)</option>
+                  <option [value]="TransactionType.COMMITMENT">Empenho</option>
+                  <option [value]="TransactionType.REINFORCEMENT">Reforço</option>
+                  <option [value]="TransactionType.CANCELLATION">Cancelamento</option>
+               </select>
+            </div>
+
+            <!-- Contract -->
+            <div class="space-y-1.5">
+               <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Contrato</label>
+               <input 
+                  type="text" 
+                  [ngModel]="filterContract()"
+                  (ngModelChange)="filterContract.set($event)"
+                  placeholder="Ex: 124/2024"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
+               >
+            </div>
+
+            <!-- Commitment Note -->
+            <div class="space-y-1.5">
+               <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nota de Empenho</label>
+               <input 
+                  type="text" 
+                  [ngModel]="filterCommitment()"
+                  (ngModelChange)="filterCommitment.set($event)"
+                  placeholder="Ex: 2025NE..."
+                  class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-sco-blue outline-none"
+               >
+            </div>
+
+          </div>
+        </div>
+      }
+    </div>
   </div>
 
-  <!-- Data Grid -->
-  <div class="bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+  <!-- Data Grid Container - com altura definida para scroll -->
+  <div class="flex-1 mx-6 md:mx-10 mb-6 flex flex-col bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
     @if (financialService.loading()) {
       <div class="p-6 space-y-4">
         <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
@@ -204,99 +205,187 @@
         <button (click)="financialService.loadAllTransactions()" class="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg font-medium hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors">Tentar Novamente</button>
       </div>
     } @else {
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
-          <!-- Table Head -->
-        <thead>
-          <tr class="bg-gray-50/50 dark:bg-gray-800/50">
-            <th class="w-16 px-6 py-4"></th> <!-- Icon Column -->
-            <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Lançamento</th>
-            <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Contrato</th>
-            <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">ID do Empenho</th>
-            <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Dotação</th>
-            <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Data</th>
-            <th class="px-6 py-4 text-center text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Tipo</th>
-            <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Valor</th>
-            <th class="px-6 py-4 text-center text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Unidade Gestora</th>
-          </tr>
-        </thead>
-        
-        <!-- Table Body -->
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-          @for (item of filteredTransactions(); track item.id) {
-            <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-              
-              <!-- Icon -->
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="h-10 w-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110" [class]="getIconClass(item.type)">
-                  <span class="material-symbols-outlined text-[20px]">{{ getIcon(item.type) }}</span>
-                </div>
-              </td>
-
-              <!-- Description -->
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ item.description }}</span>
-              </td>
-
-              <!-- Contract -->
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-sm text-gray-500 dark:text-gray-400 font-mono">{{ item.contract_number }}</span>
-              </td>
-
-              <!-- Commitment ID -->
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-sm text-gray-500 dark:text-gray-400 font-mono">{{ item.commitment_id }}</span>
-              </td>
-
-              <!-- Budget Description (New Column) -->
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                  {{ item.budget_description }}
-                </span>
-              </td>
-
-              <!-- Date -->
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-sm text-gray-500 dark:text-gray-400">{{ item.date | date:'dd/MM/yyyy' }}</span>
-              </td>
-
-              <!-- Type Badge -->
-              <td class="px-6 py-4 whitespace-nowrap text-center">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-sm" [class]="getTypeClass(item.type)">
-                  {{ getTypeLabel(item.type) }}
-                </span>
-              </td>
-
-              <!-- Amount -->
-              <td class="px-6 py-4 whitespace-nowrap text-right">
-                <span class="text-sm font-bold text-gray-900 dark:text-white">R$ {{ item.amount | number:'1.2-2':'pt-BR' }}</span>
-              </td>
-
-              <!-- Department -->
-              <td class="px-6 py-4 whitespace-nowrap text-center">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                  {{ item.department }}
-                </span>
-              </td>
-
+      
+      <!-- Table com scroll vertical e responsiva sem scroll horizontal -->
+      <div class="flex-1 overflow-x-auto" style="min-height: 0;">
+        <table class="min-w-full w-full table-fixed">
+          
+          <!-- CABEÇALHO STICKY - FIXO NO TOPO -->
+          <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th class="w-12 px-2 py-3.5"></th>
+              <th class="w-[42%] px-2 py-3.5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Lançamento</th>
+              <th class="w-[8%] px-2 py-3.5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Contrato</th>
+              <th class="w-[10%] px-2 py-3.5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">ID do Empenho</th>
+              <th class="w-[8%] px-2 py-3.5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Dotação</th>
+              <th class="w-[7%] px-2 py-3.5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Data</th>
+              <th class="w-[7%] px-2 py-3.5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Tipo</th>
+              <th class="w-[11%] px-2 py-3.5 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Valor</th>
+              <th class="w-[5%] px-2 py-3.5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">UG</th>
             </tr>
-          }
+          </thead>
+          
+          <!-- LINHAS COM CORES ALTERNADAS - SEM BORDAS -->
+          <tbody>
+            @for (item of paginatedTransactions(); track item.id; let i = $index) {
+              <!-- Cores alternadas: par = cinza claro, ímpar = branco -->
+              <tr 
+                class="transition-colors cursor-default"
+                [class]="i % 2 === 0 
+                  ? 'bg-white dark:bg-card-dark hover:bg-blue-50/50 dark:hover:bg-gray-700/50' 
+                  : 'bg-gray-50/60 dark:bg-gray-800/40 hover:bg-blue-50/50 dark:hover:bg-gray-700/50'"
+              >
+                
+                <!-- Icon -->
+                <td class="px-2 py-3 whitespace-nowrap text-center">
+                  <div class="h-9 w-9 rounded-full inline-flex items-center justify-center" [class]="getIconClass(item.type)">
+                    <span class="material-symbols-outlined text-[18px]">{{ getIcon(item.type) }}</span>
+                  </div>
+                </td>
+
+                <!-- Description / Lançamento -->
+                <td class="px-2 py-3 min-w-0 overflow-hidden">
+                  <span class="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate block" [title]="item.description">{{ item.description }}</span>
+                </td>
+
+                <!-- Contrato -->
+                <td class="px-2 py-3 min-w-0 overflow-hidden">
+                  <span class="text-sm text-gray-600 dark:text-gray-300 font-mono truncate block" [title]="item.contract_number || ''">{{ item.contract_number || '---' }}</span>
+                </td>
+
+                <!-- ID do Empenho -->
+                <td class="px-2 py-3 min-w-0 overflow-hidden">
+                  <span class="text-sm text-gray-600 dark:text-gray-300 font-mono truncate block" [title]="item.commitment_id || ''">{{ item.commitment_id || '---' }}</span>
+                </td>
+
+                <!-- Dotação -->
+                <td class="px-2 py-3 min-w-0 overflow-hidden">
+                  <span class="text-xs text-gray-600 dark:text-gray-400 truncate block" [title]="item.budget_description || item.department || ''">
+                    {{ item.budget_description || item.department || '---' }}
+                  </span>
+                </td>
+
+                <!-- Data -->
+                <td class="px-2 py-3 whitespace-nowrap">
+                  <span class="text-sm text-gray-600 dark:text-gray-300">{{ item.date | date:'dd/MM/yyyy' }}</span>
+                </td>
+
+                <!-- Tipo Badge -->
+                <td class="px-2 py-3 whitespace-nowrap text-center">
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold" [class]="getTypeClass(item.type)">
+                    {{ getTypeLabel(item.type) }}
+                  </span>
+                </td>
+
+                <!-- Valor -->
+                <td class="px-2 py-3 whitespace-nowrap text-right">
+                  <span class="text-sm font-bold text-gray-800 dark:text-gray-100">R$ {{ item.amount | number:'1.2-2':'pt-BR' }}</span>
+                </td>
+
+                <!-- Unidade Gestora -->
+                <td class="px-2 py-3 min-w-0 overflow-hidden">
+                  <span class="text-xs text-gray-600 dark:text-gray-300 font-medium truncate block" [title]="resolveUnidadeGestora(item)">
+                    {{ resolveUnidadeGestora(item) }}
+                  </span>
+                </td>
+
+              </tr>
+            }
+            
+            <!-- Empty State -->
+            @if (paginatedTransactions().length === 0) {
+              <tr>
+                <td colspan="9" class="px-6 py-20 text-center">
+                  <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-3 block">inbox</span>
+                  <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Nenhum lançamento encontrado</p>
+                  <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Tente ajustar os filtros ou clique em "Atualizar SIGEF"</p>
+                </td>
+              </tr>
+            }
           </tbody>
         </table>
       </div>
 
-      <!-- Footer / Pagination -->
-      <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+      <!-- Paginação - FIXA NO RODAPÉ -->
+      <div class="flex-shrink-0 px-4 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50 dark:bg-gray-800/50">
+        
+        <!-- Contador de registros -->
         <div class="text-sm text-gray-500 dark:text-gray-400">
-          Exibindo <span class="font-medium text-gray-900 dark:text-white">1-{{ filteredTransactions().length }}</span> de <span class="font-medium text-gray-900 dark:text-white">{{ filteredTransactions().length }}</span> lançamentos
+          @if (filteredTransactions().length > 0) {
+            Exibindo <span class="font-bold text-gray-700 dark:text-gray-200">{{ startIndex() }}-{{ endIndex() }}</span> de <span class="font-bold text-gray-700 dark:text-gray-200">{{ filteredTransactions().length }}</span> lançamentos
+          } @else {
+            Nenhum lançamento para exibir
+          }
         </div>
-        <div class="flex gap-2">
-          <button class="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors">
-            Anterior
-          </button>
-          <button class="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            Próximo
-          </button>
+        
+        <!-- Page Size + Navegação -->
+        <div class="flex items-center gap-4">
+          
+          <!-- Seletor de quantidade -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500">Registros:</span>
+            <select 
+              [value]="pageSize()"
+              (change)="onPageSizeChange($event)"
+              class="px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-1 focus:ring-sco-blue outline-none appearance-none cursor-pointer"
+            >
+              <option [value]="10">10</option>
+              <option [value]="20">20</option>
+              <option [value]="30">30</option>
+              <option [value]="50">50</option>
+            </select>
+          </div>
+
+          <!-- Botões de navegação -->
+          @if (totalPages() > 1) {
+            <div class="flex items-center gap-1">
+              
+              <!-- Primeira Página -->
+              <button 
+                (click)="goToPage(1)"
+                [disabled]="!hasPrevPage()"
+                class="p-1.5 rounded-md text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-700"
+                title="Primeira página"
+              >
+                <span class="material-symbols-outlined text-[18px]">first_page</span>
+              </button>
+              
+              <!-- Anterior -->
+              <button 
+                (click)="prevPage()"
+                [disabled]="!hasPrevPage()"
+                class="px-3.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+
+              <!-- Indicador de Página Atual -->
+              <div class="px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md min-w-[80px] text-center">
+                <span class="text-sm font-bold text-sco-blue">{{ currentPage() }}</span>
+                <span class="text-sm text-gray-400 mx-1">/</span>
+                <span class="text-sm font-medium text-gray-600 dark:text-gray-300">{{ totalPages() }}</span>
+              </div>
+
+              <!-- Próximo -->
+              <button 
+                (click)="nextPage()"
+                [disabled]="!hasNextPage()"
+                class="px-3.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Próximo
+              </button>
+
+              <!-- Última Página -->
+              <button 
+                (click)="goToPage(totalPages())"
+                [disabled]="!hasNextPage()"
+                class="p-1.5 rounded-md text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-700"
+                title="Última página"
+              >
+                <span class="material-symbols-outlined text-[18px]">last_page</span>
+              </button>
+            </div>
+          }
         </div>
       </div>
     }

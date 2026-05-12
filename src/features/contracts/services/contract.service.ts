@@ -227,28 +227,23 @@ export class ContractService {
   private mapRawToContract(raw: any, aditivos: Aditivo[] = [], selectedYear?: number): Contract {
     const dataFimOriginal = this.parseDate(raw.data_fim);
 
-    // Agregar valores das dotações (filtrando por ano se fornecido)
+    // Agregar valores das dotações (TODAS as dotações, sem filtro de ano)
+    // total_empenhado e total_pago são totais históricos ACUMULADOS, não filtrados por ano
     let totalEmpenhado = 0;
     let totalPago = 0;
     let dataUltimoPagamento: Date | undefined = undefined;
 
     if (raw.dotacoes && Array.isArray(raw.dotacoes)) {
       raw.dotacoes.forEach((d: any) => {
-        // As dotações podem vir da tabela dotacoes via join
-        const budgetYear = d.ano || (d.data_disponibilidade ? new Date(d.data_disponibilidade).getFullYear() : null);
+        // SOMA SEM FILTRO DE ANO - estes são totais acumulados históricos
+        totalEmpenhado += Number(d.total_empenhado) || 0;
+        totalPago += Number(d.total_pago) || 0;
         
-        // Se temos um ano selecionado, só somamos as dotações daquele ano
-        // Caso contrário, somamos tudo (all-time) para consistência histórica
-        if (!selectedYear || budgetYear === selectedYear) {
-          totalEmpenhado += Number(d.total_empenhado) || 0;
-          totalPago += Number(d.total_pago) || 0;
-          
-          const upDate = d.updated_at || d.data_ultimo_pagamento;
-          if (upDate) {
-            const up = new Date(upDate);
-            if (!dataUltimoPagamento || up > dataUltimoPagamento) {
-              dataUltimoPagamento = up;
-            }
+        const upDate = d.updated_at || d.data_ultimo_pagamento;
+        if (upDate) {
+          const up = new Date(upDate);
+          if (!dataUltimoPagamento || up > dataUltimoPagamento) {
+            dataUltimoPagamento = up;
           }
         }
       });
