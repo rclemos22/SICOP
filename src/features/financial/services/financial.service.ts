@@ -269,14 +269,14 @@ export class FinancialService {
           });
         });
 
-        // 2. Agrupar TODAS as OBs da mesma NE por mês de pagamento
-        //    Diferente do agrupamento antigo por 'deobservacao' que separava
-        //    pagamento líquido de retenções (IRRF, ISS, etc.), agora todas
-        //    as OBs do mesmo mês são consolidadas em UMA transação.
+        // 2. Agrupar TODAS as OBs da mesma NE por PP (Parcela de Pagamento = nudocumento).
+        //    Cada PP representa um pagamento distinto, podendo envolver 1 ou mais OBs.
+        //    Diferente do agrupamento anterior por mês — que juntava PPs diferentes
+        //    da mesma NE+mes — cada PP vira UMA transação.
         const groupedObs = new Map<string, typeof obsCache>();
         obsCache.forEach(ob => {
-          const obPaymentMonth = ob.dtpagamento ? ob.dtpagamento.substring(0, 7) : (ob.dtlancamento ? ob.dtlancamento.substring(0, 7) : 'unknown');
-          const key = `${neValue}-${obPaymentMonth}`;
+          const docKey = ob.nudocumento || ob.nuordembancaria || `unknown_${ob.id}`;
+          const key = `${neValue}-${docKey}`;
           const list = groupedObs.get(key) || [];
           list.push(ob);
           groupedObs.set(key, list);
@@ -317,9 +317,10 @@ export class FinancialService {
           const paymentMonth = groupObs[0].dtpagamento ? groupObs[0].dtpagamento.substring(0, 7) : (groupObs[0].dtlancamento ? groupObs[0].dtlancamento.substring(0, 7) : undefined);
           const maxDate = groupObs.map(o => o.dtpagamento || o.dtlancamento || '').sort().reverse()[0] || new Date().toISOString().split('T')[0];
 
-          // ID consolidado ESTÁVEL: baseado na NE + mês de pagamento
-          // Assim, o upsert sempre encontra o mesmo registro para o mesmo mês
-          const sigefId = `cache-aggr-${neValue}-${paymentMonth || 'unknown'}`;
+          // ID consolidado ESTÁVEL: baseado na NE + PP (nudocumento)
+          // Cada PP (parcela de pagamento) sempre terá o mesmo sigef_id em todas as sincronizações
+          const ppDoc = groupObs[0].nudocumento || groupObs[0].nuordembancaria || 'UNKNOWN';
+          const sigefId = `cache-aggr-${neValue}-${ppDoc}`;
 
           // Migrar vinculação pregressa se ela existia nas partições individuais
           let linkedParcela = null;
@@ -334,8 +335,9 @@ export class FinancialService {
              }
           }
 
-          // Montar descrição amigável no formato NFS (padrão único)
-          const description = (`PAGAMENTO (NFs) - OBs: ${allObs} | DOCs: ${allDocs}`).toUpperCase();
+          // Montar descrição amigável: PP + OBs envolvidas
+          const descPP = ppDoc !== 'UNKNOWN' ? `PP ${ppDoc}` : '';
+          const description = (`PAGAMENTO${descPP ? ` (${descPP})` : ''} - OBs: ${allObs}`).toUpperCase();
 
           transactionsToUpsert.push({
             contract_id: contractId,
