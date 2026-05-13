@@ -1,14 +1,18 @@
 import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
-import { Component, inject, computed, output, viewChild, ElementRef, effect, signal } from '@angular/core';
+import { Component, inject, output, viewChild, ElementRef, effect, signal } from '@angular/core';
 import * as d3 from 'd3';
 import { DashboardService } from '../../services/dashboard.service';
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { OverdueAlertsCardComponent } from '../../components/overdue-alerts-card.component';
+import { LowBudgetCardComponent } from '../../components/low-budget-card.component';
+import { ExpiringContractsComponent } from '../../components/expiring-contracts.component';
+import { RecentPaymentsTableComponent } from '../../components/recent-payments-table.component';
 
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe],
+  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe, OverdueAlertsCardComponent, LowBudgetCardComponent, ExpiringContractsComponent, RecentPaymentsTableComponent],
   templateUrl: './dashboard-page.component.html',
 })
 export class DashboardPageComponent {
