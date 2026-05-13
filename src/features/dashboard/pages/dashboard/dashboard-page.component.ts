@@ -70,7 +70,8 @@ export class DashboardPageComponent {
       const newYear = this.appContext.anoExercicio();
       if (newYear !== this.anoBase()) {
         this.anoBase.set(newYear);
-        this.dashboardService.loadAllData();
+        // Troca de ano = refresh silencioso (não pisca)
+        this.dashboardService.refreshAllData();
       }
     });
 

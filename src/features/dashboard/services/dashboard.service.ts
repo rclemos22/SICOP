@@ -101,7 +101,10 @@ export class DashboardService {
 
   // ── Loading & Error ────────────────────────────────────────────────────
 
-  readonly isLoading = computed(() => this.contractService.loading() || this.budgetService.loading());
+  private _isFirstLoad = true;
+
+  /** Exibe loading apenas na primeira carga. Refreshes silenciosos não piscam a tela. */
+  readonly isLoading = computed(() => this._isFirstLoad && (this.contractService.loading() || this.budgetService.loading()));
 
   readonly hasError = computed(() => this.contractService.error() || this.budgetService.error());
 
@@ -438,11 +441,24 @@ export class DashboardService {
   // ── Data Loading ──────────────────────────────────────────────────────
 
   async loadAllData(): Promise<void> {
+    this._isFirstLoad = true;
     const year = this.appContext.anoExercicio();
     await Promise.all([
       this.contractService.loadContracts(),
       this.budgetService.loadDotacoes(),
       this.financialService.loadAllTransactions(),
+      this.loadRecentPayments(year),
+    ]);
+    this._isFirstLoad = false;
+  }
+
+  /** Refresh silencioso: atualiza dados sem piscar a tela (não toca loading state) */
+  async refreshAllData(): Promise<void> {
+    const year = this.appContext.anoExercicio();
+    await Promise.all([
+      this.contractService.loadContracts(undefined, true),
+      this.budgetService.loadDotacoes(true),
+      this.financialService.loadAllTransactions(true),
       this.loadRecentPayments(year),
     ]);
   }
@@ -473,10 +489,7 @@ export class DashboardService {
     try {
       await this.sigefSync.syncBatch(tasks);
       this.lastSyncTimestamp.set(new Date());
-      await Promise.all([
-        this.financialService.loadAllTransactions(),
-        this.contractService.loadContracts(),
-      ]);
+      await this.refreshAllData();
     } catch (err) {
       console.error('[DashboardService] Falha na sincronização global:', err);
     }

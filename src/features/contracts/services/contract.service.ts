@@ -99,9 +99,11 @@ export class ContractService {
     }
   }
 
-  async loadContracts(year?: number): Promise<void> {
-    this._loading.set(true);
-    this._error.set(null);
+  async loadContracts(year?: number, silent?: boolean): Promise<void> {
+    if (!silent) {
+      this._loading.set(true);
+      this._error.set(null);
+    }
 
     try {
       let rawContracts: any[] = [];
@@ -121,11 +123,13 @@ export class ContractService {
 
       this._contracts.set(contracts);
     } catch (err: any) {
-      this.errorHandler.handle(err, 'ContractService.loadContracts');
-      this._error.set(err.message || 'Erro ao carregar contratos');
+      if (!silent) {
+        this.errorHandler.handle(err, 'ContractService.loadContracts');
+        this._error.set(err.message || 'Erro ao carregar contratos');
+      }
       this._contracts.set([]);
     } finally {
-      this._loading.set(false);
+      if (!silent) this._loading.set(false);
     }
   }
 

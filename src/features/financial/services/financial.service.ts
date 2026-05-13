@@ -30,9 +30,11 @@ export class FinancialService {
     this.loadAllTransactions();
   }
 
-  async loadAllTransactions(): Promise<void> {
-    this._loading.set(true);
-    this._error.set(null);
+  async loadAllTransactions(silent?: boolean): Promise<void> {
+    if (!silent) {
+      this._loading.set(true);
+      this._error.set(null);
+    }
 
     try {
       // 1. Buscar apenas transações vinculadas a contratos cadastrados E que possuem Nota de Empenho (NE)
@@ -70,10 +72,12 @@ export class FinancialService {
         this.backfillTransacoes();
       }
     } catch (err: any) {
-      this.errorHandler.handle(err, 'FinancialService.loadAllTransactions');
-      this._error.set(err.message || 'Erro desconhecido');
+      if (!silent) {
+        this.errorHandler.handle(err, 'FinancialService.loadAllTransactions');
+        this._error.set(err.message || 'Erro desconhecido');
+      }
     } finally {
-      this._loading.set(false);
+      if (!silent) this._loading.set(false);
     }
   }
 

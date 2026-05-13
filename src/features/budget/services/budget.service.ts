@@ -45,9 +45,11 @@ export class BudgetService {
   /**
    * Cabelo global: busca todas as dotações da view vw_saldo_dotacoes sem filtros iniciais.
    */
-  async loadDotacoes(): Promise<void> {
-    this._loading.set(true);
-    this._error.set(null);
+  async loadDotacoes(silent?: boolean): Promise<void> {
+    if (!silent) {
+      this._loading.set(true);
+      this._error.set(null);
+    }
     try {
       const { data, error } = await this.supabaseService.client
         .from('vw_saldo_dotacoes')
@@ -56,11 +58,13 @@ export class BudgetService {
       if (error) throw error;
       this._allBudgets.set((data || []).map((raw: any) => this.mapRawToDotacao(raw)));
     } catch (err: any) {
-      this.errorHandler.handle(err, 'BudgetService.loadDotacoes');
-      this._error.set(err.message || 'Erro ao carregar dotações');
+      if (!silent) {
+        this.errorHandler.handle(err, 'BudgetService.loadDotacoes');
+        this._error.set(err.message || 'Erro ao carregar dotações');
+      }
       this._allBudgets.set([]);
     } finally {
-      this._loading.set(false);
+      if (!silent) this._loading.set(false);
     }
   }
 
