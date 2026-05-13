@@ -413,6 +413,14 @@ export class SigefService implements OnDestroy {
           }
 
           if (this._isRetryableError(err) && currentRetries > 0) {
+            const isSlow = /tls|socket|timeout|etimedout/i.test(err?.message || err?.cause?.message || String(err));
+            // Para erros lentos (timeout, etc.), retry apenas 1x com backoff curto
+            // para não travar a fila global por minutos
+            const retryLimit = isSlow ? 1 : currentRetries;
+            if (currentRetries <= retries - retryLimit) {
+              this._cleanupQuery(queryId);
+              throw err;
+            }
             currentBackoff = this._calcBackoff(err, currentBackoff);
             console.warn(`[SIGEF] Infra Error (${this._extractErrorMessage(err)}). Backoff ${Math.round(currentBackoff)}ms, retries: ${currentRetries}`);
             await new Promise(resolve => setTimeout(resolve, currentBackoff));

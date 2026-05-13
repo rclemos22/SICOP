@@ -20,6 +20,7 @@ export class FinancialService {
   private _transactions = signal<Transaction[]>([]);
   private _loading = signal<boolean>(false);
   private _error = signal<string | null>(null);
+  private _backfillDone = false;
 
   public transactions = this._transactions.asReadonly();
   public loading = this._loading.asReadonly();
@@ -62,6 +63,12 @@ export class FinancialService {
       transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       this._transactions.set(transactions);
+
+      // Backfill único: preenche campos faltantes nas transações existentes
+      if (!this._backfillDone) {
+        this._backfillDone = true;
+        this.backfillTransacoes();
+      }
     } catch (err: any) {
       this.errorHandler.handle(err, 'FinancialService.loadAllTransactions');
       this._error.set(err.message || 'Erro desconhecido');
@@ -262,16 +269,21 @@ export class FinancialService {
           });
         });
 
-        // 2. Agrupar OBs da mesma NE por 'deobservacao' para unificar Pagamento Líquido e Impostos
+        // 2. Agrupar TODAS as OBs da mesma NE por mês de pagamento
+        //    Diferente do agrupamento antigo por 'deobservacao' que separava
+        //    pagamento líquido de retenções (IRRF, ISS, etc.), agora todas
+        //    as OBs do mesmo mês são consolidadas em UMA transação.
         const groupedObs = new Map<string, typeof obsCache>();
         obsCache.forEach(ob => {
-          const key = ob.deobservacao || ob.nudocumento || `unknown_${ob.id}`;
+          const obPaymentMonth = ob.dtpagamento ? ob.dtpagamento.substring(0, 7) : (ob.dtlancamento ? ob.dtlancamento.substring(0, 7) : 'unknown');
+          const key = `${neValue}-${obPaymentMonth}`;
           const list = groupedObs.get(key) || [];
           list.push(ob);
           groupedObs.set(key, list);
         });
 
         // Buscar transações de liquidação no banco para resgatar vínculos manuais de 'parcela_referencia' 
+        // Além disso, coletar sigef_ids antigos para limpeza dos registros pré-agrupamento
         const { data: dbTrans } = await this.supabaseService.client
           .from('transacoes')
           .select('sigef_id, parcela_referencia, document_number')
@@ -285,7 +297,14 @@ export class FinancialService {
           .map(t => [t.document_number, t.parcela_referencia])
         );
 
-        for (const [groupKey, groupObs] of groupedObs.entries()) {
+        // Colecionar IDs antigos do formato cache-aggr-* para limpeza posterior
+        for (const t of (dbTrans || [])) {
+          if (t.sigef_id?.startsWith('cache-aggr-')) {
+            oldSigefIdsToDelete.add(t.sigef_id);
+          }
+        }
+
+        for (const [, groupObs] of groupedObs.entries()) {
           groupObs.sort((a, b) => (a.nudocumento || '').localeCompare(b.nudocumento || ''));
           
           const totalAmount = groupObs.reduce((sum, o) => sum + Math.abs(Number(o.vltotal) || 0), 0);
@@ -295,9 +314,9 @@ export class FinancialService {
           const paymentMonth = groupObs[0].dtpagamento ? groupObs[0].dtpagamento.substring(0, 7) : (groupObs[0].dtlancamento ? groupObs[0].dtlancamento.substring(0, 7) : undefined);
           const maxDate = groupObs.map(o => o.dtpagamento || o.dtlancamento || '').sort().reverse()[0] || new Date().toISOString().split('T')[0];
 
-          // Formular o novo ID consolidado baseado na NE e no primeiro documento (agregador)
-          const firstDoc = groupObs[0].nudocumento || groupObs[0].nuordembancaria || 'UNKNOWN';
-          const sigefId = `cache-aggr-${neValue}-${firstDoc}`;
+          // ID consolidado ESTÁVEL: baseado na NE + mês de pagamento
+          // Assim, o upsert sempre encontra o mesmo registro para o mesmo mês
+          const sigefId = `cache-aggr-${neValue}-${paymentMonth || 'unknown'}`;
 
           // Migrar vinculação pregressa se ela existia nas partições individuais
           let linkedParcela = null;
@@ -312,10 +331,8 @@ export class FinancialService {
              }
           }
 
-          // Montar descrição amigável.
-          const description = groupObs.length > 1 
-            ? (`PAGAMENTO (NFs) - OBs: ${allObs} | DOCs: ${allDocs}`).toUpperCase()
-            : (`PAGAMENTO OB ${allObs} - DOC ${allDocs}`).toUpperCase();
+          // Montar descrição amigável no formato NFS (padrão único)
+          const description = (`PAGAMENTO (NFs) - OBs: ${allObs} | DOCs: ${allDocs}`).toUpperCase();
 
           transactionsToUpsert.push({
             contract_id: contractId,
@@ -342,6 +359,11 @@ export class FinancialService {
             const singleId = `cache-ob-${obNumero}-${docNumero}`;
             oldSigefIdsToDelete.add(singleId);
           });
+        }
+
+        // Remover do delete set os IDs que acabamos de upsertar (para não deletá-los)
+        for (const t of transactionsToUpsert) {
+          oldSigefIdsToDelete.delete(t.sigef_id);
         }
 
         // UPSERT primeiro (seguro: se falhar, os registros antigos ainda existem)
@@ -458,5 +480,36 @@ export class FinancialService {
     }
     
     console.log('[FinancialService] Sincronização global concluída.');
+  }
+
+  /**
+   * Rotina de backfill: re-sincroniza todos os contratos a partir do cache local,
+   * aplicando as regras de negócio mais recentes (descrição NFS, campos faltantes, etc).
+   */
+  async backfillTransacoes(): Promise<void> {
+    console.log('[FinancialService] Iniciando backfill: re-sincronizando todos os contratos do cache...');
+
+    const budgets = this.budgetService.dotacoes();
+    const contractIds = [...new Set(budgets.map(b => b.contract_id).filter(Boolean))] as string[];
+
+    if (contractIds.length === 0) {
+      console.log('[FinancialService] Nenhum contrato com dotação para re-sincronizar.');
+      return;
+    }
+
+    console.log(`[FinancialService] Re-sincronizando ${contractIds.length} contratos...`);
+
+    for (const contractId of contractIds) {
+      try {
+        await this.syncSigefTransactions(contractId);
+      } catch (err) {
+        console.warn(`[FinancialService] Erro no backfill do contrato ${contractId}:`, err);
+      }
+    }
+
+    // Recarregar transações na UI após o backfill
+    await this.loadAllTransactions();
+
+    console.log('[FinancialService] Backfill concluído.');
   }
 }

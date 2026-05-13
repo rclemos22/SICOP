@@ -617,7 +617,7 @@ export class SigefSyncService {
 
   // ─── Utilitários ─────────────────────────────────────────────
 
-  private async _withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 2000): Promise<T> {
+  private async _withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 3000): Promise<T> {
     let lastError: any;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -625,7 +625,7 @@ export class SigefSyncService {
       } catch (err: any) {
         lastError = err;
         if (this._isNetworkError(err) && attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+          const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 30000) * (0.85 + Math.random() * 0.3);
           console.warn(`[SIGEF SYNC] Retry ${attempt}/${maxRetries} em ${Math.round(delay)}ms... (${this._extractErrorMsg(err)})`);
           await this._delay(delay);
         } else {

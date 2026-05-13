@@ -58,7 +58,7 @@ export class FinancialPageComponent {
 
   // Signals
   searchQuery = signal('');
-  activeTab = signal<'ALL' | 'PAYMENTS' | 'COMMITMENTS'>('ALL');
+  activeTab = signal<'ALL' | 'PAYMENTS' | 'COMMITMENTS' | 'CANCELLED'>('ALL');
 
   // Advanced Filter State
   isFilterPanelOpen = signal(false);
@@ -118,6 +118,7 @@ export class FinancialPageComponent {
       // Tab Filter
       if (tab === 'PAYMENTS' && t.type !== TransactionType.LIQUIDATION) return false;
       if (tab === 'COMMITMENTS' && t.type !== TransactionType.COMMITMENT) return false;
+      if (tab === 'CANCELLED' && t.type !== TransactionType.CANCELLATION) return false;
 
       // Advanced Filter: Type
       if (type && t.type !== type) return false;
@@ -212,7 +213,7 @@ export class FinancialPageComponent {
   }
 
   // Actions
-  setTab(tab: 'ALL' | 'PAYMENTS' | 'COMMITMENTS') {
+  setTab(tab: 'ALL' | 'PAYMENTS' | 'COMMITMENTS' | 'CANCELLED') {
     this.activeTab.set(tab);
   }
 
@@ -259,19 +260,19 @@ export class FinancialPageComponent {
   /**
    * Indica se qualquer operação de sync está em andamento (bulk ou NE-a-NE).
    */
-  get isAnySyncing(): boolean {
-    return this.bulkSyncService.isRunning() || this.sigefSyncService.isGlobalSyncing();
-  }
+  isAnySyncing = computed(() =>
+    this.bulkSyncService.isRunning() || this.sigefSyncService.isGlobalSyncing()
+  );
 
   /**
    * Label dinâmico do botão de sync.
    */
-  get syncButtonLabel(): string {
+  syncButtonLabel = computed(() => {
     if (this.bulkSyncService.isRunning()) {
       const p = this.bulkSyncService.progress();
       return `${p.currentLabel} (${p.percent}%)`;
     }
     if (this.sigefSyncService.isGlobalSyncing()) return 'Atualizando contratos...';
     return 'Atualizar SIGEF';
-  }
+  });
 }

@@ -99,6 +99,9 @@ export class ContractDetailsPageComponent {
   /** OBs encontradas via busca profunda (fora do contexto inicial do contrato) */
   extraObs = signal<Transaction[]>([]);
   isDeepSearching = signal<boolean>(false);
+
+  /** Estado do botão "Atualizar Lançamentos" (cache local) */
+  isUpdatingLancamentos = signal<boolean>(false);
   
 
   // Filtra transações de liquidação (pagamentos) para vinculação
@@ -387,6 +390,9 @@ export class ContractDetailsPageComponent {
   /** Armazena o queryId atual para permitir cancelamento */
   private currentQueryId: string | null = null;
 
+  /** Intervalo de auto-refresh (15 minutos) */
+  private autoRefreshInterval: ReturnType<typeof setInterval> | null = null;
+
   constructor() {
     /**
      * Efeito reativo: carrega aditivos, orçamentos e transações
@@ -408,6 +414,11 @@ export class ContractDetailsPageComponent {
         this.loadTransactions(c.id);
       }
     });
+
+    // Auto-refresh a cada 15 minutos para buscar atualizações do cache local
+    this.autoRefreshInterval = setInterval(() => {
+      this.atualizarLancamentos();
+    }, 15 * 60 * 1000); // 15 minutos
   }
 
   /**
@@ -424,6 +435,10 @@ export class ContractDetailsPageComponent {
 
   ngOnDestroy(): void {
     this.cancelCurrentQueries();
+    if (this.autoRefreshInterval) {
+      clearInterval(this.autoRefreshInterval);
+      this.autoRefreshInterval = null;
+    }
   }
 
   private async loadBudgets(contractId: string): Promise<void> {
@@ -668,6 +683,30 @@ export class ContractDetailsPageComponent {
       console.error('[ContractDetails] Erro na sincronização batch:', err);
     } finally {
       this.currentQueryId = null;
+    }
+  }
+
+  /**
+   * Atualiza os lançamentos financeiros a partir do cache local (sem consultar API SIGEF).
+   * Lê os dados já baixados do cache e persiste no banco, depois recarrega a UI.
+   */
+  async atualizarLancamentos() {
+    const contractId = this.contractId();
+    if (!contractId || this.isUpdatingLancamentos()) return;
+
+    this.isUpdatingLancamentos.set(true);
+    try {
+      console.log('[ContractDetails] Atualizando lançamentos do cache local...');
+      await this.financialService.syncSigefTransactions(contractId);
+      await this.loadTransactions(contractId);
+      await this.loadBudgets(contractId);
+      await this.contractService.loadContracts();
+      this.lastSyncDate.set(new Date());
+      console.log('[ContractDetails] Lançamentos atualizados com sucesso.');
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro ao atualizar lançamentos:', err);
+    } finally {
+      this.isUpdatingLancamentos.set(false);
     }
   }
 

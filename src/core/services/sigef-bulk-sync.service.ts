@@ -537,7 +537,7 @@ export class SigefBulkSyncService {
       } catch (err: any) {
         lastError = err;
         if (this._isNetworkError(err) && attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+          const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 30000) * (0.85 + Math.random() * 0.3);
           console.warn(`[BulkSync] Retry ${attempt}/${maxRetries} em ${Math.round(delay)}ms... (${err?.message || ''})`);
           await this._delay(delay);
         } else {

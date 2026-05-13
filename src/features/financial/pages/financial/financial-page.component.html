@@ -39,6 +39,15 @@
           >
             Empenhos
           </button>
+          <button 
+            (click)="setTab('CANCELLED')"
+            class="px-5 py-1.5 text-sm font-medium rounded-md transition-all duration-200"
+            [class]="activeTab() === 'CANCELLED' 
+              ? 'bg-white dark:bg-gray-700 text-sco-blue dark:text-white shadow-sm' 
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'"
+          >
+            Cancelados
+          </button>
         </div>
       </div>
 
@@ -76,16 +85,16 @@
           <button 
             id="btn-atualizar-sigef"
             (click)="syncGlobal()"
-            [disabled]="isAnySyncing"
+            [disabled]="isAnySyncing()"
             class="flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-xl transition-all shadow-sm border"
-            [class]="isAnySyncing
+            [class]="isAnySyncing()
               ? 'bg-blue-50 border-blue-200 text-sco-blue dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300 cursor-wait'
               : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'"
           >
-            <span class="material-symbols-outlined text-[20px]" [class.animate-spin]="isAnySyncing">
-              {{ isAnySyncing ? 'sync' : 'cloud_download' }}
+            <span class="material-symbols-outlined text-[20px]" [class.animate-spin]="isAnySyncing()">
+              {{ isAnySyncing() ? 'sync' : 'cloud_download' }}
             </span>
-            {{ syncButtonLabel }}
+            {{ syncButtonLabel() }}
           </button>
 
           @if (bulkSyncService.isRunning()) {
