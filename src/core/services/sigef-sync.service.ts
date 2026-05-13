@@ -62,6 +62,7 @@ export class SigefSyncService {
   readonly syncQueue       = this._syncQueue.asReadonly();
   readonly currentIdx      = this._currentIdx.asReadonly();
   readonly isLocked        = this._isLocked.asReadonly();
+  setLocked(locked: boolean) { this._isLocked.set(locked); }
   readonly isSyncing       = computed(() => this._currentIdx() >= 0 && this._currentIdx() < this._syncQueue().length);
   readonly isGlobalSyncing = computed(() => this.isSyncing());
 

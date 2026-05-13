@@ -619,64 +619,38 @@ export class ContractDetailsPageComponent {
   async refreshSigefData(fullScan: boolean = true) {
     const budgets = this.budgets();
     const budgetsComNE = budgets.filter(b => b.nunotaempenho);
-    
-    if (budgetsComNE.length === 0) {
-      console.log('[ContractDetails] Nenhuma dotação com NE para atualizar');
-      return;
-    }
-    
-    // Cancela consultas anteriores e gera novo queryId
+    if (budgetsComNE.length === 0) return;
+
     this.cancelCurrentQueries();
     this.currentQueryId = `refresh-${this.contractId()}-${Date.now()}`;
     this.sigefService.enqueueQuery(this.currentQueryId);
-    
-    console.log('[ContractDetails] Atualizando dados SIGEF via Batch Sync...');
-    
-    try {
-      // 1. Criar tarefas para a fila de sincronização
-      const tasks = budgetsComNE.map(budget => {
-        const neValue = budget.nunotaempenho!.trim();
-        const anoNE = neValue.substring(0, 4);
-        return {
-          ne: neValue,
-          ug: budget.unid_gestora,
-          ano: anoNE
-        };
-      });
 
-      // 2. Executar a sincronização em lote (fila controlada com persistência automática no banco)
-      await this.sigefSyncService.syncBatch(tasks, this.contract()?.id, true, !fullScan);
-      
-      // Verifica se foi cancelado
-      if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
-        console.log('[ContractDetails] Atualização cancelada.');
-        return;
-      }
-      
-      // 3. Atualizar carimbos de data de sincronização local para cada dotação
+    const contractId = this.contractId();
+    const tasks = budgetsComNE.map(b => ({
+      ne: b.nunotaempenho!.trim(),
+      ano: b.nunotaempenho!.substring(0, 4),
+      ug: b.unid_gestora,
+    }));
+
+    try {
+      this.sigefSyncService.setLocked(true);
+      await this.sigefSyncService.syncBatch(tasks, contractId, false, !fullScan);
+
+      if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) return;
+
       const lastSyncMap = new Map(this.sigefLastSync());
-      for (const budget of budgetsComNE) {
-        lastSyncMap.set(budget.id, new Date());
-      }
+      budgetsComNE.forEach(b => lastSyncMap.set(b.id, new Date()));
       this.sigefLastSync.set(lastSyncMap);
 
-      // 4. Persistir os dados baixados no banco transacoes (agrupa OBs por NE+mês)
-      await this.financialService.syncSigefTransactions(this.contractId());
-
-      // 5. Recarregar contratos, transações e dotações
       await this.contractService.loadContracts();
-      await this.loadTransactions(this.contractId());
-      await this.loadBudgets(this.contractId());
-
+      await this.loadTransactions(contractId);
+      await this.loadBudgets(contractId);
       this.lastSyncDate.set(new Date());
-      console.log('[ContractDetails] Dados SIGEF atualizados com sucesso');
     } catch (err: any) {
-      if (err.message === 'Query cancelled') {
-        console.log('[ContractDetails] Sincronização cancelada.');
-        return;
-      }
+      if (err.message === 'Query cancelled') return;
       console.error('[ContractDetails] Erro na sincronização batch:', err);
     } finally {
+      this.sigefSyncService.setLocked(false);
       this.currentQueryId = null;
     }
   }
