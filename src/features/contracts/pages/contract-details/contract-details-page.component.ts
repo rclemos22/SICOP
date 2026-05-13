@@ -102,6 +102,9 @@ export class ContractDetailsPageComponent {
 
   /** Estado do botão "Atualizar Lançamentos" (cache local) */
   isUpdatingLancamentos = signal<boolean>(false);
+
+  debugMode = signal(false);
+  toggleDebug() { this.debugMode.update(v => !v); }
   
 
   // Filtra transações de liquidação (pagamentos) para vinculação
