@@ -1,7 +1,7 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
-import { SigefCacheService } from '../../../core/services/sigef-cache.service';
+import { SigefCacheService, SigefOrdemBancaria } from '../../../core/services/sigef-cache.service';
 import { Transaction, TransactionType } from '../../../shared/models/transaction.model';
 import { getUnidadeLabel } from '../../../shared/models/budget.model';
 import { BudgetService } from '../../budget/services/budget.service';
@@ -221,6 +221,7 @@ export class FinancialService {
     if (contractBudgets.length === 0) return;
 
     const syncErrors: string[] = [];
+    const obsCachePerNe = new Map<string, SigefOrdemBancaria[]>();
 
     for (const budget of contractBudgets) {
       if (!budget.nunotaempenho) continue;
@@ -231,6 +232,7 @@ export class FinancialService {
 
       try {
         const obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
+        obsCachePerNe.set(neValue, obsCache);
         const movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
 
         const EVENTO_LABELS: Record<number, string> = {
@@ -418,7 +420,90 @@ export class FinancialService {
         syncErrors.push(msg);
       }
     }
-    
+
+    // ─── Varredura complementar: OBs no cache em UG diferente da dotação ───
+    // Após processar cada dotação com (UG+NE), busca OBs para TODAS as NEs do
+    // contrato independente da UG — uma mesma NE pode ter OBs em UGs distintas.
+    for (const budget of contractBudgets) {
+      if (!budget.nunotaempenho) continue;
+      const ne = budget.nunotaempenho.trim();
+
+      try {
+        const { data: extraRaw } = await this.supabaseService.client
+          .from('sigef_ordens_bancarias')
+          .select('*')
+          .eq('nunotaempenho', ne);
+
+        if (!extraRaw || extraRaw.length === 0) continue;
+
+        // Mapear manualmente os dados crus do banco para o formato SigefOrdemBancaria
+        const extraObs: SigefOrdemBancaria[] = extraRaw.map((r: any) => ({
+          id: r.id,
+          nuordembancaria: r.nuordembancaria,
+          cdunidadegestora: r.cdunidadegestora,
+          nunotaempenho: r.nunotaempenho,
+          nudocumento: r.nudocumento,
+          vltotal: r.vltotal,
+          dtlancamento: r.dtlancamento,
+          dtpagamento: r.dtpagamento,
+          cdsituacaoordembancaria: r.cdsituacaoordembancaria,
+          deobservacao: r.deobservacao
+        } as SigefOrdemBancaria));
+
+        // IDs já processados no grupo principal desta NE
+        const seen = new Set(obsCachePerNe.get(ne)?.map(o => `${o.nuordembancaria}-${o.nudocumento}`) || []);
+
+        const newObs = extraObs.filter(o => !seen.has(`${o.nuordembancaria}-${o.nudocumento}`));
+        if (newObs.length === 0) continue;
+
+        const ug = budget.unid_gestora || '080101';
+        const extraTx: any[] = [];
+
+        const extraGrouped = new Map<string, typeof newObs>();
+        newObs.forEach(ob => {
+          const docKey = ob.nudocumento || ob.nuordembancaria || `unknown_${ob.id}`;
+          const key = `${ne}-${docKey}`;
+          const list = extraGrouped.get(key) || [];
+          list.push(ob);
+          extraGrouped.set(key, list);
+        });
+
+        for (const [, groupObs] of extraGrouped.entries()) {
+          const total = groupObs.reduce((s, o) => s + Math.abs(Number(o.vltotal) || 0), 0);
+          const obs = [...new Set(groupObs.map(o => o.nuordembancaria).filter(Boolean))].join(', ');
+          const ppDoc = groupObs[0].nudocumento || groupObs[0].nuordembancaria || 'UNKNOWN';
+          const maxDate = groupObs.map(o => o.dtpagamento || o.dtlancamento || '').sort().reverse()[0] || '';
+          const pm = groupObs[0].dtpagamento ? groupObs[0].dtpagamento.substring(0, 7) : (groupObs[0].dtlancamento ? groupObs[0].dtlancamento.substring(0, 7) : undefined);
+          const descPP = ppDoc !== 'UNKNOWN' ? `PP ${ppDoc}` : '';
+
+          extraTx.push({
+            contract_id: contractId,
+            sigef_id: `cache-aggr-${ne}-${ppDoc}`,
+            description: (`PAGAMENTO${descPP ? ` (${descPP})` : ''} - OBs: ${obs}`).toUpperCase(),
+            commitment_id: ne,
+            date: maxDate,
+            type: TransactionType.LIQUIDATION,
+            amount: total,
+            department: budget.dotacao,
+            budget_description: budget.dotacao,
+            unidade_gestora_label: getUnidadeLabel(ug),
+            document_number: [...new Set(groupObs.map(o => o.nudocumento).filter(Boolean))].join(', '),
+            ob_number: obs,
+            payment_month: pm,
+            parcela_pago_em: groupObs[0].dtpagamento || null
+          });
+        }
+
+        if (extraTx.length > 0) {
+          await this.supabaseService.client
+            .from('transacoes')
+            .upsert(extraTx, { onConflict: 'sigef_id' });
+        }
+      } catch (err) {
+        console.warn(`[FinancialService] Erro na varredura complementar NE ${ne}:`, err);
+      }
+    }
+
     if (syncErrors.length > 0) {
       console.warn(`[FinancialService] ${syncErrors.length} erro(s) na sincronização de ${contractBudgets.length} dotações para contrato ${contractId}`);
     }
