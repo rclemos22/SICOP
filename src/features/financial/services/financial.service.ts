@@ -297,9 +297,12 @@ export class FinancialService {
           .map(t => [t.document_number, t.parcela_referencia])
         );
 
-        // Colecionar IDs antigos do formato cache-aggr-* para limpeza posterior
+        // Colecionar TODOS os IDs de transações legadas (cache-*) para limpeza posterior.
+        // Tanto o formato antigo (cache-aggr-{NE}-{firstDoc}, cache-ob-{OB}-{DOC})
+        // quanto o formato atual (cache-aggr-{NE}-{month}) — os atuais serão removidos
+        // do delete set após o upsert.
         for (const t of (dbTrans || [])) {
-          if (t.sigef_id?.startsWith('cache-aggr-')) {
+          if (t.sigef_id?.startsWith('cache-')) {
             oldSigefIdsToDelete.add(t.sigef_id);
           }
         }
@@ -485,26 +488,36 @@ export class FinancialService {
   /**
    * Rotina de backfill: re-sincroniza todos os contratos a partir do cache local,
    * aplicando as regras de negócio mais recentes (descrição NFS, campos faltantes, etc).
+   * 
+   * Diferente do syncAllSystemContracts, esta função consulta o banco diretamente
+   * para obter todos os contract_ids — não depende do sinal dotacoes() que pode
+   * ainda não ter sido populado quando o serviço é inicializado.
    */
   async backfillTransacoes(): Promise<void> {
     console.log('[FinancialService] Iniciando backfill: re-sincronizando todos os contratos do cache...');
 
-    const budgets = this.budgetService.dotacoes();
-    const contractIds = [...new Set(budgets.map(b => b.contract_id).filter(Boolean))] as string[];
+    try {
+      const { data: contracts } = await this.supabaseService.client
+        .from('contratos')
+        .select('id');
 
-    if (contractIds.length === 0) {
-      console.log('[FinancialService] Nenhum contrato com dotação para re-sincronizar.');
-      return;
-    }
-
-    console.log(`[FinancialService] Re-sincronizando ${contractIds.length} contratos...`);
-
-    for (const contractId of contractIds) {
-      try {
-        await this.syncSigefTransactions(contractId);
-      } catch (err) {
-        console.warn(`[FinancialService] Erro no backfill do contrato ${contractId}:`, err);
+      if (!contracts || contracts.length === 0) {
+        console.log('[FinancialService] Nenhum contrato encontrado para backfill.');
+        return;
       }
+
+      const contractIds = contracts.map(c => c.id) as string[];
+      console.log(`[FinancialService] Re-sincronizando ${contractIds.length} contratos...`);
+
+      for (const contractId of contractIds) {
+        try {
+          await this.syncSigefTransactions(contractId);
+        } catch (err) {
+          console.warn(`[FinancialService] Erro no backfill do contrato ${contractId}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error('[FinancialService] Erro ao buscar contratos para backfill:', err);
     }
 
     // Recarregar transações na UI após o backfill

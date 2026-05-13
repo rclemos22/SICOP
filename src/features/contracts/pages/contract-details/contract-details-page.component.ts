@@ -4,7 +4,7 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefService } from '../../../../core/services/sigef.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
-import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria, SIGEF_PAID_STATUSES } from '../../../../core/services/sigef-cache.service';
+import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria } from '../../../../core/services/sigef-cache.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 
 import { getUnidadeLabel, getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
@@ -235,11 +235,7 @@ export class ContractDetailsPageComponent {
 
       const isManualPaid = c.parcelas_pagas_manual?.includes(reference);
 
-      const hasSigefPayment = matches.some(t => {
-        if (!t.sigef_id) return false;
-        const desc = t.description.toLowerCase();
-        return SIGEF_PAID_STATUSES.some(s => desc.includes(s.toLowerCase()));
-      });
+      const hasSigefPayment = matches.some(t => !!t.sigef_id);
 
       if (isManualPaid || hasSigefPayment) {
         status = 'PAID';
@@ -663,16 +659,15 @@ export class ContractDetailsPageComponent {
         lastSyncMap.set(budget.id, new Date());
       }
       this.sigefLastSync.set(lastSyncMap);
-      
-      // 4. Recarregar contratos para atualizar os cálculos financeiros (Totais Empenhado/Pago) baseados no novo cache
+
+      // 4. Persistir os dados baixados no banco transacoes (agrupa OBs por NE+mês)
+      await this.financialService.syncSigefTransactions(this.contractId());
+
+      // 5. Recarregar contratos, transações e dotações
       await this.contractService.loadContracts();
-      
-      // 5. Recarregar transações do BANCO (agora incluindo os novos dados do SIGEF persistidos)
       await this.loadTransactions(this.contractId());
-      
-      // 6. Recarregar as dotações (os valores estarão atualizados via database trigger)
       await this.loadBudgets(this.contractId());
-      
+
       this.lastSyncDate.set(new Date());
       console.log('[ContractDetails] Dados SIGEF atualizados com sucesso');
     } catch (err: any) {
