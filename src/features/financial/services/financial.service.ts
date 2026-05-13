@@ -297,13 +297,15 @@ export class FinancialService {
           .map(t => [t.document_number, t.parcela_referencia])
         );
 
-        // Colecionar TODOS os IDs de transações legadas (cache-*) para limpeza posterior.
-        // Tanto o formato antigo (cache-aggr-{NE}-{firstDoc}, cache-ob-{OB}-{DOC})
-        // quanto o formato atual (cache-aggr-{NE}-{month}) — os atuais serão removidos
-        // do delete set após o upsert.
-        for (const t of (dbTrans || [])) {
-          if (t.sigef_id?.startsWith('cache-')) {
-            oldSigefIdsToDelete.add(t.sigef_id);
+        // Só coleciona registros antigos do banco se houver novos dados de OB para substituí-los.
+        // Caso contrário, manteria os registros existentes — evitando deletar OBs que estão
+        // no banco mas não no cache (ex: OB 2026OB001786 que pode ter sido carregada antes).
+        const hasObsCache = obsCache.length > 0;
+        if (hasObsCache) {
+          for (const t of (dbTrans || [])) {
+            if (t.sigef_id?.startsWith('cache-')) {
+              oldSigefIdsToDelete.add(t.sigef_id);
+            }
           }
         }
 
