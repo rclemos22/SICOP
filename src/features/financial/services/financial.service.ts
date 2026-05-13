@@ -1,4 +1,5 @@
 import { inject, Injectable, signal } from '@angular/core';
+import { DebugService } from '../../../core/services/debug.service';
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { SigefCacheService, SigefOrdemBancaria } from '../../../core/services/sigef-cache.service';
@@ -16,6 +17,7 @@ export class FinancialService {
   private sigefCacheService = inject(SigefCacheService);
   private budgetService = inject(BudgetService);
   private contractService = inject(ContractService);
+  private debug = inject(DebugService);
 
   private _transactions = signal<Transaction[]>([]);
   private _loading = signal<boolean>(false);
@@ -218,11 +220,13 @@ export class FinancialService {
    * Transforma registros do cache (OBs e Movimentos) em transações permanentes.
    */
   async syncSigefTransactions(contractId: string): Promise<void> {
-    // Busca dotações diretamente (ignora filtros de ano do contexto)
+    this.debug.sync(`syncSigefTransactions: contrato ${contractId}`);
     const budgetResult = await this.budgetService.getBudgetsByContractId(contractId);
     const contractBudgets = budgetResult.data || [];
-    
-    if (contractBudgets.length === 0) return;
+    if (contractBudgets.length === 0) {
+      this.debug.warn(`syncSigefTransactions: nenhuma dotação para contrato ${contractId}`);
+      return;
+    }
 
     const syncErrors: string[] = [];
     const obsCachePerNe = new Map<string, SigefOrdemBancaria[]>();
@@ -587,8 +591,7 @@ export class FinancialService {
    * ainda não ter sido populado quando o serviço é inicializado.
    */
   async backfillTransacoes(): Promise<void> {
-    console.log('[FinancialService] Iniciando backfill: re-sincronizando todos os contratos do cache...');
-
+    this.debug.sync('backfillTransacoes: re-sincronizando todos os contratos...');
     try {
       const { data: contracts } = await this.supabaseService.client
         .from('contratos')

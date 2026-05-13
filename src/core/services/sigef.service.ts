@@ -1,6 +1,7 @@
 import { Injectable, inject, signal, OnDestroy, forwardRef } from '@angular/core';
 import { environment } from '../../environments/environment';
 import { SigefCacheService, SIGEF_PAID_STATUSES } from './sigef-cache.service';
+import { DebugService } from './debug.service';
 
 export type ApiStatus = 'connected' | 'disconnected' | 'refreshing' | 'error';
 
@@ -116,6 +117,7 @@ export class SigefService implements OnDestroy {
   private tokenExpiry: number | null = null;
   private refreshInterval: any;
   private cacheService = inject(forwardRef(() => SigefCacheService));
+  private debug = inject(DebugService);
   private authPromise: Promise<void> | null = null;
 
   // ─── Fila Global de Consultas ────────────────────────────────
@@ -404,6 +406,7 @@ export class SigefService implements OnDestroy {
           }
 
           await new Promise(resolve => setTimeout(resolve, 300));
+          this.debug.api(`${response.status} ${url.substring(0, 100)}`);
           return response;
         } catch (err: any) {
           clearTimeout(id);

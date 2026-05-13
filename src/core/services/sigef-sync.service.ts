@@ -7,6 +7,7 @@ import { ContractService } from '../../features/contracts/services/contract.serv
 import { BudgetService } from '../../features/budget/services/budget.service';
 import { AppContextService } from './app-context.service';
 import { SupabaseService } from './supabase.service';
+import { DebugService } from './debug.service';
 
 export interface SyncTask {
   ne: string;
@@ -43,6 +44,7 @@ export class SigefSyncService {
   private budgetService    = inject(BudgetService);
   private appContext       = inject(AppContextService);
   private supabase         = inject(SupabaseService);
+  private debug            = inject(DebugService);
 
   /** Armazena o queryId atual para permitir cancelamento */
   private currentQueryId: string | null = null;
@@ -242,21 +244,21 @@ export class SigefSyncService {
     this._syncQueue.set(queue);
     this._currentIdx.set(0);
     this._isLocked.set(lockUI);
+    this.debug.sync(`Iniciando syncBatch: ${queue.length} NE(s)`);
 
     try {
       for (let i = 0; i < queue.length; i++) {
-        // Verifica se foi cancelado
         if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
-          console.log(`[SIGEF SYNC] syncBatch cancelado durante processamento da NE ${queue[i].ne}.`);
+          this.debug.warn(`syncBatch cancelado na NE ${queue[i].ne}`);
           break;
         }
 
         this._currentIdx.set(i);
         const task = queue[i];
         this._updateTaskStatus(i, 'processing');
+        this.debug.sync(`[${i + 1}/${queue.length}] NE: ${task.ne} (UG:${task.ug})`);
 
         try {
-          console.log(`[SIGEF SYNC] ${i + 1}/${queue.length} – NE: ${task.ne} (recentOnly=${recentOnly})`);
           await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId, recentOnly);
           this._updateTaskStatus(i, 'completed');
         } catch (err: any) {
@@ -500,32 +502,23 @@ export class SigefSyncService {
       : await this.mirrorService.getExistingObNumbers(targetNE, ugStr);
 
     if (recentOnly) {
-      // Regra: Para "Atualizar SIGEF" (rápido), baixar apenas os últimos 60 dias.
       const today = new Date();
       const sixtyDaysAgo = new Date();
       sixtyDaysAgo.setDate(today.getDate() - 60);
-
-      const datainicio = sixtyDaysAgo.toISOString().split('T')[0];
-      const datafim    = today.toISOString().split('T')[0];
-
-      console.log(`[SIGEF SYNC] OBs: Busca rápida (60 dias: ${datainicio} a ${datafim}) para NE ${targetNE}`);
-      await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
+      const di = sixtyDaysAgo.toISOString().split('T')[0];
+      const df = today.toISOString().split('T')[0];
+      this.debug.sync(`OBs: busca rápida (${di} a ${df}) NE ${targetNE}`);
+      await this._fetchObsForPeriod(di, df, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
     } else {
-      // Regra: Para "Sincronizar SIGEF" (completo), fazer a varredura por anos.
-      const anoNE    = parseInt(ano, 10);
+      const anoNE = parseInt(ano, 10);
       const anoAtual = new Date().getFullYear();
-
       for (let a = anoNE; a <= anoAtual; a++) {
-        // Verifica se foi cancelado
         if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
-          console.log(`[SIGEF SYNC] _syncObsForNe cancelado durante varredura de anos para NE ${targetNE}.`);
+          this.debug.warn(`OBs cancelado NE ${targetNE} ano ${a}`);
           return;
         }
-
-        const datainicio = `${a}-01-01`;
-        const datafim    = `${a}-12-31`;
-        console.log(`[SIGEF SYNC] OBs: Varredura completa ano ${a} para NE ${targetNE}`);
-        await this._fetchObsForPeriod(datainicio, datafim, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
+        this.debug.sync(`OBs: varredura ano ${a} NE ${targetNE}`);
+        await this._fetchObsForPeriod(`${a}-01-01`, `${a}-12-31`, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
       }
     }
   }
@@ -569,6 +562,7 @@ export class SigefSyncService {
           : filtered.filter(ob => !existingObs.has((ob.nuordembancaria || '').trim().toUpperCase()));
 
         if (newObs.length > 0) {
+          this.debug.sync(`OBs: ${newObs.length} nova(s) para NE ${targetNE} (página ${page})`);
           await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
           await this.cacheService.saveOrdensBancarias(
             newObs.map(ob => this._mapApiObToCache(ob, ugNum))

@@ -7,6 +7,7 @@ import { SigefService } from '../../../../core/services/sigef.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria } from '../../../../core/services/sigef-cache.service';
 import { SupabaseService } from '../../../../core/services/supabase.service';
+import { DebugService } from '../../../../core/services/debug.service';
 
 import { getUnidadeLabel, getUnidadeBadgeClass, Dotacao } from '../../../../shared/models/budget.model';
 import {
@@ -51,6 +52,7 @@ export class ContractDetailsPageComponent {
   public sigefSyncService = inject(SigefSyncService);
   private sigefCacheService = inject(SigefCacheService);
   private supabaseService = inject(SupabaseService);
+  private debugService = inject(DebugService);
 
   // Input (bound via route param :contractId)
   contractId = input.required<string>();
