@@ -5,7 +5,7 @@ import { OverdueAlert } from '../services/dashboard.service';
 @Component({
   selector: 'app-overdue-alerts-card',
   standalone: true,
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe],
   template: `
     <div class="mb-8 overflow-hidden bg-white dark:bg-gray-800 border-l-4 border-red-500 shadow-sm">
       <div class="p-4 bg-red-50/30 dark:bg-red-900/10 flex items-center justify-between border-b border-red-100 dark:border-red-900/20">

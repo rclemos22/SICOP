@@ -1,4 +1,4 @@
-import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { Component, inject, viewChild, ElementRef, effect, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { DashboardService } from '../../services/dashboard.service';
@@ -16,7 +16,7 @@ import { ContractComparisonChart } from '../../charts/contract-comparison-chart'
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, CurrencyPipe, DatePipe, DecimalPipe, OverdueAlertsCardComponent, LowBudgetCardComponent, ExpiringContractsComponent, RecentPaymentsTableComponent],
+  imports: [CommonModule, OverdueAlertsCardComponent, LowBudgetCardComponent, ExpiringContractsComponent, RecentPaymentsTableComponent],
   templateUrl: './dashboard-page.component.html',
 })
 export class DashboardPageComponent {
