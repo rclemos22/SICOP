@@ -1,100 +1,49 @@
 <div class="flex h-screen overflow-hidden">
-  <!-- Sidebar -->
   <aside class="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hidden md:flex flex-col">
     <div class="h-16 flex items-center justify-center px-6">
       <span class="font-bold text-2xl tracking-tight text-sco-blue dark:text-white">SICOP</span>
     </div>
     <nav class="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-      <!-- Dashboard Link -->
-      <a 
-        (click)="showDashboard()"
-        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
-        [class]="view() === 'dashboard'
-          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
-          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
-      >
+      <a routerLink="/" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         [routerLinkActiveOptions]="{ exact: true }"
+         class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">dashboard</span>
         Dashboard
       </a>
-      
-      <!-- Contracts Link -->
-      <a 
-        (click)="showList()"
-        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
-        [class]="view() === 'list' || view() === 'form' || view() === 'contract-details'
-          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
-          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
-      >
+      <a routerLink="/contracts" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">description</span>
         Contratos
       </a>
-
-      <!-- Financial Link -->
-      <a 
-        (click)="showFinancial()"
-        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
-        [class]="view() === 'financial' 
-          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
-          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
-      >
+      <a routerLink="/financial" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">account_balance_wallet</span>
         Financeiro
       </a>
-
-      <!-- Budget Link (NEW) -->
-      <a 
-        (click)="showBudget()"
-        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
-        [class]="view() === 'budget' 
-          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
-          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
-      >
+      <a routerLink="/budget" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">monetization_on</span>
         Orçamento
       </a>
-
-      <!-- Suppliers Link -->
-      <a 
-        (click)="showSuppliers()"
-        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
-        [class]="view() === 'suppliers' 
-          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
-          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
-      >
+      <a routerLink="/suppliers" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">business</span>
         Fornecedores
       </a>
-
-      <!-- Nota de Empenho Link -->
-      <a 
-        (click)="showNotaEmpenho()"
-        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
-        [class]="view() === 'nota-empenho' 
-          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
-          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
-      >
+      <a routerLink="/nota-empenho" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">receipt_long</span>
         Nota de Empenho
       </a>
-
-      <!-- Ordem Bancária Link -->
-      <a 
-        (click)="showOrdemBancaria()"
-        class="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group"
-        [class]="view() === 'ordem-bancaria' 
-          ? 'bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white' 
-          : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue'"
-      >
+      <a routerLink="/ordem-bancaria" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">payments</span>
         Ordem Bancária
       </a>
     </nav>
   </aside>
 
-  <!-- Main Content Wrapper -->
   <main class="flex-1 flex flex-col h-screen overflow-hidden bg-background-light dark:bg-background-dark">
-    
-    <!-- API Status Banner - Sempre visivel -->
     <div class="flex items-center justify-between px-4 py-2 text-sm border-b transition-all duration-300"
       [class]="sigefService.apiStatus() === 'connected' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 
                sigefService.apiStatus() === 'refreshing' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800' :
@@ -117,135 +66,67 @@
           <span class="font-medium">Erro na API: {{ sigefService.error() }}</span>
         }
       </div>
-      <button 
-        (click)="sigefService.reconnect()"
-        class="flex items-center gap-1 px-3 py-1 rounded font-medium hover:opacity-80 transition-opacity"
-        [class]="sigefService.apiStatus() === 'connected' ? 'bg-green-200/50 dark:bg-green-800/30 hover:bg-green-200' : 
-                 sigefService.apiStatus() === 'refreshing' ? 'bg-yellow-200/50 dark:bg-yellow-800/30 hover:bg-yellow-200' :
-                 'bg-red-200/50 dark:bg-red-800/30 hover:bg-red-200'"
-      >
+      <button (click)="sigefService.reconnect()"
+              class="flex items-center gap-1 px-3 py-1 rounded font-medium hover:opacity-80 transition-opacity"
+              [class]="sigefService.apiStatus() === 'connected' ? 'bg-green-200/50 dark:bg-green-800/30 hover:bg-green-200' : 
+                       sigefService.apiStatus() === 'refreshing' ? 'bg-yellow-200/50 dark:bg-yellow-800/30 hover:bg-yellow-200' :
+                       'bg-red-200/50 dark:bg-red-800/30 hover:bg-red-200'">
         <span class="material-symbols-outlined text-[14px]">refresh</span>
         {{ sigefService.apiStatus() === 'connected' ? 'Renovar' : 'Reconectar' }}
       </button>
     </div>
 
-    <!-- Top Header -->
     <header class="h-16 shrink-0 flex items-center justify-between px-8 bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm z-10 sticky top-0 border-b border-gray-200/50 dark:border-gray-700">
       <div class="flex items-center gap-4">
-        <!-- Mobile Menu Button -->
         <button (click)="toggleSidebar()" class="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
           <span class="material-symbols-outlined">menu</span>
         </button>
       </div>
       <div class="flex items-center gap-4">
-        <!-- Year Selector (Context) -->
-        <div class="flex items-center gap-3 ml-auto">
-          <!-- Minimalist Year Pill -->
-          <div class="relative flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1.5 shadow-sm hover:border-sco-blue/30 hover:shadow transition-all group cursor-pointer">
-            <span class="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-sco-blue dark:text-gray-500 transition-colors">calendar_today</span>
-            <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">{{ contextService.anoExercicio() }}</span>
-            <span class="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600 dark:text-gray-500 transition-colors">keyboard_arrow_down</span>
-            
-            <!-- Invisible Overlay Select -->
-            <select 
-              [ngModel]="contextService.anoExercicio()" 
-              (ngModelChange)="contextService.setAno($event)"
-              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none"
-              title="Selecionar Ano"
-            >
-              @for (year of contextService.availableYears; track year) {
-                <option [value]="year">{{ year }}</option>
-              }
-            </select>
-          </div>
+        <div class="relative flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1.5 shadow-sm hover:border-sco-blue/30 hover:shadow transition-all group cursor-pointer">
+          <span class="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-sco-blue dark:text-gray-500 transition-colors">calendar_today</span>
+          <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">{{ contextService.anoExercicio() }}</span>
+          <span class="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600 dark:text-gray-500 transition-colors">keyboard_arrow_down</span>
+          <select [ngModel]="contextService.anoExercicio()" (ngModelChange)="contextService.setAno($event)"
+                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none" title="Selecionar Ano">
+            @for (year of contextService.availableYears; track year) {
+              <option [value]="year">{{ year }}</option>
+            }
+          </select>
         </div>
       </div>
     </header>
 
-    <!-- Page Content Router -->
-    @if (view() === 'dashboard') {
-      <app-dashboard-page 
-        class="flex-1 min-h-0"
-        (navigate)="handleDashboardNavigation($event)"
-        (viewContract)="handleViewContract($event)"
-      ></app-dashboard-page>
-    } @else if (view() === 'list') {
-      <app-contracts-page 
-        class="flex-1 min-h-0" 
-        [initialContract]="contractToEdit()"
-        (createContract)="showForm()"
-        (openContractDetails)="openContractDetails($event)"
-      ></app-contracts-page>
-    } @else if (view() === 'financial') {
-      <app-financial-page class="flex-1 min-h-0"></app-financial-page>
-    } @else if (view() === 'budget') {
-      <app-budget-page class="flex-1 min-h-0"></app-budget-page>
-    } @else if (view() === 'suppliers') {
-      <app-suppliers-page class="flex-1 min-h-0"></app-suppliers-page>
-    } @else if (view() === 'nota-empenho') {
-      <app-nota-empenho-page class="flex-1 min-h-0"></app-nota-empenho-page>
-    } @else if (view() === 'ordem-bancaria') {
-      <app-ordem-bancaria-page class="flex-1 min-h-0"></app-ordem-bancaria-page>
-    } @else if (view() === 'contract-details' && selectedContractId()) {
-      <app-contract-details-page 
-        class="flex-1 min-h-0"
-        [contractId]="selectedContractId()!"
-        (back)="showList()"
-        (editContract)="showForm($event)"
-      ></app-contract-details-page>
-    } @else {
-      <app-contract-form 
-        class="flex-1 min-h-0" 
-        [contract]="contractToEdit()"
-        (cancel)="showList()" 
-        (save)="handleSave($event)"
-      ></app-contract-form>
-    }
-    
-  </main>
+    <router-outlet />
 
-  <!-- Global SIGEF Sync Overlay (Lock) -->
-  @if (sigefSyncService.isLocked()) {
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm transition-all animate-in fade-in duration-300">
-      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-sco-blue/20 flex flex-col items-center text-center">
-        <!-- Spinner Animado Premium -->
-        <div class="relative w-20 h-20 mb-6">
-          <div class="absolute inset-0 border-4 border-sco-blue/10 rounded-full"></div>
-          <div class="absolute inset-0 border-4 border-t-sco-blue rounded-full animate-spin"></div>
-          <div class="absolute inset-0 flex items-center justify-center">
-            <span class="material-symbols-outlined text-sco-blue text-3xl">sync</span>
+    @if (sigefSyncService.isLocked()) {
+      <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm transition-all animate-in fade-in duration-300">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-sco-blue/20 flex flex-col items-center text-center">
+          <div class="relative w-20 h-20 mb-6">
+            <div class="absolute inset-0 border-4 border-sco-blue/10 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-t-sco-blue rounded-full animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span class="material-symbols-outlined text-sco-blue text-3xl">sync</span>
+            </div>
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Sincronizando com SIGEF</h3>
+          <p class="text-gray-500 dark:text-gray-400 mb-6">
+            Estamos atualizando as informações financeiras (NEs e OBs) diretamente da API oficial.
+            Por favor, aguarde a conclusão para garantir a integridade dos dados.
+          </p>
+          <div class="w-full bg-gray-100 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden mb-3">
+            <div class="bg-sco-blue h-full transition-all duration-500 ease-out" [style.width.%]="sigefSyncService.progress()"></div>
+          </div>
+          <div class="flex justify-between w-full text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
+            @if (sigefSyncService.syncStatus(); as status) {
+              <span>Processando NE: {{ status.task.ne }}</span>
+              <span>{{ status.current }}/{{ status.total }} ({{ sigefSyncService.progress() }}%)</span>
+            } @else {
+              <span>Iniciando...</span>
+            }
           </div>
         </div>
-
-        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Sincronizando com SIGEF</h3>
-        <p class="text-gray-500 dark:text-gray-400 mb-6">
-          Estamos atualizando as informações financeiras (NEs e OBs) diretamente da API oficial.
-          Por favor, aguarde a conclusão para garantir a integridade dos dados.
-        </p>
-
-        <!-- Barra de Progresso Real-time -->
-        <div class="w-full bg-gray-100 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden mb-3">
-          <div 
-            class="bg-sco-blue h-full transition-all duration-500 ease-out"
-            [style.width.%]="sigefSyncService.progress()"
-          ></div>
-        </div>
-        
-        <div class="flex justify-between w-full text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
-          @if (sigefSyncService.syncStatus(); as status) {
-            <span>Processando NE: {{ status.task.ne }}</span>
-            <span>{{ status.current }}/{{ status.total }} ({{ sigefSyncService.progress() }}%)</span>
-          } @else {
-             <span>Iniciando...</span>
-          }
-        </div>
-
-        <!-- Alerta de Bloqueio -->
-        <div class="mt-8 flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-lg text-sm border border-yellow-200 dark:border-yellow-800">
-          <span class="material-symbols-outlined text-[18px]">lock</span>
-          <span>Navegação temporariamente suspensa</span>
-        </div>
       </div>
-    </div>
-  }
+    }
+  </main>
 </div>

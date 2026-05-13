@@ -28,10 +28,10 @@
   } @else {
     <!-- Alertas -->
     @if (overdueInstallments().length > 0) {
-      <app-overdue-alerts-card [alerts]="overdueInstallments()" (viewContract)="viewContract.emit($event)" />
+      <app-overdue-alerts-card [alerts]="overdueInstallments()" (viewContract)="handleViewContract($event)" />
     }
     @if (lowBudgetAlerts().length > 0) {
-      <app-low-budget-card [alerts]="lowBudgetAlerts()" (viewContract)="viewContract.emit($event)" />
+      <app-low-budget-card [alerts]="lowBudgetAlerts()" (viewContract)="handleViewContract($event)" />
     }
 
     <!-- Main Metrics Grid -->
@@ -260,7 +260,7 @@
 
       <!-- Expiring Alert & Quick Summary -->
       <div class="flex flex-col gap-6">
-        <app-expiring-contracts [contracts]="expiringContracts()" (viewContract)="viewContract.emit($event)" />
+        <app-expiring-contracts [contracts]="expiringContracts()" (viewContract)="handleViewContract($event)" />
 
         <!-- Quick Summary Mini-Card -->
         <div class="bg-indigo-600 p-6 text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden">

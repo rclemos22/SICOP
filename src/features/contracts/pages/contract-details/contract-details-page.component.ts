@@ -1,5 +1,6 @@
 import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
-import { Component, inject, input, computed, signal, output, effect } from '@angular/core';
+import { Component, inject, input, computed, signal, effect } from '@angular/core';
+import { Router } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefService } from '../../../../core/services/sigef.service';
@@ -51,10 +52,9 @@ export class ContractDetailsPageComponent {
   private sigefCacheService = inject(SigefCacheService);
   private supabaseService = inject(SupabaseService);
 
-  // Inputs & Outputs
+  // Input (bound via route param :contractId)
   contractId = input.required<string>();
-  back = output<void>();
-  editContract = output<any>();
+  router = inject(Router);
 
   // Active Tab State
   activeTab = signal<'OVERVIEW' | 'ADITIVOS' | 'BUDGETS' | 'FINANCIAL'>('OVERVIEW');
@@ -609,7 +609,7 @@ export class ContractDetailsPageComponent {
   openEditContract() {
     console.log('[ContractDetails] Editar contrato clicado');
     // Emit the contract object so the form can be populated
-    this.editContract.emit(this.contract());
+    this.router.navigate(['/contracts', this.contractId(), 'edit']);
   }
   
   /**

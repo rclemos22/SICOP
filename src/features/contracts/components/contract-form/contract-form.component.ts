@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, input, output, signal, computed, effect } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup, AbstractControl, ValidationErrors } from '@angular/forms';
+import { Router } from '@angular/router';
 import { CurrencyUtils } from '../../../../app/shared/utils/currency-utils';
 import { SupplierService } from '../../../suppliers/services/supplier.service';
 import { Supplier } from '../../../../shared/models/supplier.model';
@@ -21,6 +22,7 @@ export class ContractFormComponent implements OnInit {
   private fb: FormBuilder = inject(FormBuilder);
   private supplierService = inject(SupplierService);
   private supabaseService = inject(SupabaseService);
+  private router = inject(Router);
   
   // Input para edição
   contract = input<any | null>(null);
@@ -320,6 +322,7 @@ export class ContractFormComponent implements OnInit {
 
       console.log('Emitindo dados do contrato para salvamento:', formData);
       this.save.emit(formData);
+      this.router.navigate(['/contracts']);
     } else {
       this.contractForm.markAllAsTouched();
       alert('Por favor, corrija os erros no formulário antes de salvar.');
@@ -329,5 +332,6 @@ export class ContractFormComponent implements OnInit {
   onCancel() {
     this.close.emit();
     this.cancel.emit();
+    this.router.navigate(['/contracts']);
   }
 }

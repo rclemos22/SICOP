@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, signal, computed, output, inject, OnInit, OnDestroy, input } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, OnDestroy, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { AppContextService } from '../../../../core/services/app-context.service';
@@ -19,13 +20,10 @@ import { ContractService } from '../../services/contract.service';
 export class ContractsPageComponent implements OnInit, OnDestroy {
   public contractService = inject(ContractService);
   private appContext = inject(AppContextService);
+  private router = inject(Router);
 
   // Input from parent (for editing)
   initialContract = input<any | null>(null);
-
-  // Navigation Event
-  createContract = output<void>();
-  openContractDetails = output<string>();
 
   // Modal State
   isFormOpen = signal(false);
@@ -295,6 +293,6 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   }
 
   handleSelect(contractId: string) {
-    this.openContractDetails.emit(contractId);
+    this.router.navigate(['/contracts', contractId]);
   }
 }

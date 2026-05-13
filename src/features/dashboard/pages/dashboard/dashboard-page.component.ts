@@ -1,5 +1,6 @@
 import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
-import { Component, inject, output, viewChild, ElementRef, effect, signal } from '@angular/core';
+import { Component, inject, viewChild, ElementRef, effect, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { DashboardService } from '../../services/dashboard.service';
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
@@ -19,6 +20,7 @@ import { ContractComparisonChart } from '../../charts/contract-comparison-chart'
   templateUrl: './dashboard-page.component.html',
 })
 export class DashboardPageComponent {
+  private router = inject(Router);
   readonly dashboardService = inject(DashboardService);
   readonly appContext = inject(AppContextService);
   readonly sigefSync = inject(SigefSyncService);
@@ -34,10 +36,6 @@ export class DashboardPageComponent {
   monthlyExecutionChartContainer = viewChild<ElementRef>('monthlyExecutionChart');
   paymentComparisonChartContainer = viewChild<ElementRef>('paymentComparisonChart');
   contractComparisonChartContainer = viewChild<ElementRef>('contractComparisonChart');
-
-  // Outputs
-  navigate = output<'contracts' | 'financial' | 'budget'>();
-  viewContract = output<string>();
 
   // Ano-base watcher
   private anoBase = signal(this.appContext.anoExercicio());
@@ -92,7 +90,7 @@ export class DashboardPageComponent {
 
     effect(() => {
       const el = this.contractComparisonChartContainer()?.nativeElement;
-      if (el) this.contractComparisonChart.render(el, this.paymentComparisonByContract(), (c) => this.viewContract.emit(c));
+      if (el) this.contractComparisonChart.render(el, this.paymentComparisonByContract(), (c) => this.handleViewContract(c));
     });
   }
 
@@ -106,9 +104,10 @@ export class DashboardPageComponent {
     return this.dashboardService.getLinkedObsForInstallment(contractId, reference);
   }
 
-  goToContracts() { this.navigate.emit('contracts'); }
-  goToFinancial() { this.navigate.emit('financial'); }
-  goToBudget() { this.navigate.emit('budget'); }
+  goToContracts() { this.router.navigate(['/contracts']); }
+  goToFinancial() { this.router.navigate(['/financial']); }
+  goToBudget() { this.router.navigate(['/budget']); }
+  handleViewContract(contractNumber: string) { this.router.navigate(['/contracts', contractNumber]); }
 
   async syncAllSigef() { await this.dashboardService.syncAllSigef(); }
 
