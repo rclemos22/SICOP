@@ -1,16 +1,8 @@
-import { CommonModule, CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
 import { Component, signal, computed, inject, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import {
-  Transaction,
-  TransactionType,
-  getTransactionTypeLabel,
-  getTransactionTypeColorClass,
-  getTransactionIcon,
-  getTransactionIconBgClass
-} from '../../../../shared/models/transaction.model';
+import { Transaction, TransactionType, getTransactionTypeLabel, getTransactionTypeColorClass, getTransactionIcon, getTransactionIconBgClass } from '../../../../shared/models/transaction.model';
 import { getUnidadeLabel } from '../../../../shared/models/budget.model';
-
 import { FinancialService } from '../../services/financial.service';
 import { BudgetService } from '../../../budget/services/budget.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
@@ -41,19 +33,10 @@ export class FinancialPageComponent {
     return map;
   });
 
-  // Resolve o label da unidade gestora para uma transação
   resolveUnidadeGestora(item: Transaction): string {
-    // 1. Se já tem o label definido, usa
-    if (item.unidade_gestora_label) {
-      return item.unidade_gestora_label;
-    }
-    // 2. Senão, procura no mapa de dotações pelo commitment_id (NE)
+    if (item.unidade_gestora_label) return item.unidade_gestora_label;
     const ugCode = this.neToUgMap().get(item.commitment_id);
-    if (ugCode) {
-      return getUnidadeLabel(ugCode);
-    }
-    // 3. Se não encontrar, retorna --- (NÃO mostra mais o número da dotação)
-    return '---';
+    return ugCode ? getUnidadeLabel(ugCode) : '---';
   }
 
   // Signals
@@ -82,20 +65,11 @@ export class FinancialPageComponent {
   getIconClass = getTransactionIconBgClass;
 
   constructor() {
-    // Carregar dotações para o mapa de Unidade Gestora
     this.budgetService.loadDotacoes();
-
-    // Reset to page 1 when filters change
     effect(() => {
-      // Just accessing these signals to trigger the effect when they change
-      this.searchQuery();
-      this.activeTab();
-      this.filterStartDate();
-      this.filterEndDate();
-      this.filterType();
-      this.filterContract();
-      this.filterCommitment();
-      
+      this.searchQuery(); this.activeTab();
+      this.filterStartDate(); this.filterEndDate();
+      this.filterType(); this.filterContract(); this.filterCommitment();
       this.currentPage.set(1);
     });
   }
@@ -130,23 +104,10 @@ export class FinancialPageComponent {
       if (commitment && !t.commitment_id.toLowerCase().includes(commitment)) return false;
 
       // Advanced Filter: Date Range
-      if (startDate) {
-        const start = new Date(startDate);
-        const tDate = new Date(t.date);
-        tDate.setHours(0, 0, 0, 0);
-        const sDate = new Date(start);
-        sDate.setHours(0, 0, 0, 0);
-        if (tDate < sDate) return false;
-      }
-
-      if (endDate) {
-        const end = new Date(endDate);
-        const tDate = new Date(t.date);
-        tDate.setHours(0, 0, 0, 0);
-        const eDate = new Date(end);
-        eDate.setHours(0, 0, 0, 0);
-        if (tDate > eDate) return false;
-      }
+      const tDate = new Date(t.date);
+      tDate.setHours(0, 0, 0, 0);
+      if (startDate && tDate < new Date(startDate)) return false;
+      if (endDate && tDate > new Date(endDate)) return false;
 
       // Text Search (Global)
       if (query) {
@@ -241,17 +202,9 @@ export class FinancialPageComponent {
    */
   async syncGlobal() {
     try {
-      console.log('[FinancialPage] Baixando dados dos últimos 60 dias...');
-      // 1. Download bulk dos últimos 60 dias (NE + OB)
       await this.bulkSyncService.downloadLast60Days();
-
-      // 2. Recarregar contratos a partir do espelho atualizado
       await this.sigefSyncService.syncAllContractsFinance(true);
-
-      // 3. Recarregar lançamentos locais
       await this.financialService.loadAllTransactions();
-
-      console.log('[FinancialPage] Atualização SIGEF concluída.');
     } catch (err: any) {
       console.error('[FinancialPage] Erro na atualização SIGEF:', err);
     }
