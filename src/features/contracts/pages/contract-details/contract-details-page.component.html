@@ -80,7 +80,7 @@
         </div>
         <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-yellow-900 dark:text-yellow-100">
           <span>Contrato:</span><span class="font-bold">{{ contractId() }}</span>
-          <span>Dotações:</span><span class="font-bold">{{ budgets().length }} ({{ budgets().filter(b => b.nunotaempenho).length }} com NE)</span>
+          <span>Dotações:</span><span class="font-bold">{{ budgets().length }} ({{ budgetsWithNeCount() }} com NE)</span>
           <span>Transações DB:</span><span class="font-bold">{{ dbTransactions().length }}</span>
           <span>Último sync:</span><span class="font-bold">{{ lastSyncDate() | date:'dd/MM/yy HH:mm' || '---' }}</span>
           <span>isUpdatingLanc:</span><span class="font-bold">{{ isUpdatingLancamentos() }}</span>

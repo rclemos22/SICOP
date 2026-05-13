@@ -105,6 +105,7 @@ export class ContractDetailsPageComponent {
 
   debugMode = signal(false);
   toggleDebug() { this.debugMode.update(v => !v); }
+  budgetsWithNeCount = computed(() => this.budgets().filter(b => b.nunotaempenho).length);
   
 
   // Filtra transações de liquidação (pagamentos) para vinculação
