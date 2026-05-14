@@ -303,6 +303,31 @@ export class SigefCacheService {
     }
   }
 
+  async getOrdensBancariasPorNeGlobal(neNumber: string): Promise<SigefOrdemBancaria[]> {
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('sigef_ordens_bancarias')
+        .select('*')
+        .eq('nunotaempenho', neNumber)
+        .order('dtlancamento', { ascending: true });
+
+      if (error) {
+        this.debug.error(`getOrdensBancariasPorNeGlobal(${neNumber}): ${error.message}`);
+        return [];
+      }
+      if (!data || data.length === 0) {
+        this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}): 0 resultados`);
+        return [];
+      }
+
+      this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}): ${data.length} OB(s)`);
+      return data.map(this.mapToOrdemBancaria);
+    } catch (err: any) {
+      this.debug.error(`getOrdensBancariasPorNeGlobal(${neNumber}) exception: ${err.message}`);
+      return [];
+    }
+  }
+
   async saveOrdemBancaria(ob: SigefOrdemBancaria): Promise<void> {
     const payload = {
       nuordembancaria: ob.nuordembancaria,
@@ -717,5 +742,24 @@ export class SigefCacheService {
       updated_at: data.updated_at,
       last_sync: data.last_sync
     };
+  }
+
+  async clearCacheForNe(neNumber: string): Promise<void> {
+    const ne = neNumber.trim().toUpperCase();
+    await Promise.all([
+      this.supabaseService.client.from('sigef_notas_empenho').delete().eq('nunotaempenho', ne),
+      this.supabaseService.client.from('sigef_ne_movimentos').delete().eq('nunotaempenho', ne),
+      this.supabaseService.client.from('sigef_ordens_bancarias').delete().eq('nunotaempenho', ne),
+    ]);
+    this.debug.cache(`Cache limpo para NE ${ne}`);
+  }
+
+  async clearAllCache(): Promise<void> {
+    await Promise.all([
+      this.supabaseService.client.from('sigef_notas_empenho').delete().neq('nunotaempenho', ''),
+      this.supabaseService.client.from('sigef_ne_movimentos').delete().neq('nunotaempenho', ''),
+      this.supabaseService.client.from('sigef_ordens_bancarias').delete().neq('nunotaempenho', ''),
+    ]);
+    this.debug.cache('Cache de NE e OB totalmente limpo');
   }
 }

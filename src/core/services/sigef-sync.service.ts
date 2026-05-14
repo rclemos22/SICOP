@@ -574,7 +574,7 @@ export class SigefSyncService {
 
           const filtered = result.data.filter(ob => {
             const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-            const isTargetUg = !ugStr || (ob.cdunidadegestora?.toString() === ugStr);
+            const isTargetUg = !ugStr || parseInt(ob.cdunidadegestora?.toString() || '0', 10) === parseInt(ugStr, 10);
             return isTargetNe && isTargetUg;
           });
 
@@ -632,7 +632,7 @@ export class SigefSyncService {
       }
     }
 
-    const obRaws = await this.mirrorService.getObsRawByNe(neNumber, ugStr);
+    const obRaws = await this.mirrorService.getObsRawByNeGlobal(neNumber);
     if (obRaws.length > 0) {
       await this.cacheService.saveOrdensBancarias(
         obRaws.map(raw => this._mapRawObToCache(raw, ugNum))

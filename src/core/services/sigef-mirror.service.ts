@@ -212,6 +212,23 @@ export class SigefMirrorService {
   }
 
   /**
+   * Retorna os raw_data de todas as OBs de uma NE, ignorando UG.
+   */
+  async getObsRawByNeGlobal(nunotaempenho: string): Promise<Record<string, any>[]> {
+    const { data, error } = await this.client
+      .from('import_sigef_ob')
+      .select('raw_data')
+      .eq('nunotaempenho', nunotaempenho.trim().toUpperCase())
+      .order('dtlancamento', { ascending: true, nullsFirst: false });
+
+    if (error) {
+      console.error('[SigefMirror] Erro ao buscar OBs por NE (global):', error);
+      return [];
+    }
+    return (data || []).map(r => r.raw_data);
+  }
+
+  /**
    * Retorna uma OB específica pelo número.
    */
   async getObByNumber(nuordembancaria: string, cdunidadegestora: string): Promise<ImportSigefOb | null> {
