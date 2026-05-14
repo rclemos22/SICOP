@@ -662,23 +662,17 @@ export class ContractDetailsPageComponent {
   }
 
   /**
-   * Atualiza os lançamentos financeiros a partir do cache local (sem consultar API SIGEF).
-   * Lê os dados já baixados do cache e persiste no banco, depois recarrega a UI.
+   * Atualiza os lançamentos financeiros buscando OBs e NEs diretamente da API oficial do SIGEF.
+   * Ignora o cache local para garantir dados atualizados.
    */
   async atualizarLancamentos() {
-    const contractId = this.contractId();
-    if (!contractId || this.isUpdatingLancamentos()) return;
-
+    if (this.isUpdatingLancamentos()) return;
     this.isUpdatingLancamentos.set(true);
     try {
-      console.log('[ContractDetails] Atualizando lançamentos do cache local...');
-      await this.financialService.syncSigefTransactions(contractId);
-      await this.loadTransactions(contractId);
-      await this.loadBudgets(contractId);
-      await this.contractService.loadContracts();
+      await this.refreshSigefData(true);
       this.lastSyncDate.set(new Date());
-      console.log('[ContractDetails] Lançamentos atualizados com sucesso.');
     } catch (err: any) {
+      if (err.message === 'Query cancelled') return;
       console.error('[ContractDetails] Erro ao atualizar lançamentos:', err);
     } finally {
       this.isUpdatingLancamentos.set(false);
