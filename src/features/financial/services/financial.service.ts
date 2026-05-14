@@ -239,9 +239,22 @@ export class FinancialService {
       const ugNum = parseInt(ug, 10);
 
       try {
-        const obsCache = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, neValue);
-        obsCachePerNe.set(neValue, obsCache);
         const movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
+
+        // Coletar TODAS as NEs vinculadas: a NE original + NEs dos movimentos (reforços)
+        // Cada NE vinculada pode ter suas próprias OBs.
+        const allNes = [...new Set([
+          neValue,
+          ...movimentosCache.map((m: any) => m.nunotaempenho).filter(Boolean)
+        ])] as string[];
+
+        // Buscar OBs de todas as NEs vinculadas (qualquer UG)
+        const allObs: SigefOrdemBancaria[] = [];
+        for (const ne of allNes) {
+          const obs = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, ne);
+          allObs.push(...obs);
+        }
+        obsCachePerNe.set(neValue, allObs);
 
         const EVENTO_LABELS: Record<number, string> = {
           400010: 'Empenho Inicial',
@@ -279,12 +292,10 @@ export class FinancialService {
           });
         });
 
-        // 2. Agrupar TODAS as OBs da mesma NE por PP (Parcela de Pagamento = nudocumento).
+        // 2. Agrupar OBs por PP (Parcela de Pagamento = nudocumento).
         //    Cada PP representa um pagamento distinto, podendo envolver 1 ou mais OBs.
-        //    Diferente do agrupamento anterior por mês — que juntava PPs diferentes
-        //    da mesma NE+mes — cada PP vira UMA transação.
-        const groupedObs = new Map<string, typeof obsCache>();
-        obsCache.forEach(ob => {
+        const groupedObs = new Map<string, typeof allObs>();
+        allObs.forEach(ob => {
           const docKey = ob.nudocumento || ob.nuordembancaria || `unknown_${ob.id}`;
           const key = `${neValue}-${docKey}`;
           const list = groupedObs.get(key) || [];
@@ -293,7 +304,6 @@ export class FinancialService {
         });
 
         // Buscar transações de liquidação no banco para resgatar vínculos manuais de 'parcela_referencia' 
-        // Além disso, coletar sigef_ids antigos para limpeza dos registros pré-agrupamento
         const { data: dbTrans } = await this.supabaseService.client
           .from('transacoes')
           .select('sigef_id, parcela_referencia, document_number')
@@ -310,7 +320,7 @@ export class FinancialService {
         // Só coleciona registros antigos do banco se houver novos dados de OB para substituí-los.
         // Caso contrário, manteria os registros existentes — evitando deletar OBs que estão
         // no banco mas não no cache (ex: OB 2026OB001786 que pode ter sido carregada antes).
-        const hasObsCache = obsCache.length > 0;
+        const hasObsCache = allObs.length > 0;
         if (hasObsCache) {
           for (const t of (dbTrans || [])) {
             if (t.sigef_id?.startsWith('cache-')) {
@@ -326,8 +336,10 @@ export class FinancialService {
           const allDocs = [...new Set(groupObs.map(o => o.nudocumento).filter(Boolean))].join(', ');
           const allObs = [...new Set(groupObs.map(o => o.nuordembancaria).filter(Boolean))].join(', ');
           
-          const paymentMonth = groupObs[0].dtpagamento ? groupObs[0].dtpagamento.substring(0, 7) : (groupObs[0].dtlancamento ? groupObs[0].dtlancamento.substring(0, 7) : undefined);
-          const maxDate = groupObs.map(o => o.dtpagamento || o.dtlancamento || '').sort().reverse()[0] || new Date().toISOString().split('T')[0];
+          // Data de pagamento: usa dtpagamento. Se vazio, tenta dtlancamento. Se ambos vazios, usa a data do movimento de empenho.
+          const validDates = groupObs.map(o => o.dtpagamento || o.dtlancamento).filter(Boolean).sort().reverse();
+          const maxDate = validDates[0] || '';
+          const paymentMonth = maxDate ? maxDate.substring(0, 7) : undefined;
 
           // ID consolidado ESTÁVEL: baseado na NE + PP (nudocumento)
           // Cada PP (parcela de pagamento) sempre terá o mesmo sigef_id em todas as sincronizações
@@ -406,7 +418,7 @@ export class FinancialService {
         const dotacaoTotalCancelado = movimentosCache
           .filter(m => m.cdevento === 400012)
           .reduce((sum, m) => sum + Math.abs(Number(m.vlnotaempenho) || 0), 0);
-        const dotacaoTotalPago = this.sigefCacheService.calcularValorPago(obsCache);
+        const dotacaoTotalPago = this.sigefCacheService.calcularValorPago(allObs);
         const dotacaoSaldoDisponivel = Math.max(0, Number(budget.valor_dotacao) - dotacaoTotalEmpenhado);
 
         const { error: dotError } = await this.supabaseService.client
