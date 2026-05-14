@@ -405,12 +405,16 @@ export class SigefSyncService {
     forceSync: boolean,
     recentOnly: boolean = true
   ): Promise<void> {
-    // Guard: nunca chama API individual se o bulk ainda não foi concluído.
-    // Isso previne ETIMEDOUT em cascata enquanto o espelho está sendo populado.
-    const ready = await this._checkBulkReady();
-    if (!ready) {
-      console.log(`[SIGEF SYNC] _syncNeFromApi bloqueado para NE ${neNumber} — bulk pendente.`);
-      return;
+    // Guard: em modo automático (navegação/auto), nunca chama API se o bulk
+    // ainda não foi concluído (evita ETIMEDOUT em cascata).
+    // Em modo forçado (botão manual), ignora o guard — o usuário explicitamente
+    // pediu para buscar, independente do estado do bulk.
+    if (!forceSync) {
+      const ready = await this._checkBulkReady();
+      if (!ready) {
+        this.debug.warn(`_syncNeFromApi bloqueado para NE ${neNumber} — bulk pendente`);
+        return;
+      }
     }
 
     // Verifica se foi cancelado
@@ -492,11 +496,14 @@ export class SigefSyncService {
     recentOnly: boolean = true,
     queryId?: string
   ): Promise<void> {
-    // Guard: nunca busca OBs individuais enquanto bulk não completou.
-    const ready = await this._checkBulkReady();
-    if (!ready) {
-      console.log(`[SIGEF SYNC] _syncObsForNe bloqueado para NE ${nunotaempenho} — bulk pendente.`);
-      return;
+    // Guard: em modo automático, não busca OBs se o bulk não concluiu.
+    // Em modo forçado (botão manual), ignora o guard.
+    if (!forceSync) {
+      const ready = await this._checkBulkReady();
+      if (!ready) {
+        this.debug.warn(`_syncObsForNe bloqueado — NE ${nunotaempenho}, bulk pendente`);
+        return;
+      }
     }
 
     // Verifica se foi cancelado
