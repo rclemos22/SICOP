@@ -1,8 +1,8 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SigefService, OrdemBancaria } from '../../../../core/services/sigef.service';
-import { environment } from '../../../../environments/environment';
+import { DebugService } from '../../../../core/services/debug.service';
 
 interface UnidadeGestora {
   codigo: string;
@@ -23,8 +23,12 @@ interface UnidadeGestora {
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Consulta de ordens bancárias via API SIGEF.</p>
         </div>
         
-        <!-- Auth Status -->
         <div class="flex items-center gap-2">
+          <button (click)="toggleDebug()"
+            class="px-2.5 py-1.5 text-xs font-medium border rounded-lg transition-all"
+            [class]="debugMode() ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'">
+            <span class="material-symbols-outlined text-[16px]">bug_report</span>
+          </button>
           @if (sigefService.loading()) {
             <span class="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium">
               <span class="animate-spin material-symbols-outlined text-[16px]">sync</span>
@@ -43,6 +47,28 @@ interface UnidadeGestora {
           }
         </div>
       </div>
+
+      @if (debugMode()) {
+        <div class="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-300 dark:border-yellow-700 rounded-xl text-xs font-mono space-y-2 max-h-[300px] overflow-y-auto">
+          <div class="flex items-center justify-between mb-2">
+            <strong class="text-yellow-800 dark:text-yellow-200 text-sm">Debug</strong>
+            <button (click)="debugService.clear()" class="text-yellow-600 hover:text-yellow-800 text-[10px] underline mr-2">Limpar</button>
+          </div>
+          <div class="space-y-0.5 max-h-[240px] overflow-y-auto">
+            @for (entry of debugService.logs(); track entry.timestamp) {
+              <div class="flex gap-1.5 text-[10px] leading-tight border-b border-yellow-200/30 pb-0.5"
+                   [class.text-red-600!]="entry.type === 'error'"
+                   [class.text-amber-600!]="entry.type === 'warn'"
+                   [class.text-blue-600!]="entry.type === 'api'"
+                   [class.text-green-700!]="entry.type === 'sync'">
+                <span class="text-yellow-500 w-14 shrink-0">{{ entry.timestamp | date:'HH:mm:ss' }}</span>
+                <span class="w-10 shrink-0 font-bold uppercase">{{ entry.type }}</span>
+                <span class="truncate">{{ entry.message }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
 
       <!-- Search Form -->
       <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm mb-6">
@@ -241,71 +267,46 @@ interface UnidadeGestora {
     </div>
   `
 })
-export class OrdemBancariaPageComponent implements OnInit {
+export class OrdemBancariaPageComponent {
   sigefService = inject(SigefService);
-  
+  debugService = inject(DebugService);
+
   numeroOB = '';
   buscou = false;
-  
+  debugMode = signal(false);
+  toggleDebug() { this.debugMode.update(v => !v); }
+
   ordemBancaria = signal<OrdemBancaria | null>(null);
-  
+
   unidadeGestoraSelecionada = '080101';
-  
+
   unidadesGestoras: UnidadeGestora[] = [
     { codigo: '080101', nome: 'DPEMA' },
     { codigo: '080901', nome: 'FADEP' }
   ];
 
-  private extrairAnoDoNumeroOB(numeroOB: string): string {
-    const match = numeroOB.trim().match(/^(\d{4})/);
-    if (match) {
-      return match[1];
-    }
-    return new Date().getFullYear().toString();
-  }
-
-  ngOnInit() {
-  }
-
   getStatusClass(situacao: string | null): string {
     const s = situacao?.toLowerCase() || '';
-    if (s.includes('confirmada') || s.includes('creditado')) {
+    if (s.includes('confirmada') || s.includes('creditado'))
       return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800';
-    }
-    if (s.includes('pendente') || s.includes('agendado')) {
+    if (s.includes('pendente') || s.includes('agendado'))
       return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800';
-    }
-    if (s.includes('cancelada') || s.includes('rejeitada')) {
+    if (s.includes('cancelada') || s.includes('rejeitada'))
       return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800';
-    }
     return 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600';
   }
 
   async buscarOrdemBancaria() {
     if (!this.numeroOB) return;
-    
     const cleanOB = this.numeroOB.trim().toUpperCase();
     const ug = this.unidadeGestoraSelecionada;
-    const ano = this.extrairAnoDoNumeroOB(cleanOB);
-    
-    console.log('[DEBUG OB] Buscando:', { cleanOB, ug, ano });
-    
     this.buscou = true;
     this.ordemBancaria.set(null);
-    
     try {
-      // Usar a nova lógica de espelho (Cache-First)
       const found = await this.sigefService.getOrdemBancariaByNumberWithMirror(cleanOB, ug);
-      
-      console.log('[DEBUG OB] Resultado:', found ? `Encontrado: nudocumento:${found.nudocumento} nuordembancaria:${found.nuordembancaria} UG:${found.cdunidadegestora}` : 'Não encontrado');
-      
-      if (found) {
-        this.ordemBancaria.set(found);
-      } else {
-        this.ordemBancaria.set(null);
-      }
+      this.ordemBancaria.set(found);
     } catch (err: any) {
-      console.error('Erro ao buscar ordem bancária:', err);
+      this.debugService.error(`Erro ao buscar OB ${cleanOB}: ${err.message}`);
       this.ordemBancaria.set(null);
     }
   }
