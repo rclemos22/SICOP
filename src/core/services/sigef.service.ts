@@ -1,6 +1,7 @@
 import { Injectable, inject, signal, OnDestroy, forwardRef } from '@angular/core';
 import { environment } from '../../environments/environment';
 import { SigefCacheService, SIGEF_PAID_STATUSES } from './sigef-cache.service';
+import { SigefMirrorService } from './sigef-mirror.service';
 import { DebugService } from './debug.service';
 
 export type ApiStatus = 'connected' | 'disconnected' | 'refreshing' | 'error';
@@ -117,6 +118,7 @@ export class SigefService implements OnDestroy {
   private tokenExpiry: number | null = null;
   private refreshInterval: any;
   private cacheService = inject(forwardRef(() => SigefCacheService));
+  private mirrorService = inject(SigefMirrorService);
   private debug = inject(DebugService);
   private authPromise: Promise<void> | null = null;
 
@@ -1079,8 +1081,9 @@ export class SigefService implements OnDestroy {
       );
 
       if (found) {
-        // Salva no espelho para futuras consultas
+        this.debug.sync(`OB ${cleanOB} encontrada via API — salvando no cache e espelho`);
         await this.cacheService.saveOrdemBancaria(this.mapApiObToCache(found, ugNum));
+        await this.mirrorService.saveObsBulk([found as Record<string, any>], ug);
         return found;
       }
     } catch (err: any) {
