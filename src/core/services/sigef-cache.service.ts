@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { SupabaseService } from './supabase.service';
+import { DebugService } from './debug.service';
 import { ErrorHandlerService } from './error-handler.service';
 
 export interface SigefNotaEmpenho {
@@ -131,6 +132,7 @@ export const SIGEF_PAID_STATUSES = [
 export class SigefCacheService {
   private supabaseService = inject(SupabaseService);
   private errorHandler = inject(ErrorHandlerService);
+  private debug = inject(DebugService);
 
   private _loading = signal<boolean>(false);
   readonly loading = this._loading.asReadonly();
@@ -284,12 +286,19 @@ export class SigefCacheService {
         .eq('nunotaempenho', neNumber)
         .order('dtlancamento', { ascending: true });
 
-      if (error || !data) {
+      if (error) {
+        this.debug.error(`getOrdensBancariasPorNe(${ug}, ${neNumber}): ${error.message}`);
+        return [];
+      }
+      if (!data || data.length === 0) {
+        this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${neNumber}): 0 resultados`);
         return [];
       }
 
+      this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${neNumber}): ${data.length} OB(s)`);
       return data.map(this.mapToOrdemBancaria);
-    } catch (err) {
+    } catch (err: any) {
+      this.debug.error(`getOrdensBancariasPorNe(${ug}, ${neNumber}) exception: ${err.message}`);
       return [];
     }
   }
