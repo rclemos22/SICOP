@@ -238,20 +238,23 @@ export class FinancialService {
       const ug = budget.unid_gestora || '080101';
       const ugNum = parseInt(ug, 10);
 
+      this.debug.sync(`[${neValue}] processando...`);
+
       try {
         const movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
+        this.debug.sync(`[${neValue}] ${movimentosCache.length} movimentos`);
 
-        // Coletar TODAS as NEs vinculadas: a NE original + NEs dos movimentos (reforços)
-        // Cada NE vinculada pode ter suas próprias OBs.
         const allNes = [...new Set([
           neValue,
           ...movimentosCache.map((m: any) => m.nunotaempenho).filter(Boolean)
         ])] as string[];
 
-        // Buscar OBs de todas as NEs vinculadas (qualquer UG)
+        this.debug.sync(`[${neValue}] ${allNes.length} NE(s) vinculadas: ${allNes.join(', ')}`);
+
         const allObs: SigefOrdemBancaria[] = [];
         for (const ne of allNes) {
           const obs = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, ne);
+          this.debug.sync(`[${ne}] ${obs.length} OB(s) encontradas no cache`);
           allObs.push(...obs);
         }
         obsCachePerNe.set(neValue, allObs);
@@ -292,8 +295,8 @@ export class FinancialService {
           });
         });
 
-        // 2. Agrupar OBs por PP (Parcela de Pagamento = nudocumento).
-        //    Cada PP representa um pagamento distinto, podendo envolver 1 ou mais OBs.
+        // 2. Agrupar OBs por PP
+        this.debug.sync(`[${neValue}] agrupando ${allObs.length} OB(s) por PP...`);
         const groupedObs = new Map<string, typeof allObs>();
         allObs.forEach(ob => {
           const docKey = ob.nudocumento || ob.nuordembancaria || `unknown_${ob.id}`;
@@ -302,6 +305,7 @@ export class FinancialService {
           list.push(ob);
           groupedObs.set(key, list);
         });
+        this.debug.sync(`[${neValue}] ${groupedObs.size} grupo(s) de PP`);
 
         // Buscar transações de liquidação no banco para resgatar vínculos manuais de 'parcela_referencia' 
         const { data: dbTrans } = await this.supabaseService.client
@@ -391,29 +395,30 @@ export class FinancialService {
         }
 
         // Remover do delete set os IDs que acabamos de upsertar (para não deletá-los)
+        const liquidacoes = transactionsToUpsert.filter(t => t.type === 'LIQUIDATION').length;
+        const commitments = transactionsToUpsert.filter(t => t.type !== 'LIQUIDATION').length;
+        this.debug.sync(`[${neValue}] upsert: ${liquidacoes} pagamentos + ${commitments} movimentos`);
+
         for (const t of transactionsToUpsert) {
           oldSigefIdsToDelete.delete(t.sigef_id);
         }
 
-        // UPSERT primeiro (seguro: se falhar, os registros antigos ainda existem)
         if (transactionsToUpsert.length > 0) {
           const { error } = await this.supabaseService.client
             .from('transacoes')
             .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
-
           if (error) throw error;
+          this.debug.sync(`[${neValue}] upsert OK`);
         }
 
-        // DEPOIS limpar transações legadas parciais (apenas se o upsert acima tiver sucesso)
         if (oldSigefIdsToDelete.size > 0) {
           const idsToDelete = Array.from(oldSigefIdsToDelete);
+          this.debug.sync(`[${neValue}] limpando ${idsToDelete.length} registro(s) legados`);
           await this.supabaseService.client
             .from('transacoes')
             .delete()
             .in('sigef_id', idsToDelete);
         }
-
-        // === Atualizar totais financeiros da dotação ===
         const dotacaoTotalEmpenhado = this.sigefCacheService.calcularValorEmpenhado(movimentosCache);
         const dotacaoTotalCancelado = movimentosCache
           .filter(m => m.cdevento === 400012)
