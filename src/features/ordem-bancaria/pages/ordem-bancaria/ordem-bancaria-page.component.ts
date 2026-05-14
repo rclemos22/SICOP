@@ -3,6 +3,8 @@ import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SigefService, OrdemBancaria } from '../../../../core/services/sigef.service';
 import { DebugService } from '../../../../core/services/debug.service';
+import { FinancialService } from '../../../financial/services/financial.service';
+import { SupabaseService } from '../../../../core/services/supabase.service';
 
 interface UnidadeGestora {
   codigo: string;
@@ -270,6 +272,8 @@ interface UnidadeGestora {
 export class OrdemBancariaPageComponent {
   sigefService = inject(SigefService);
   debugService = inject(DebugService);
+  financialService = inject(FinancialService);
+  supabaseService = inject(SupabaseService);
 
   numeroOB = '';
   buscou = false;
@@ -305,6 +309,27 @@ export class OrdemBancariaPageComponent {
     try {
       const found = await this.sigefService.getOrdemBancariaByNumberWithMirror(cleanOB, ug);
       this.ordemBancaria.set(found);
+
+      // Após salvar a OB no cache+espelho, sincronizar transações
+      // dos contratos vinculados à NE desta OB
+      if (found?.nunotaempenho) {
+        this.debugService.sync(`OB ${cleanOB}: buscando contratos vinculados à NE ${found.nunotaempenho}`);
+        const { data: dotacoes } = await this.supabaseService.client
+          .from('dotacoes')
+          .select('contract_id')
+          .eq('nunotaempenho', found.nunotaempenho);
+
+        const contractIds = [...new Set((dotacoes || []).map(d => d.contract_id).filter(Boolean))] as string[];
+        this.debugService.sync(`OB ${cleanOB}: ${contractIds.length} contrato(s) vinculados`);
+
+        for (const cid of contractIds) {
+          await this.financialService.syncSigefTransactions(cid);
+        }
+
+        if (contractIds.length > 0) {
+          await this.financialService.loadAllTransactions(true);
+        }
+      }
     } catch (err: any) {
       this.debugService.error(`Erro ao buscar OB ${cleanOB}: ${err.message}`);
       this.ordemBancaria.set(null);

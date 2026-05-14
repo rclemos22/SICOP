@@ -31,6 +31,8 @@ export class AppComponent {
           console.log('[App] Espelho SIGEF vazio — iniciando download inicial (2025 + 2026)...');
           await this.bulkSyncService.downloadInitialData();
           console.log('[App] Download inicial concluído.');
+          // Popular transacoes a partir dos dados recém-baixados
+          await this.sigefSyncService.syncAllContractsFinance(false);
         } else {
           console.log('[App] Espelho SIGEF já possui dados. Download inicial pulado.');
         }
