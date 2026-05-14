@@ -375,7 +375,7 @@ export class SigefService implements OnDestroy {
 
       while (true) {
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 120000);
+        const id = setTimeout(() => controller.abort(), 30000);
 
         if (queryId) {
           const pending = this.pendingQueries.get(queryId);
@@ -405,7 +405,6 @@ export class SigefService implements OnDestroy {
             continue;
           }
 
-          await new Promise(resolve => setTimeout(resolve, 300));
           this.debug.api(`${response.status} ${url.substring(0, 100)}`);
           return response;
         } catch (err: any) {
@@ -415,17 +414,18 @@ export class SigefService implements OnDestroy {
             return new Response(null, { status: 499, statusText: 'Query cancelled' });
           }
 
+          const isSlow = /tls|socket|timeout|etimedout|aggregateerror/i.test(err?.message || err?.cause?.message || String(err) || '');
+
+          // Timeout/connection errors: fail fast (server unreachable, retry não adianta)
+          if (isSlow) {
+            this.debug.warn(`API timeout: ${this._extractErrorMessage(err)} — ${url.substring(0, 80)}`);
+            this._cleanupQuery(queryId);
+            throw err;
+          }
+
           if (this._isRetryableError(err) && currentRetries > 0) {
-            const isSlow = /tls|socket|timeout|etimedout/i.test(err?.message || err?.cause?.message || String(err));
-            // Para erros lentos (timeout, etc.), retry apenas 1x com backoff curto
-            // para não travar a fila global por minutos
-            const retryLimit = isSlow ? 1 : currentRetries;
-            if (currentRetries <= retries - retryLimit) {
-              this._cleanupQuery(queryId);
-              throw err;
-            }
             currentBackoff = this._calcBackoff(err, currentBackoff);
-            console.warn(`[SIGEF] Infra Error (${this._extractErrorMessage(err)}). Backoff ${Math.round(currentBackoff)}ms, retries: ${currentRetries}`);
+            this.debug.warn(`API retry ${currentRetries}x: ${this._extractErrorMessage(err)}`);
             await new Promise(resolve => setTimeout(resolve, currentBackoff));
             currentRetries--;
             continue;

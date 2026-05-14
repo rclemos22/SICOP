@@ -536,57 +536,70 @@ export class SigefSyncService {
     existingObs: Set<string>,
     queryId?: string
   ): Promise<void> {
-    try {
-      let page = 1;
-      let hasNext = true;
+    const MAX_PAGE_RETRIES = 3;
+    let page = 1;
+    let hasNext = true;
 
-      while (hasNext && page <= 10) {
-        // Verifica se foi cancelado
-        if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
-          console.log(`[SIGEF SYNC] _fetchObsForPeriod cancelado para NE ${targetNE}.`);
-          return;
-        }
-
-        const result = await this.sigefService.getOrdemBancaria(
-          datainicio, datafim, page, undefined, targetNE, ugStr, forceSync, queryId
-        );
-
-        const filtered = result.data.filter(ob => {
-          const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
-          const isTargetUg = !ugStr || (ob.cdunidadegestora?.toString() === ugStr);
-          return isTargetNe && isTargetUg;
-        });
-
-        const newObs = forceSync
-          ? filtered
-          : filtered.filter(ob => !existingObs.has((ob.nuordembancaria || '').trim().toUpperCase()));
-
-        if (newObs.length > 0) {
-          this.debug.sync(`OBs: ${newObs.length} nova(s) para NE ${targetNE} (página ${page})`);
-          await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
-          await this.cacheService.saveOrdensBancarias(
-            newObs.map(ob => this._mapApiObToCache(ob, ugNum))
-          );
-          newObs.forEach(ob => existingObs.add((ob.nuordembancaria || '').trim().toUpperCase()));
-        }
-
-        hasNext = !!result.next;
-        page++;
-
-        // Verifica se foi cancelado antes da próxima página
-        if (hasNext && queryId && !this.sigefService.hasPendingQuery(queryId)) {
-          console.log(`[SIGEF SYNC] _fetchObsForPeriod cancelado durante paginação para NE ${targetNE}.`);
-          return;
-        }
-
-        if (hasNext) await this._delay(500);
-      }
-    } catch (err: any) {
-      if (err.message === 'Query cancelled') {
-        console.log(`[SIGEF SYNC] _fetchObsForPeriod cancelado para NE ${targetNE}.`);
+    while (hasNext && page <= 10) {
+      if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
+        this.debug.warn(`fetchObs cancelado NE ${targetNE} pág ${page}`);
         return;
       }
-      console.warn(`[SIGEF SYNC] Erro ao buscar OBs (${datainicio} - ${datafim}) para NE ${targetNE}:`, err);
+
+      let pageRetries = 0;
+      let success = false;
+
+      while (!success && pageRetries <= MAX_PAGE_RETRIES) {
+        try {
+          const result = await this.sigefService.getOrdemBancaria(
+            datainicio, datafim, page, undefined, targetNE, ugStr, forceSync, queryId
+          );
+
+          const filtered = result.data.filter(ob => {
+            const isTargetNe = (ob.nunotaempenho || '').trim().toUpperCase() === targetNE;
+            const isTargetUg = !ugStr || (ob.cdunidadegestora?.toString() === ugStr);
+            return isTargetNe && isTargetUg;
+          });
+
+          const newObs = forceSync
+            ? filtered
+            : filtered.filter(ob => !existingObs.has((ob.nuordembancaria || '').trim().toUpperCase()));
+
+          if (newObs.length > 0) {
+            this.debug.sync(`OBs: ${newObs.length} nova(s) NE ${targetNE} pág ${page}`);
+            await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
+            await this.cacheService.saveOrdensBancarias(
+              newObs.map(ob => this._mapApiObToCache(ob, ugNum))
+            );
+            newObs.forEach(ob => existingObs.add((ob.nuordembancaria || '').trim().toUpperCase()));
+          }
+
+          hasNext = !!result.next;
+          success = true;
+        } catch (err: any) {
+          if (err.message === 'Query cancelled') {
+            this.debug.warn(`fetchObs cancelado NE ${targetNE}`);
+            return;
+          }
+          pageRetries++;
+          if (pageRetries <= MAX_PAGE_RETRIES) {
+            this.debug.warn(`OBs timeout pág ${page} NE ${targetNE} — retry ${pageRetries}/${MAX_PAGE_RETRIES}`);
+            await this._delay(2000 * pageRetries);
+          } else {
+            this.debug.error(`OBs falhou pág ${page} NE ${targetNE} após ${MAX_PAGE_RETRIES} tentativas — pulando`);
+            hasNext = false;
+          }
+        }
+      }
+
+      if (success) {
+        page++;
+        if (hasNext && queryId && !this.sigefService.hasPendingQuery(queryId)) {
+          this.debug.warn(`fetchObs cancelado NE ${targetNE}`);
+          return;
+        }
+        if (hasNext) await this._delay(500);
+      }
     }
   }
 
