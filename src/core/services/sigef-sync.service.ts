@@ -163,14 +163,24 @@ export class SigefSyncService {
       console.log(`[SIGEF SYNC] Espelho: NE ${neNumber} — ${movements.length} registro(s).`);
       await this._persistFromMirrorToCache(neNumber, ugStr);
 
-      // Se for ação manual (forceSync), busca OBs mais recentes da API
-      // (sempre consulta a API mesmo se OBs já existem no espelho,
-      //  para capturar novos pagamentos emitidos desde a última sincronia)
+      // Se for ação manual (forceSync), busca OBs da API para a NE principal
+      // E também para todas as NEs vinculadas (reforços), já que cada NE
+      // vinculada pode ter suas próprias OBs.
       if (forceSync) {
         const ugNum = parseInt(ugStr, 10);
         const obRaws = await this.mirrorService.getObsRawByNe(neNumber, ugStr);
-        console.log(`[SIGEF SYNC] NE ${neNumber} — ${obRaws.length} OB(s) no espelho. Buscando novas da API (recentOnly=${recentOnly})...`);
-        await this._syncObsForNe(ano, neNumber, ugStr, ugNum, forceSync, recentOnly, this.currentQueryId || undefined);
+        this.debug.sync(`NE ${neNumber}: ${obRaws.length} OB(s) no espelho. Buscando novas da API (recentOnly=${recentOnly})...`);
+
+        // NEs vinculadas: a NE original + todas as NEs dos movimentos (reforços)
+        const allNes = [...new Set([
+          neNumber,
+          ...movements.map((m: any) => m.nunotaempenho).filter(Boolean)
+        ])] as string[];
+
+        for (const targetNe of allNes) {
+          if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) break;
+          await this._syncObsForNe(ano, targetNe, ugStr, ugNum, forceSync, recentOnly, this.currentQueryId || undefined);
+        }
 
         if (contractId) {
           await this.financialService.syncSigefTransactions(contractId).catch(err =>
