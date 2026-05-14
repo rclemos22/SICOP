@@ -396,7 +396,32 @@ export class SigefSyncService {
     }
   }
 
-  // ─── Sincronização pontual via API (fallback) ─────────────────
+  /**
+   * Aplica a correção de relacionamentos NE/OB a todos os contratos cadastrados:
+   * 1. Limpa o cache estruturado (sigef_notas_empenho, sigef_ne_movimentos, sigef_ordens_bancarias)
+   * 2. Repopula o cache a partir do espelho (import_sigef_ne, import_sigef_ob)
+   * 3. Recria as transações financeiras (transacoes) para todos os contratos
+   * 
+   * As consultas NE-only garantem que OBs sejam encontradas independente da UG
+   * em que foram originalmente armazenadas.
+   */
+  async applyFixToAllContracts(): Promise<void> {
+    if (this.isSyncing()) {
+      console.warn('[SIGEF SYNC] Sincronização já em andamento. Ignorando applyFixToAllContracts.');
+      return;
+    }
+
+    console.log('[SIGEF FIX] Aplicando correção de relacionamentos NE/OB em todos os contratos...');
+    this.debug.sync('applyFixToAllContracts: limpando cache estruturado...');
+
+    await this.cacheService.clearAllCache();
+
+    this.debug.sync('applyFixToAllContracts: repopulando do espelho...');
+    await this.syncAllContractsFinance(true);
+
+    console.log('[SIGEF FIX] Correção aplicada com sucesso em todos os contratos.');
+    this.debug.sync('applyFixToAllContracts: concluído');
+  }
 
   private async _syncNeFromApi(
     ano: string, 

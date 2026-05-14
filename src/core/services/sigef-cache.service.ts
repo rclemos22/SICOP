@@ -320,8 +320,16 @@ export class SigefCacheService {
         return [];
       }
 
-      this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}): ${data.length} OB(s)`);
-      return data.map(this.mapToOrdemBancaria);
+      this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}): ${data.length} OB(s) brutas`);
+      const seen = new Set<string>();
+      const unique = data.filter(ob => {
+        const key = ob.nuordembancaria?.trim().toUpperCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}): ${unique.length} OB(s) únicas`);
+      return unique.map(this.mapToOrdemBancaria);
     } catch (err: any) {
       this.debug.error(`getOrdensBancariasPorNeGlobal(${neNumber}) exception: ${err.message}`);
       return [];
