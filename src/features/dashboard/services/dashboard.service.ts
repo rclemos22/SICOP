@@ -283,16 +283,22 @@ export class DashboardService {
 
   readonly totalCommittedValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.contractService.contracts()
-      .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
-      .reduce((acc, c) => acc + (Number(c.total_empenhado) || 0), 0);
+    return this.financialService.transactions()
+      .filter(t => {
+        const txYear = new Date(t.date).getFullYear();
+        return txYear === year && (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT);
+      })
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
   });
 
   readonly totalPaidValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.contractService.contracts()
-      .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
-      .reduce((acc, c) => acc + (Number(c.total_pago) || 0), 0);
+    return this.financialService.transactions()
+      .filter(t => {
+        const txYear = new Date(t.date).getFullYear();
+        return txYear === year && t.type === TransactionType.LIQUIDATION;
+      })
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
   });
 
   readonly totalBalanceToPay = computed(() => Math.max(0, this.totalCommittedValue() - this.totalPaidValue()));

@@ -2,8 +2,21 @@ import { inject, Injectable, signal } from '@angular/core';
 import { DebugService } from '../../../core/services/debug.service';
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
-import { SigefCacheService, SigefOrdemBancaria } from '../../../core/services/sigef-cache.service';
+import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria, SIGEF_PAID_STATUSES } from '../../../core/services/sigef-cache.service';
 import { Transaction, TransactionType } from '../../../shared/models/transaction.model';
+
+export interface NesPagamentoRow {
+  tipo: 'EMPENHO' | 'ANULACAO' | 'PAGAMENTO';
+  ne: string;
+  ug: string;
+  ugLabel: string;
+  dotacao: string;
+  pp?: string;
+  obNumber?: string;
+  obStatus?: string;
+  amount: number;
+  date: string;
+}
 import { getUnidadeLabel } from '../../../shared/models/budget.model';
 import { BudgetService } from '../../budget/services/budget.service';
 import { ContractService } from '../../contracts/services/contract.service';
@@ -230,6 +243,28 @@ export class FinancialService {
 
     const syncErrors: string[] = [];
 
+    // ── 1. Coleta TODOS os NEs de TODAS as dotações do contrato ──
+    const allContractNes = new Set<string>();
+    for (const b of contractBudgets) {
+      if (b.nunotaempenho) allContractNes.add(b.nunotaempenho.trim());
+    }
+    this.debug.sync(`${allContractNes.size} NE(s) no contrato: ${[...allContractNes].join(', ')}`);
+
+    // ── 2. Pré-carrega OBs de TODOS os NEs (enriquecimento; não é fonte de verdade) ──
+    const allObs: SigefOrdemBancaria[] = [];
+    for (const ne of allContractNes) {
+      const obs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
+      this.debug.sync(`NE ${ne}: ${obs.length} OB(s) no cache`);
+      allObs.push(...obs);
+    }
+
+    const fmtDate = (d: any): string => {
+      if (!d) return new Date().toISOString().split('T')[0];
+      if (typeof d === 'string') return d.substring(0, 10);
+      if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      return new Date().toISOString().split('T')[0];
+    };
+
     for (const budget of contractBudgets) {
       if (!budget.nunotaempenho) continue;
 
@@ -237,205 +272,164 @@ export class FinancialService {
       const ug = budget.unid_gestora || '080101';
       const ugNum = parseInt(ug, 10);
 
-      this.debug.sync(`[${neValue}] processando...`);
+      this.debug.sync(`[${neValue}] dotação ${budget.dotacao}...`);
 
       try {
         const movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
-        this.debug.sync(`[${neValue}] ${movimentosCache.length} movimentos`);
 
-        const allNes = [...new Set([
-          neValue,
-          ...movimentosCache.map((m: any) => m.nunotaempenho).filter(Boolean)
-        ])] as string[];
-
-        this.debug.sync(`[${neValue}] ${allNes.length} NE(s) vinculadas: ${allNes.join(', ')}`);
-
-        const allObs: SigefOrdemBancaria[] = [];
-        for (const ne of allNes) {
-          const obs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
-          this.debug.sync(`[${ne}] ${obs.length} OB(s) encontradas no cache`);
-          allObs.push(...obs);
-        }
-
-        const EVENTO_LABELS: Record<number, string> = {
-          400010: 'Empenho Inicial',
-          400011: 'Reforço de Empenho',
-          400012: 'Anulação de Empenho'
-        };
+        const { data: existingDbLiq } = await this.supabaseService.client
+          .from('transacoes')
+          .select('sigef_id, parcela_referencia, document_number')
+          .eq('contract_id', contractId)
+          .eq('commitment_id', neValue)
+          .in('type', ['LIQUIDATION']);
+        const docToParcelaMap = new Map((existingDbLiq || [])
+          .filter(t => t.parcela_referencia)
+          .map(t => [t.document_number, t.parcela_referencia])
+        );
 
         const transactionsToUpsert: any[] = [];
-        const oldSigefIdsToDelete = new Set<string>();
 
-        // 1. Processar e Aglomerar Movimentos de Empenho (COMMITMENTS)
-        movimentosCache.forEach((m, idx) => {
-          let type = TransactionType.COMMITMENT;
-          let description = EVENTO_LABELS[m.cdevento] || 'Movimento de Empenho';
-
-          if (m.cdevento === 400012) {
-            type = TransactionType.CANCELLATION;
-          } else if (m.cdevento === 400011) {
-            type = TransactionType.REINFORCEMENT;
-          }
-
+        // ═══════════════════════════════════════════
+        // A. COMMITMENT (Empenho) — dos movimentos do cache
+        // ═══════════════════════════════════════════
+        const empenhoMovs = movimentosCache.filter(m => m.cdevento === 400010 || m.cdevento === 400011);
+        const totalEmpenhadoMov = empenhoMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
+        if (totalEmpenhadoMov > 0) {
+          const primaryMov = empenhoMovs.find(m => m.cdevento === 400010) || empenhoMovs[0];
           transactionsToUpsert.push({
             contract_id: contractId,
-            sigef_id: `cache-mov-${m.nunotaempenho}-${m.cdevento}-${idx}`,
-            description: `${description} ${m.nunotaempenho !== neValue ? '(' + m.nunotaempenho + ')' : ''} - NE Ref ${neValue}`,
+            sigef_id: `cache-mov-com-${neValue}`,
+            description: `Empenho - NE Ref ${neValue}`,
             commitment_id: neValue,
-            date: m.dtlancamento || new Date().toISOString().split('T')[0],
-            type: type,
-            amount: Math.abs(Number(m.vlnotaempenho) || 0),
+            date: fmtDate(primaryMov?.dtlancamento || budget.data_disponibilidade),
+            type: TransactionType.COMMITMENT,
+            amount: totalEmpenhadoMov,
             department: budget.dotacao,
             budget_description: budget.dotacao,
             unidade_gestora_label: getUnidadeLabel(ug),
             document_number: neValue,
             ob_number: 'N/A'
           });
-        });
-
-        // 2. Agrupar OBs por PP
-        this.debug.sync(`[${neValue}] agrupando ${allObs.length} OB(s) por PP...`);
-        const groupedObs = new Map<string, typeof allObs>();
-        allObs.forEach(ob => {
-          const docKey = ob.nudocumento || ob.nuordembancaria || `unknown_${ob.id}`;
-          const key = `${neValue}-${docKey}`;
-          const list = groupedObs.get(key) || [];
-          list.push(ob);
-          groupedObs.set(key, list);
-        });
-        this.debug.sync(`[${neValue}] ${groupedObs.size} grupo(s) de PP`);
-
-        // Buscar transações de liquidação no banco para resgatar vínculos manuais de 'parcela_referencia' 
-        const { data: dbTrans } = await this.supabaseService.client
-          .from('transacoes')
-          .select('sigef_id, parcela_referencia, document_number')
-          .eq('contract_id', contractId)
-          .eq('commitment_id', neValue)
-          .in('type', ['LIQUIDATION']);
-
-        const existingMap = new Map((dbTrans || []).map(t => [t.sigef_id, t]));
-        const docToParcelaMap = new Map((dbTrans || [])
-          .filter(t => t.parcela_referencia)
-          .map(t => [t.document_number, t.parcela_referencia])
-        );
-
-        // Só coleciona registros antigos do banco se houver novos dados de OB para substituí-los.
-        // Caso contrário, manteria os registros existentes — evitando deletar OBs que estão
-        // no banco mas não no cache (ex: OB 2026OB001786 que pode ter sido carregada antes).
-        const hasObsCache = allObs.length > 0;
-        if (hasObsCache) {
-          for (const t of (dbTrans || [])) {
-            if (t.sigef_id?.startsWith('cache-')) {
-              oldSigefIdsToDelete.add(t.sigef_id);
-            }
-          }
         }
 
-        for (const [, groupObs] of groupedObs.entries()) {
-          groupObs.sort((a, b) => (a.nudocumento || '').localeCompare(b.nudocumento || ''));
-          
-          const totalAmount = groupObs.reduce((sum, o) => sum + Math.abs(Number(o.vltotal) || 0), 0);
-          const allDocs = [...new Set(groupObs.map(o => o.nudocumento).filter(Boolean))].join(', ');
-          const allObs = [...new Set(groupObs.map(o => o.nuordembancaria).filter(Boolean))].join(', ');
-          
-          // Data de pagamento: usa dtpagamento. Se vazio, tenta dtlancamento. Se ambos vazios, usa a data do movimento de empenho.
-          const validDates = groupObs.map(o => o.dtpagamento || o.dtlancamento).filter(Boolean).sort().reverse();
-          const maxDate = validDates[0] || '';
-          const paymentMonth = maxDate ? maxDate.substring(0, 7) : undefined;
-
-          // ID consolidado ESTÁVEL: baseado na NE + PP (nudocumento)
-          // Cada PP (parcela de pagamento) sempre terá o mesmo sigef_id em todas as sincronizações
-          const ppDoc = groupObs[0].nudocumento || groupObs[0].nuordembancaria || 'UNKNOWN';
-          const sigefId = `cache-aggr-${neValue}-${ppDoc}`;
-
-          // Migrar vinculação pregressa se ela existia nas partições individuais
-          let linkedParcela = null;
-          if (existingMap.has(sigefId) && existingMap.get(sigefId)?.parcela_referencia) {
-             linkedParcela = existingMap.get(sigefId)?.parcela_referencia;
-          } else {
-             for (const ob of groupObs) {
-               if (ob.nudocumento && docToParcelaMap.has(ob.nudocumento)) {
-                 linkedParcela = docToParcelaMap.get(ob.nudocumento);
-                 break;
-               }
-             }
-          }
-
-          // Montar descrição amigável: PP + OBs envolvidas
-          const descPP = ppDoc !== 'UNKNOWN' ? `PP ${ppDoc}` : '';
-          const description = (`PAGAMENTO${descPP ? ` (${descPP})` : ''} - OBs: ${allObs}`).toUpperCase();
-
+        // ═══════════════════════════════════════════
+        // B. CANCELLATION (Anulação) — dos movimentos do cache
+        // ═══════════════════════════════════════════
+        const cancelMovs = movimentosCache.filter(m => m.cdevento === 400012);
+        const totalCanceladoMov = cancelMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
+        if (totalCanceladoMov > 0) {
+          const cancelMov = cancelMovs[0];
           transactionsToUpsert.push({
             contract_id: contractId,
-            sigef_id: sigefId,
-            description,
+            sigef_id: `cache-mov-can-${neValue}`,
+            description: `Anulação de Empenho - NE Ref ${neValue}`,
             commitment_id: neValue,
-            date: maxDate,
-            type: TransactionType.LIQUIDATION,
-            amount: totalAmount,
+            date: fmtDate(cancelMov?.dtlancamento || budget.data_disponibilidade),
+            type: TransactionType.CANCELLATION,
+            amount: totalCanceladoMov,
             department: budget.dotacao,
             budget_description: budget.dotacao,
             unidade_gestora_label: getUnidadeLabel(ug),
-            document_number: allDocs,
-            ob_number: allObs,
-            payment_month: paymentMonth,
-            parcela_pago_em: groupObs[0].dtpagamento || null,
-            ...(linkedParcela ? { parcela_referencia: linkedParcela } : {})
-          });
-
-          // Enfileirar as antigas instâncias descentralizadas para limpeza
-          groupObs.forEach(ob => {
-            const obNumero = ob.nuordembancaria || 'S/N';
-            const docNumero = ob.nudocumento || obNumero;
-            const singleId = `cache-ob-${obNumero}-${docNumero}`;
-            oldSigefIdsToDelete.add(singleId);
+            document_number: neValue,
+            ob_number: 'N/A'
           });
         }
 
-        // Remover do delete set os IDs que acabamos de upsertar (para não deletá-los)
-        const liquidacoes = transactionsToUpsert.filter(t => t.type === 'LIQUIDATION').length;
-        const commitments = transactionsToUpsert.filter(t => t.type !== 'LIQUIDATION').length;
-        this.debug.sync(`[${neValue}] upsert: ${liquidacoes} pagamentos + ${commitments} movimentos`);
+        // ═══════════════════════════════════════════
+        // C. LIQUIDATION(s) (Pagamento) — das OBs do cache
+        // ═══════════════════════════════════════════
+        const budgetPaidObs = allObs.filter(ob => {
+          const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
+          const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
+          return obNe === neValue && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
+        });
 
-        for (const t of transactionsToUpsert) {
-          oldSigefIdsToDelete.delete(t.sigef_id);
+        if (budgetPaidObs.length > 0) {
+          const groupedObs = new Map<string, SigefOrdemBancaria[]>();
+          budgetPaidObs.forEach(ob => {
+            const docKey = ob.nudocumento || ob.nuordembancaria || `unknown_${ob.id}`;
+            const key = `${neValue}-${docKey}`;
+            const list = groupedObs.get(key) || [];
+            list.push(ob);
+            groupedObs.set(key, list);
+          });
+
+          for (const [, group] of groupedObs) {
+            const totalAmount = group.reduce((s, o) => s + Math.abs(Number(o.vltotal) || 0), 0);
+
+            const validDates = group.map(o => o.dtpagamento || o.dtlancamento).filter(Boolean).sort().reverse();
+            const maxDate = validDates[0] || '';
+
+            const allDocs = [...new Set(group.map(o => o.nudocumento).filter(Boolean))].join(', ');
+            const allObsStr = [...new Set(group.map(o => o.nuordembancaria).filter(Boolean))].join(', ');
+            const ppDoc = group[0].nudocumento || group[0].nuordembancaria || 'UNKNOWN';
+            const sigefId = `cache-aggr-${neValue}-${ppDoc}`;
+
+            let linkedParcela: string | null = null;
+            if (group[0].nudocumento && docToParcelaMap.has(group[0].nudocumento)) {
+              linkedParcela = docToParcelaMap.get(group[0].nudocumento)!;
+            }
+
+            transactionsToUpsert.push({
+              contract_id: contractId,
+              sigef_id: sigefId,
+              description: `PAGAMENTO (PP ${ppDoc}) - OBs: ${allObsStr}`.toUpperCase(),
+              commitment_id: neValue,
+              date: maxDate || fmtDate(budget.data_disponibilidade),
+              type: TransactionType.LIQUIDATION,
+              amount: totalAmount,
+              department: budget.dotacao,
+              budget_description: budget.dotacao,
+              unidade_gestora_label: getUnidadeLabel(ug),
+              document_number: allDocs,
+              ob_number: allObsStr,
+              payment_month: maxDate ? maxDate.substring(0, 7) : undefined,
+              parcela_pago_em: group[0].dtpagamento || null,
+              ...(linkedParcela ? { parcela_referencia: linkedParcela } : {})
+            });
+          }
         }
 
+        // ═══════════════════════════════════════════
+        // D. Limpeza de registros antigos + Upsert
+        // ═══════════════════════════════════════════
+
+        // Deleta transações legadas do cache para esta NE (serão substituídas)
         if (transactionsToUpsert.length > 0) {
+          await this.supabaseService.client
+            .from('transacoes')
+            .delete()
+            .eq('contract_id', contractId)
+            .eq('commitment_id', neValue)
+            .like('sigef_id', 'cache-%');
+
           const { error } = await this.supabaseService.client
             .from('transacoes')
             .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
           if (error) throw error;
-          this.debug.sync(`[${neValue}] upsert OK`);
-        }
+          this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-        if (oldSigefIdsToDelete.size > 0) {
-          const idsToDelete = Array.from(oldSigefIdsToDelete);
-          this.debug.sync(`[${neValue}] limpando ${idsToDelete.length} registro(s) legados`);
+          // Atualiza a dotação com totais calculados (alimenta vw_saldo_dotacoes e o SQL trigger)
+          const totalCom = transactionsToUpsert
+            .filter(t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT)
+            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
+          const totalCan = transactionsToUpsert
+            .filter(t => t.type === TransactionType.CANCELLATION)
+            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
+          const totalPag = transactionsToUpsert
+            .filter(t => t.type === TransactionType.LIQUIDATION)
+            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
+
           await this.supabaseService.client
-            .from('transacoes')
-            .delete()
-            .in('sigef_id', idsToDelete);
-        }
-        const dotacaoTotalEmpenhado = this.sigefCacheService.calcularValorEmpenhado(movimentosCache);
-        const dotacaoTotalCancelado = movimentosCache
-          .filter(m => m.cdevento === 400012)
-          .reduce((sum, m) => sum + Math.abs(Number(m.vlnotaempenho) || 0), 0);
-        const dotacaoTotalPago = this.sigefCacheService.calcularValorPago(allObs);
-        const dotacaoSaldoDisponivel = Math.max(0, Number(budget.valor_dotacao) - dotacaoTotalEmpenhado);
-
-        const { error: dotError } = await this.supabaseService.client
-          .from('dotacoes')
-          .update({
-            total_empenhado: dotacaoTotalEmpenhado,
-            total_cancelado: dotacaoTotalCancelado,
-            total_pago: dotacaoTotalPago,
-            saldo_disponivel: dotacaoSaldoDisponivel
-          })
-          .eq('id', budget.id);
-
-        if (dotError) {
-          console.warn(`[FinancialService] Erro ao atualizar dotação ${budget.id}:`, dotError);
+            .from('dotacoes')
+            .update({
+              total_empenhado: totalCom,
+              total_cancelado: totalCan,
+              total_pago: totalPag,
+              saldo_disponivel: Math.max(0, (budget.valor_dotacao || 0) - totalCom + totalCan)
+            })
+            .eq('id', budget.id);
         }
       } catch (err: any) {
         const msg = `NE ${neValue}: ${err.message || 'Erro desconhecido'}`;
@@ -447,50 +441,144 @@ export class FinancialService {
     if (syncErrors.length > 0) {
       console.warn(`[FinancialService] ${syncErrors.length} erro(s) na sincronização de ${contractBudgets.length} dotações para contrato ${contractId}`);
     }
-    
+
     await this.updateContractTotals(contractId);
   }
-  
+
+  async getContractNesPagamentosDetalhados(contractId: string): Promise<NesPagamentoRow[]> {
+    const budgetResult = await this.budgetService.getBudgetsByContractId(contractId);
+    const budgets = budgetResult.data || [];
+    const result: NesPagamentoRow[] = [];
+
+    const allNes = [...new Set(
+      budgets.map(b => b.nunotaempenho?.trim()).filter(Boolean) as string[]
+    )];
+
+    // Pré-carrega OBs e movimentos de todos os NEs
+    const allObs: SigefOrdemBancaria[] = [];
+    const neMovimentosMap = new Map<string, SigefNeMovimento[]>();
+    for (const ne of allNes) {
+      const obs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
+      allObs.push(...obs);
+    }
+    for (const budget of budgets) {
+      if (!budget.nunotaempenho) continue;
+      const ne = budget.nunotaempenho.trim();
+      if (!neMovimentosMap.has(ne)) {
+        const ugNum = parseInt(budget.unid_gestora || '080101', 10);
+        const movs = await this.sigefCacheService.getNeMovimentos(ugNum, ne);
+        neMovimentosMap.set(ne, movs);
+      }
+    }
+
+    const fmtDate = (d: any): string => {
+      if (!d) return '';
+      if (typeof d === 'string') return d.substring(0, 10);
+      if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      return String(d).substring(0, 10);
+    };
+
+    for (const budget of budgets) {
+      if (!budget.nunotaempenho) continue;
+      const ne = budget.nunotaempenho.trim();
+      const ug = budget.unid_gestora || '080101';
+      const ugLabel = getUnidadeLabel(ug);
+      const movimentos = neMovimentosMap.get(ne) || [];
+
+      // EMPENHO — dos movimentos (400010=inicial, 400011=reforço)
+      const empenhoMovs = movimentos.filter(m => m.cdevento === 400010 || m.cdevento === 400011);
+      const totalEmpenhado = empenhoMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
+      if (totalEmpenhado > 0) {
+        const primaryMov = empenhoMovs.find(m => m.cdevento === 400010) || empenhoMovs[0];
+        result.push({
+          tipo: 'EMPENHO', ne, ug, ugLabel,
+          dotacao: budget.dotacao,
+          amount: totalEmpenhado,
+          date: fmtDate(primaryMov?.dtlancamento || budget.data_disponibilidade),
+        });
+      }
+
+      // ANULAÇÃO — dos movimentos (400012)
+      const cancelMovs = movimentos.filter(m => m.cdevento === 400012);
+      const totalCancelado = cancelMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
+      if (totalCancelado > 0) {
+        const cancelMov = cancelMovs[0];
+        result.push({
+          tipo: 'ANULACAO', ne, ug, ugLabel,
+          dotacao: budget.dotacao,
+          amount: totalCancelado,
+          date: fmtDate(cancelMov?.dtlancamento || budget.data_disponibilidade),
+        });
+      }
+
+      // PAGAMENTOS — das OBs do cache
+      const paidObs = allObs.filter(ob => {
+        const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
+        const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
+        return obNe === ne && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
+      });
+
+      if (paidObs.length > 0) {
+        for (const ob of paidObs) {
+          result.push({
+            tipo: 'PAGAMENTO', ne, ug, ugLabel,
+            dotacao: budget.dotacao,
+            pp: ob.nudocumento,
+            obNumber: ob.nuordembancaria,
+            obStatus: ob.cdsituacaoordembancaria,
+            amount: Math.abs(Number(ob.vltotal) || 0),
+            date: ob.dtpagamento || ob.dtlancamento || fmtDate(budget.data_disponibilidade),
+          });
+        }
+      }
+    }
+
+    return result.sort((a, b) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      const tipoOrder: Record<string, number> = { 'EMPENHO': 0, 'PAGAMENTO': 1, 'ANULACAO': 2 };
+      return (tipoOrder[a.tipo] ?? 0) - (tipoOrder[b.tipo] ?? 0);
+    });
+  }
+
   private async updateContractTotals(contractId: string): Promise<void> {
     try {
+      // Lê da tabela transacoes (fonte de verdade para os lançamentos)
       const { data: trans } = await this.supabaseService.client
         .from('transacoes')
         .select('type, amount, date')
         .eq('contract_id', contractId);
-      
-      if (!trans || trans.length === 0) return;
-      
+
       let totalEmpenhado = 0;
       let totalPago = 0;
-      
-      for (const t of trans) {
+
+      for (const t of trans || []) {
         const amt = Math.abs(Number(t.amount) || 0);
         if (t.type === 'COMMITMENT' || t.type === 'REINFORCEMENT') {
           totalEmpenhado += amt;
         } else if (t.type === 'CANCELLATION') {
-          totalEmpenhado -= amt;
+          totalEmpenhado = Math.max(0, totalEmpenhado - amt);
         } else if (t.type === 'LIQUIDATION') {
           totalPago += amt;
         }
       }
-      
-      totalEmpenhado = Math.max(0, totalEmpenhado);
+
       const saldoAPagar = Math.max(0, totalEmpenhado - totalPago);
-      
-      const lastPayment = trans
+
+      const lastPay = (trans || [])
         .filter(t => t.type === 'LIQUIDATION')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      
+
       await this.supabaseService.client
         .from('contratos')
         .update({
           total_empenhado: totalEmpenhado,
           total_pago: totalPago,
           saldo_a_pagar: saldoAPagar,
-          data_ultimo_pagamento: lastPayment?.date || null
+          data_ultimo_pagamento: lastPay?.date || null
         })
         .eq('id', contractId);
-      
+
       this.contractService.loadContracts();
     } catch (err) {
       console.error('[FinancialService] Erro ao atualizar totais do contrato:', contractId, err);

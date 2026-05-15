@@ -151,25 +151,25 @@
           </div>
         }
 
-        <!-- Total Empenhado -->
+        <!-- Total Empenhado (da transacoes) -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Empenhado</span>
           <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-            {{ budgetSummary().totalEmpenhado | currency:'BRL':'symbol':'1.2-2' }}
+            {{ financialSummary().totalCommitted | currency:'BRL':'symbol':'1.2-2' }}
           </div>
           <!-- Progress Bar (Empenhado vs Global) -->
           <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-2">
             <div 
               class="h-1 bg-blue-500 rounded-full transition-all duration-500"
-              [style.width.%]="(budgetSummary().totalEmpenhado / c.valor_anual) * 100"
+              [style.width.%]="(financialSummary().totalCommitted / c.valor_anual) * 100"
             ></div>
           </div>
           <p class="text-[10px] text-gray-400 mt-2 text-right">
-            {{ (budgetSummary().totalEmpenhado / c.valor_anual) * 100 | number:'1.0-1' }}% Empenhado
+            {{ (financialSummary().totalCommitted / c.valor_anual) * 100 | number:'1.0-1' }}% Empenhado
           </p>
         </div>
 
-        <!-- Total Pago -->
+        <!-- Total Pago (da transacoes) -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Pago</span>
           <div class="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
@@ -179,15 +179,15 @@
            <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-2">
              <div 
                class="h-1 bg-green-500 rounded-full transition-all duration-500"
-               [style.width.%]="(financialSummary().totalPaid / budgetSummary().totalEmpenhado) * 100"
+               [style.width.%]="(financialSummary().totalPaid / financialSummary().totalCommitted) * 100"
              ></div>
            </div>
            <p class="text-[10px] text-gray-400 mt-2 text-right">
-             {{ (financialSummary().totalPaid / budgetSummary().totalEmpenhado) * 100 | number:'1.0-1' }}% do Empenho
+             {{ (financialSummary().totalPaid / financialSummary().totalCommitted) * 100 | number:'1.0-1' }}% do Empenho
            </p>
         </div>
 
-        <!-- Balance -->
+        <!-- Balance (Restante a pagar) -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Saldo Contratual</span>
           <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
@@ -877,7 +877,7 @@
                   </div>
                 </div>
 
-                <!-- KPIs Grid -->
+                <!-- KPIs Grid — dados dos lançamentos NE/OB (cache SIGEF) -->
                 <div class="flex flex-row gap-2 sm:gap-3 w-full">
                   <!-- Empenhado -->
                   <div class="flex-1 min-w-0 bg-white dark:bg-card-dark p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -885,7 +885,10 @@
                       <span class="material-symbols-outlined text-[12px]">account_balance_wallet</span> Empenhado
                     </span>
                     <div class="text-xs sm:text-base font-bold text-gray-900 dark:text-white truncate">
-                      {{ budgetSummary().totalEmpenhado | currency:'BRL':'symbol':'1.2-2' }}
+                      {{ paymentProgress().totalEmpenhado | currency:'BRL':'symbol':'1.2-2' }}
+                    </div>
+                    <div class="flex items-center gap-1 mt-1">
+                      <span class="text-[9px] text-gray-400 font-medium">{{ paymentProgress().neCount }} NE(s)</span>
                     </div>
                   </div>
                   <!-- Pago -->
@@ -894,73 +897,89 @@
                       <span class="material-symbols-outlined text-[12px]">check_circle</span> Pago
                     </span>
                     <div class="text-xs sm:text-base font-bold text-gray-900 dark:text-white truncate">
-                      {{ budgetSummary().totalPago | currency:'BRL':'symbol':'1.2-2' }}
+                      {{ paymentProgress().totalPago | currency:'BRL':'symbol':'1.2-2' }}
+                    </div>
+                    <div class="flex items-center gap-1 mt-1">
+                      <span class="text-[9px] text-gray-400 font-medium">{{ paymentProgress().obCount }} OB(s)</span>
+                      @if (paymentProgress().percentPaid > 0) {
+                        <span class="text-[9px] font-bold" [class]="paymentProgress().percentPaid >= 100 ? 'text-green-600' : 'text-amber-600'">
+                          {{ paymentProgress().percentPaid }}%
+                        </span>
+                      }
                     </div>
                   </div>
-                  <!-- Saldo -->
+                  <!-- Progresso / Saldo -->
                   <div class="flex-1 min-w-0 bg-white dark:bg-card-dark p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 mb-1 truncate">
-                      <span class="material-symbols-outlined text-[12px]">pending_actions</span> Saldo
+                      <span class="material-symbols-outlined text-[12px]">trending_up</span> Progresso
                     </span>
                     <div class="text-xs sm:text-base font-bold text-gray-900 dark:text-white truncate">
-                      {{ budgetSummary().saldoDisponivel | currency:'BRL':'symbol':'1.2-2' }}
+                      {{ paymentProgress().percentPaid }}%
+                    </div>
+                    <div class="mt-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                      <div class="h-1.5 rounded-full transition-all duration-500" [class]="paymentProgress().percentPaid >= 100 ? 'bg-green-500' : 'bg-sco-blue'" [style.width.%]="Math.min(paymentProgress().percentPaid, 100)"></div>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1">
+                      <span class="text-[9px] text-gray-400 font-medium">{{ Math.max(0, paymentProgress().totalEmpenhado - paymentProgress().totalPago) | currency:'BRL':'symbol':'1.2-2' }} saldo</span>
                     </div>
                   </div>
                 </div>
 
-                @if (transactions().length > 0) {
+                @if (nesPagamentos().length > 0) {
                   <div class="overflow-x-auto mt-6 -mx-4 sm:mx-0 border border-gray-100 dark:border-gray-800 rounded-lg">
-                    <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800 table-fixed">
+                    <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
                       <thead class="bg-gray-50 dark:bg-gray-800/50">
                         <tr>
-                          <th class="w-[14%] px-2 py-3 text-left text-[10px] font-bold text-gray-400 uppercase">Data</th>
-                          <th class="w-[32%] px-2 py-3 text-left text-[10px] font-bold text-gray-400 uppercase">Evento / Situação</th>
-                          <th class="w-[18%] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Empenho</th>
-                          <th class="w-[14%] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Parcela</th>
-                          <th class="w-[10%] px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Tipo</th>
-                          <th class="w-[12%] px-2 py-3 text-right text-[10px] font-bold text-gray-400 uppercase">Valor</th>
+                          <th class="px-2 py-3 text-left text-[10px] font-bold text-gray-400 uppercase">Data</th>
+                          <th class="px-2 py-3 text-left text-[10px] font-bold text-gray-400 uppercase">NE</th>
+                          <th class="px-2 py-3 text-left text-[10px] font-bold text-gray-400 uppercase">PP</th>
+                          <th class="px-2 py-3 text-left text-[10px] font-bold text-gray-400 uppercase">OB</th>
+                          <th class="px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">UG</th>
+                          <th class="px-2 py-3 text-center text-[10px] font-bold text-gray-400 uppercase">Tipo</th>
+                          <th class="px-2 py-3 text-right text-[10px] font-bold text-gray-400 uppercase">Valor</th>
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                        @for (t of transactions(); track t.id) {
+                        @for (row of nesPagamentos(); track $index) {
                           <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                            <td class="px-2 py-3 text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap font-mono truncate">
-                              {{ t.date | date:'dd/MM/yy' }}
+                            <td class="px-2 py-3 text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap font-mono">
+                              {{ row.date | date:'dd/MM/yy' }}
                             </td>
-                            <td class="px-2 py-3 min-w-0 overflow-hidden">
-                              <div class="flex flex-col gap-0.5 min-w-0">
-                                <div class="text-[11px] font-medium text-gray-900 dark:text-white truncate" [title]="t.description">
-                                  {{ t.description }}
-                                </div>
-                                @if (t.ob_number) {
-                                  <div class="flex items-center gap-1 text-[9px] text-sco-blue dark:text-blue-400 font-bold truncate">
-                                    <span class="material-symbols-outlined text-[12px] shrink-0">payments</span>
-                                    <span class="truncate">{{ t.ob_number }}</span>
-                                  </div>
-                                }
-                              </div>
-                            </td>
-                            <td class="px-2 py-3 text-center whitespace-nowrap min-w-0 overflow-hidden">
-                              <span class="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded truncate block" [title]="t.nunotaempenho || t.commitment_id">
-                                {{ t.nunotaempenho || t.commitment_id || '---' }}
+                            <td class="px-2 py-3 whitespace-nowrap">
+                              <span class="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded truncate inline-block max-w-[140px] overflow-hidden text-ellipsis">
+                                {{ row.ne }}
                               </span>
                             </td>
-                            <td class="px-2 py-3 text-center whitespace-nowrap">
-                              @if (t.parcela_referencia) {
-                                <span class="text-[10px] font-bold text-sco-blue bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded border border-blue-100">
-                                  {{ t.parcela_referencia }}
+                            <td class="px-2 py-3 whitespace-nowrap">
+                              @if (row.pp) {
+                                <span class="text-[11px] font-mono text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700 truncate inline-block max-w-[140px] overflow-hidden text-ellipsis">
+                                  {{ row.pp }}
                                 </span>
                               } @else {
                                 <span class="text-[10px] text-gray-300">---</span>
                               }
                             </td>
-                            <td class="px-2 py-3 text-center min-w-0 overflow-hidden">
-                              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap truncate" [class]="getTypeClass(t.type)">
-                                {{ getTypeLabel(t.type) }}
+                            <td class="px-2 py-3 whitespace-nowrap">
+                              @if (row.obNumber) {
+                                <span class="text-[11px] font-mono font-bold text-sco-blue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 truncate inline-block max-w-[140px] overflow-hidden text-ellipsis">
+                                  {{ row.obNumber }}
+                                </span>
+                              } @else {
+                                <span class="text-[10px] text-gray-300">---</span>
+                              }
+                            </td>
+                            <td class="px-2 py-3 text-center whitespace-nowrap">
+                              <span class="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border" [class]="getBadgeClass(row.ug)">
+                                {{ row.ugLabel }}
+                              </span>
+                            </td>
+                            <td class="px-2 py-3 text-center whitespace-nowrap">
+                              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap" [class]="getTipoBadge(row.tipo)">
+                                {{ row.tipo }}
                               </span>
                             </td>
                             <td class="px-2 py-3 text-right text-xs font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                              {{ t.amount | currency:'BRL':'symbol':'1.2-2' }}
+                              {{ row.amount | currency:'BRL':'symbol':'1.2-2' }}
                             </td>
                           </tr>
                         }

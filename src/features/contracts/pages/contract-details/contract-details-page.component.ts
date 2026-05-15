@@ -20,7 +20,7 @@ import {
 } from '../../../../shared/models/transaction.model';
 import { DotacaoFormComponent } from '../../../budget/components/dotacao-form/dotacao-form.component';
 import { BudgetService } from '../../../budget/services/budget.service';
-import { FinancialService } from '../../../financial/services/financial.service';
+import { FinancialService, NesPagamentoRow } from '../../../financial/services/financial.service';
 import { AditivoFormComponent } from '../../components/aditivo-form/aditivo-form.component';
 import { ContractService } from '../../services/contract.service';
 
@@ -337,6 +337,9 @@ export class ContractDetailsPageComponent {
   transactionsLoading = signal<boolean>(false);
   transactionsError = signal<string | null>(null);
 
+  nesPagamentos = signal<NesPagamentoRow[]>([]);
+  nesPagamentosLoading = signal<boolean>(false);
+
   lastSyncDate = signal<Date | null>(new Date());
   
   sigefLastSync = signal<Map<string, Date>>(new Map());
@@ -359,6 +362,22 @@ export class ContractDetailsPageComponent {
     console.log('[DEBUG] budgetSummary - year:', selectedYear, 'Budgets:', filteredBudgets.length, 'totalEmpenhado:', totalEmpenhado);
     
     return { totalEmpenhado, totalPago, saldoDisponivel };
+  });
+
+  paymentProgress = computed(() => {
+    const rows = this.nesPagamentos();
+    const empenhoRows = rows.filter(r => r.tipo === 'EMPENHO');
+    const pagamentoRows = rows.filter(r => r.tipo === 'PAGAMENTO' && r.obNumber);
+    const totalEmpenhado = empenhoRows.reduce((s, r) => s + r.amount, 0);
+    const totalPago = pagamentoRows.reduce((s, r) => s + r.amount, 0);
+    const neCount = new Set(empenhoRows.map(r => r.ne)).size;
+    return {
+      totalEmpenhado,
+      totalPago,
+      percentPaid: totalEmpenhado > 0 ? Math.round((totalPago / totalEmpenhado) * 100) : 0,
+      neCount,
+      obCount: pagamentoRows.length
+    };
   });
 
   financialSummary = computed(() => {
@@ -387,7 +406,18 @@ export class ContractDetailsPageComponent {
   getTypeClass = getTransactionTypeColorClass;
   getIcon = getTransactionIcon;
   getIconClass = getTransactionIconBgClass;
+  Math = Math;
   getBadgeClass = getUnidadeBadgeClass;
+
+  getTipoBadge(tipo: string): string {
+    switch (tipo) {
+      case 'EMPENHO': return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400';
+      case 'ANULACAO': return 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400';
+      case 'PAGAMENTO': return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400';
+      default: return 'bg-gray-50 text-gray-600 border-gray-200';
+    }
+  }
+
 
   /** Armazena o queryId atual para permitir cancelamento */
   private currentQueryId: string | null = null;
@@ -414,6 +444,7 @@ export class ContractDetailsPageComponent {
         this.loadAditivos(c.id);
         this.loadBudgets(c.id);
         this.loadTransactions(c.id);
+        this.loadNesPagamentos(c.id);
       }
     });
 
@@ -453,11 +484,11 @@ export class ContractDetailsPageComponent {
          this.budgets.set([]);
       } else {
          this.budgets.set(result.data!);
-         this.budgetsLoading.set(false);
       }
     } catch (err: any) {
       this.budgetsError.set(err.message || 'Erro ao carregar dotações');
       this.budgets.set([]);
+    } finally {
       this.budgetsLoading.set(false);
     }
   }
@@ -474,6 +505,19 @@ export class ContractDetailsPageComponent {
       this.dbTransactions.set([]);
     } finally {
       this.transactionsLoading.set(false);
+    }
+  }
+
+  private async loadNesPagamentos(contractId: string): Promise<void> {
+    this.nesPagamentosLoading.set(true);
+    try {
+      const data = await this.financialService.getContractNesPagamentosDetalhados(contractId);
+      this.nesPagamentos.set(data);
+    } catch (err: any) {
+      console.error('[ContractDetails] Erro ao carregar NE/OB/PP:', err);
+      this.nesPagamentos.set([]);
+    } finally {
+      this.nesPagamentosLoading.set(false);
     }
   }
 
@@ -651,6 +695,7 @@ export class ContractDetailsPageComponent {
       await this.contractService.loadContracts();
       await this.loadTransactions(contractId);
       await this.loadBudgets(contractId);
+      await this.loadNesPagamentos(contractId);
       this.lastSyncDate.set(new Date());
     } catch (err: any) {
       if (err.message === 'Query cancelled') return;
