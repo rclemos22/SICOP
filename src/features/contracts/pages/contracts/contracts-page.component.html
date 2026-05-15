@@ -196,12 +196,14 @@
             <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider truncate">{{ group.supplier }}</h3>
             <span class="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">{{ group.contracts.length }}</span>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div class="flex flex-row flex-wrap gap-3">
             @for (contract of group.contracts; track contract.id) {
-              <app-contract-card 
-                [contract]="contract"
-                (select)="handleSelect(contract.id)"
-              ></app-contract-card>
+              <div class="w-full sm:w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.5rem)] xl:w-[calc(25%-0.5625rem)] 2xl:w-[calc(20%-0.6rem)]">
+                <app-contract-card 
+                  [contract]="contract"
+                  (select)="handleSelect(contract.id)"
+                ></app-contract-card>
+              </div>
             }
           </div>
         </div>
