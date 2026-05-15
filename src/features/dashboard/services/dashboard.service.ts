@@ -250,7 +250,6 @@ export class DashboardService {
   readonly paymentComparisonByContract = computed<PaymentComparisonContract[]>(() => {
     const year = this.appContext.anoExercicio();
     const contracts = this.filteredContracts();
-    const transactions = this.financialService.transactions();
 
     return contracts
       .map(c => {
@@ -265,10 +264,7 @@ export class DashboardService {
             cur.setMonth(cur.getMonth() + 1);
           }
         }
-        const paid = transactions
-          .filter(t => t.contract_id === c.id && t.type === TransactionType.LIQUIDATION)
-          .filter(t => this.isFromCurrentBudget(t, year))
-          .reduce((s, t) => s + t.amount, 0);
+        const paid = Number(c.total_pago) || 0;
         return { contract: c.contrato, contratada: c.contratada, expected, paid, diff: expected - paid };
       })
       .filter(d => d.expected > 0 || d.paid > 0)
