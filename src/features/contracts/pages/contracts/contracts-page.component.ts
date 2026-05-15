@@ -170,22 +170,13 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
     return this.filteredContracts().length;
   });
 
-  /** Contratos agrupados por fornecedor, ordenados por número do contrato crescente */
-  groupedContracts = computed(() => {
-    const groups = new Map<string, Contract[]>();
-    for (const c of this.filteredContracts()) {
-      const key = c.contratada || 'Sem fornecedor';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(c);
-    }
-    return Array.from(groups.entries())
-      .map(([supplier, contracts]) => ({
-        supplier,
-        contracts: contracts.sort((a, b) =>
-          a.contrato.localeCompare(b.contrato, undefined, { numeric: true })
-        )
-      }))
-      .sort((a, b) => a.supplier.localeCompare(b.supplier));
+  /** Contratos ordenados: empresa (crescente) + número do contrato (crescente) */
+  sortedContracts = computed(() => {
+    return [...this.filteredContracts()].sort((a, b) => {
+      const cmp = (a.contratada || '').localeCompare(b.contratada || '');
+      if (cmp !== 0) return cmp;
+      return a.contrato.localeCompare(b.contrato, undefined, { numeric: true });
+    });
   });
 
   // Actions

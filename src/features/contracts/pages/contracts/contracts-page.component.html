@@ -189,41 +189,23 @@
   } @else if (filteredContracts().length > 0) {
     <!-- Main Content Area: Grid or List -->
     @if (layoutMode() === 'grid') {
-      @for (group of groupedContracts(); track group.supplier) {
-        <div class="mb-8">
-          <div class="flex items-center gap-2 mb-3 px-1">
-            <span class="material-symbols-outlined text-[18px] text-gray-400">business</span>
-            <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider truncate">{{ group.supplier }}</h3>
-            <span class="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">{{ group.contracts.length }}</span>
-          </div>
-          <div class="flex flex-row flex-wrap -mx-1.5">
-            @for (contract of group.contracts; track contract.id) {
-              <div class="w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/5 xl:w-1/6 px-1.5 mb-3">
-                <app-contract-card 
-                  [contract]="contract"
-                  (select)="handleSelect(contract.id)"
-                ></app-contract-card>
-              </div>
-            }
-          </div>
-        </div>
-      }
-    } @else {
-      <div class="pb-10 space-y-8">
-        @for (group of groupedContracts(); track group.supplier) {
-          <div>
-            <div class="flex items-center gap-2 mb-3 px-1">
-              <span class="material-symbols-outlined text-[18px] text-gray-400">business</span>
-              <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider truncate">{{ group.supplier }}</h3>
-              <span class="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">{{ group.contracts.length }}</span>
-            </div>
-            <app-contract-list-view 
-              [contracts]="group.contracts"
-              (select)="handleSelect($event)"
-              (edit)="openForm($event)"
-            ></app-contract-list-view>
+      <div class="flex flex-row flex-wrap -mx-1.5">
+        @for (contract of sortedContracts(); track contract.id) {
+          <div class="w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/5 xl:w-1/6 px-1.5 mb-3">
+            <app-contract-card 
+              [contract]="contract"
+              (select)="handleSelect(contract.id)"
+            ></app-contract-card>
           </div>
         }
+      </div>
+    } @else {
+      <div class="pb-10">
+        <app-contract-list-view 
+          [contracts]="sortedContracts()"
+          (select)="handleSelect($event)"
+          (edit)="openForm($event)"
+        ></app-contract-list-view>
       </div>
     }
   } @else {
