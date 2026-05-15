@@ -79,6 +79,10 @@ export class FinancialService {
       // 3. Ordenar por data decrescente
       transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
+      if (transactions.length === 0) {
+        await this._loadTransactionsFromCache(transactions);
+      }
+
       this._transactions.set(transactions);
 
       // Backfill único: preenche campos faltantes nas transações existentes
@@ -93,6 +97,58 @@ export class FinancialService {
       }
     } finally {
       if (!silent) this._loading.set(false);
+    }
+  }
+
+  /** Carrega dados do cache SIGEF como fallback quando transacoes está vazio */
+  private async _loadTransactionsFromCache(transactions: Transaction[]): Promise<void> {
+    try {
+      const year = new Date().getFullYear();
+      const [movData, obData] = await Promise.all([
+        this.supabaseService.client
+          .from('sigef_ne_movimentos')
+          .select('nunotaempenho, cdevento, vlnotaempenho, dtlancamento'),
+        this.supabaseService.client
+          .from('sigef_ordens_bancarias')
+          .select('nunotaempenho, nuordembancaria, nudocumento, vltotal, dtpagamento, dtlancamento, cdsituacaoordembancaria'),
+      ]);
+
+      (movData.data || []).forEach((m: any) => {
+        if (!m.vlnotaempenho) return;
+        let type = TransactionType.COMMITMENT;
+        if (m.cdevento === 400012) type = TransactionType.CANCELLATION;
+        else if (m.cdevento === 400011) type = TransactionType.REINFORCEMENT;
+        transactions.push({
+          id: `cache-mov-${m.nunotaempenho}-${m.cdevento}`,
+          contract_id: '', description: `Movimento NE ${m.nunotaempenho}`,
+          commitment_id: m.nunotaempenho || '',
+          date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
+          type, amount: Math.abs(Number(m.vlnotaempenho) || 0),
+          department: '', budget_description: '',
+          contract_number: 'N/A',
+        } as Transaction);
+      });
+
+      (obData.data || []).forEach((o: any) => {
+        if (!o.vltotal) return;
+        const obNum = o.nuordembancaria || 'S/N';
+        const docNum = o.nudocumento || obNum;
+        transactions.push({
+          id: `cache-ob-${obNum}-${docNum}`,
+          contract_id: '', description: `PAGAMENTO OB ${obNum}`,
+          commitment_id: o.nunotaempenho || '',
+          date: o.dtpagamento ? new Date(o.dtpagamento) : (o.dtlancamento ? new Date(o.dtlancamento) : new Date()),
+          type: TransactionType.LIQUIDATION,
+          amount: Math.abs(Number(o.vltotal) || 0),
+          department: '', budget_description: '',
+          contract_number: 'N/A',
+          ob_number: obNum, document_number: docNum,
+        } as Transaction);
+      });
+
+      transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+    } catch (err) {
+      console.error('[FinancialService] Erro ao carregar fallback do cache:', err);
     }
   }
 
