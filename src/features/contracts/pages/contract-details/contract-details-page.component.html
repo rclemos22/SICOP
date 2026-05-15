@@ -925,7 +925,7 @@
                   </div>
                 </div>
 
-                @if (nesPagamentos().length > 0) {
+                @if (filteredNesPagamentos().length > 0) {
                   <div class="overflow-x-auto mt-6 -mx-4 sm:mx-0 border border-gray-100 dark:border-gray-800 rounded-lg">
                     <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
                       <thead class="bg-gray-50 dark:bg-gray-800/50">
@@ -940,7 +940,7 @@
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                        @for (row of nesPagamentos(); track $index) {
+                        @for (row of filteredNesPagamentos(); track $index) {
                           <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <td class="px-2 py-3 text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap font-mono">
                               {{ row.date | date:'dd/MM/yy' }}

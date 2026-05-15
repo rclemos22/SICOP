@@ -340,6 +340,18 @@ export class ContractDetailsPageComponent {
   nesPagamentos = signal<NesPagamentoRow[]>([]);
   nesPagamentosLoading = signal<boolean>(false);
 
+  /** NE/OB filtrado pelo ano selecionado (apenas para contratos de serviço) */
+  filteredNesPagamentos = computed(() => {
+    const c = this.contract();
+    const rows = this.nesPagamentos();
+    if (!c || c.tipo !== 'serviço') return rows;
+    const selectedYear = this.appContext.anoExercicio();
+    return rows.filter(r => {
+      const year = parseInt(r.date.substring(0, 4), 10);
+      return year === selectedYear;
+    });
+  });
+
   lastSyncDate = signal<Date | null>(new Date());
   
   sigefLastSync = signal<Map<string, Date>>(new Map());
@@ -365,7 +377,7 @@ export class ContractDetailsPageComponent {
   });
 
   paymentProgress = computed(() => {
-    const rows = this.nesPagamentos();
+    const rows = this.filteredNesPagamentos();
     const empenhoRows = rows.filter(r => r.tipo === 'EMPENHO');
     const pagamentoRows = rows.filter(r => r.tipo === 'PAGAMENTO' && r.obNumber);
     const totalEmpenhado = empenhoRows.reduce((s, r) => s + r.amount, 0);
