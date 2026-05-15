@@ -283,22 +283,16 @@ export class DashboardService {
 
   readonly totalCommittedValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.financialService.transactions()
-      .filter(t => {
-        const txYear = new Date(t.date).getFullYear();
-        return txYear === year && (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT);
-      })
-      .reduce((acc, t) => acc + (t.amount || 0), 0);
+    return this.contractService.contracts()
+      .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
+      .reduce((acc, c) => acc + (Number(c.total_empenhado) || 0), 0);
   });
 
   readonly totalPaidValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.financialService.transactions()
-      .filter(t => {
-        const txYear = new Date(t.date).getFullYear();
-        return txYear === year && t.type === TransactionType.LIQUIDATION;
-      })
-      .reduce((acc, t) => acc + (t.amount || 0), 0);
+    return this.contractService.contracts()
+      .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
+      .reduce((acc, c) => acc + (Number(c.total_pago) || 0), 0);
   });
 
   readonly totalBalanceToPay = computed(() => Math.max(0, this.totalCommittedValue() - this.totalPaidValue()));
@@ -422,13 +416,19 @@ export class DashboardService {
   // ── Budget Metrics ────────────────────────────────────────────────────
 
   readonly budgetMetrics = computed<BudgetMetrics>(() => {
+    const year = this.appContext.anoExercicio();
     const totalBudget = this.budgetService.dotacoes().reduce((acc, b) => acc + b.valor_dotacao, 0);
-    const totalUsed = this.totalCommittedValue();
+    const annualUsed = this.financialService.transactions()
+      .filter(t => {
+        const txYear = new Date(t.date).getFullYear();
+        return txYear === year && (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT);
+      })
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
     return {
       totalBudget,
-      totalUsed,
-      available: Math.max(0, totalBudget - totalUsed),
-      percentageUsed: totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0,
+      totalUsed: annualUsed,
+      available: Math.max(0, totalBudget - annualUsed),
+      percentageUsed: totalBudget > 0 ? (annualUsed / totalBudget) * 100 : 0,
     };
   });
 
