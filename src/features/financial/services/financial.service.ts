@@ -248,10 +248,81 @@ export class FinancialService {
         throw error;
       }
 
-      return (data || []).map(this.mapRawToTransaction);
+      const mapped = (data || []).map(this.mapRawToTransaction);
+      if (mapped.length > 0) return mapped;
+
+      // Fallback: busca dados do cache SIGEF para este contrato
+      return await this._loadSigefForContract(contractId);
     } catch (err: any) {
       this.errorHandler.handle(err, 'FinancialService.getTransactionsByContractId');
       throw err;
+    }
+  }
+
+  /** Carrega transações do cache SIGEF para um contrato específico (fallback) */
+  private async _loadSigefForContract(contractId: string): Promise<Transaction[]> {
+    try {
+      const budgetResult = await this.budgetService.getBudgetsByContractId(contractId);
+      const budgets = budgetResult.data || [];
+      const allNes = [...new Set(
+        budgets.map(b => b.nunotaempenho?.trim()).filter(Boolean) as string[]
+      )];
+
+      const transactions: Transaction[] = [];
+      for (const ne of allNes) {
+        const [movimentos, obs] = await Promise.all([
+          this.supabaseService.client
+            .from('sigef_ne_movimentos')
+            .select('*')
+            .eq('nunotaempenho', ne)
+            .order('dtlancamento', { ascending: true }),
+          this.supabaseService.client
+            .from('sigef_ordens_bancarias')
+            .select('*')
+            .eq('nunotaempenho', ne)
+            .order('dtlancamento', { ascending: true }),
+        ]);
+
+        (movimentos.data || []).forEach((m: any, idx: number) => {
+          if (!m.vlnotaempenho) return;
+          let type = TransactionType.COMMITMENT;
+          if (m.cdevento === 400012) type = TransactionType.CANCELLATION;
+          else if (m.cdevento === 400011) type = TransactionType.REINFORCEMENT;
+          transactions.push({
+            id: `cache-mov-${m.nunotaempenho}-${m.cdevento}-${idx}`,
+            contract_id: contractId,
+            description: `Movimento NE ${m.nunotaempenho}`,
+            commitment_id: m.nunotaempenho || '',
+            date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
+            type, amount: Math.abs(Number(m.vlnotaempenho) || 0),
+            department: '', budget_description: '',
+            contract_number: 'N/A',
+          } as Transaction);
+        });
+
+        (obs.data || []).forEach((o: any) => {
+          if (!o.vltotal) return;
+          const obNum = o.nuordembancaria || 'S/N';
+          const docNum = o.nudocumento || obNum;
+          transactions.push({
+            id: `cache-ob-${obNum}-${docNum}`,
+            contract_id: contractId,
+            description: `PAGAMENTO OB ${obNum}`,
+            commitment_id: o.nunotaempenho || '',
+            date: o.dtpagamento ? new Date(o.dtpagamento) : (o.dtlancamento ? new Date(o.dtlancamento) : new Date()),
+            type: TransactionType.LIQUIDATION,
+            amount: Math.abs(Number(o.vltotal) || 0),
+            department: '', budget_description: '',
+            contract_number: 'N/A',
+            ob_number: obNum, document_number: docNum,
+          } as Transaction);
+        });
+      }
+
+      return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+    } catch (err) {
+      console.error('[FinancialService] Erro no fallback SIGEF para contrato:', contractId, err);
+      return [];
     }
   }
 
