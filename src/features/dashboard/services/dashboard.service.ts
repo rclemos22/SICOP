@@ -99,6 +99,9 @@ export class DashboardService {
   readonly lastSyncTimestamp = signal<Date | null>(null);
   readonly recentPaymentsList = signal<RecentPayment[]>([]);
 
+  /** Totais agregados do cache SIGEF (fallback quando contratos ainda não foram sincronizados) */
+  private _cacheTotals = signal<{ totalEmpenhado: number; totalPago: number }>({ totalEmpenhado: 0, totalPago: 0 });
+
   // ── Loading & Error ────────────────────────────────────────────────────
 
   private _isFirstLoad = true;
@@ -283,16 +286,20 @@ export class DashboardService {
 
   readonly totalCommittedValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.contractService.contracts()
+    const fromContracts = this.contractService.contracts()
       .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
       .reduce((acc, c) => acc + (Number(c.total_empenhado) || 0), 0);
+    if (fromContracts > 0) return fromContracts;
+    return this._cacheTotals().totalEmpenhado;
   });
 
   readonly totalPaidValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.contractService.contracts()
+    const fromContracts = this.contractService.contracts()
       .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
       .reduce((acc, c) => acc + (Number(c.total_pago) || 0), 0);
+    if (fromContracts > 0) return fromContracts;
+    return this._cacheTotals().totalPago;
   });
 
   readonly totalBalanceToPay = computed(() => Math.max(0, this.totalCommittedValue() - this.totalPaidValue()));
@@ -444,6 +451,7 @@ export class DashboardService {
       this.budgetService.loadDotacoes(),
       this.financialService.loadAllTransactions(),
       this.loadRecentPayments(year),
+      this.loadCacheTotals(),
     ]);
     this._isFirstLoad = false;
   }
@@ -456,7 +464,38 @@ export class DashboardService {
       this.budgetService.loadDotacoes(true),
       this.financialService.loadAllTransactions(true),
       this.loadRecentPayments(year),
+      this.loadCacheTotals(),
     ]);
+  }
+
+  /** Carrega totais agregados diretamente do cache SIGEF (fallback pré-sincronização) */
+  private async loadCacheTotals(): Promise<void> {
+    try {
+      const year = this.appContext.anoExercicio();
+      const [movResult, obResult] = await Promise.all([
+        this.supabaseService.client
+          .from('sigef_ne_movimentos')
+          .select('vlnotaempenho, cdevento')
+          .gte('dtlancamento', `${year}-01-01`)
+          .lte('dtlancamento', `${year}-12-31`),
+        this.supabaseService.client
+          .from('sigef_ordens_bancarias')
+          .select('vltotal, dtpagamento')
+          .gte('dtpagamento', `${year}-01-01`)
+          .lte('dtpagamento', `${year}-12-31`),
+      ]);
+
+      const totalEmpenhado = (movResult.data || [])
+        .filter(m => m.cdevento === 400010 || m.cdevento === 400011)
+        .reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
+
+      const totalPago = (obResult.data || [])
+        .reduce((s, o) => s + Math.abs(Number(o.vltotal) || 0), 0);
+
+      this._cacheTotals.set({ totalEmpenhado, totalPago });
+    } catch (err) {
+      console.error('[DashboardService] Erro ao carregar totais do cache:', err);
+    }
   }
 
   async loadRecentPayments(year: number): Promise<void> {
