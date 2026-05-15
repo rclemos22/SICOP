@@ -300,13 +300,7 @@ export class DashboardService {
   // ── Expenses by Type (Material vs Service) ─────────────────────────────
 
   readonly expensesByType = computed<ExpensesByType>(() => {
-    const year = this.appContext.anoExercicio();
     const contracts = this.filteredContracts();
-    const transactions = this.financialService.transactions();
-
-    const liquidationsThisYear = transactions.filter(
-      t => this.isFromCurrentBudget(t, year) && t.type === TransactionType.LIQUIDATION
-    );
 
     const result: ExpensesByType = {
       materialCount: 0, serviceCount: 0,
@@ -320,7 +314,8 @@ export class DashboardService {
       const isMaterial = tipo === 'material';
       const isServico = tipo === 'serviço' || tipo === 'servico';
       const isVigente = c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO;
-      const paid = liquidationsThisYear.filter(t => t.contract_id === c.id).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+      // total_pago do contrato (populado via syncSigefTransactions → dotacoes → trigger → contratos)
+      const paid = Number(c.total_pago) || 0;
 
       if (isMaterial) {
         result.materialCount++;
