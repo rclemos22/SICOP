@@ -61,6 +61,7 @@ export interface Contract {
   status_efetivo?: ContractStatus;
   tipo?: 'serviço' | 'material';
   total_empenhado?: number;
+  total_cancelado?: number;
   total_pago?: number;
   saldo_a_pagar?: number;
   data_ultimo_pagamento?: Date;

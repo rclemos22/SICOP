@@ -234,6 +234,7 @@ export class ContractService {
     // Agregar valores das dotações (TODAS as dotações, sem filtro de ano)
     // total_empenhado e total_pago são totais históricos ACUMULADOS, não filtrados por ano
     let totalEmpenhado = 0;
+    let totalCancelado = 0;
     let totalPago = 0;
     let dataUltimoPagamento: Date | undefined = undefined;
 
@@ -241,6 +242,7 @@ export class ContractService {
       raw.dotacoes.forEach((d: any) => {
         // SOMA SEM FILTRO DE ANO - estes são totais acumulados históricos
         totalEmpenhado += Number(d.total_empenhado) || 0;
+        totalCancelado += Number(d.total_cancelado) || 0;
         totalPago += Number(d.total_pago) || 0;
         
         const upDate = d.updated_at || d.data_ultimo_pagamento;
@@ -339,8 +341,9 @@ export class ContractService {
       dias_restantes: diasRestantes,
       status_efetivo: statusEfetivo,
       total_empenhado: totalEmpenhado,
+      total_cancelado: totalCancelado,
       total_pago: totalPago,
-      saldo_a_pagar: totalEmpenhado - totalPago,
+      saldo_a_pagar: totalEmpenhado - totalCancelado - totalPago,
       data_ultimo_pagamento: dataUltimoPagamento || (raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined),
       valor_mensal: raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined,
       valor_global_atualizado: valorGlobalAtualizado,

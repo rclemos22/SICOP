@@ -248,24 +248,15 @@ export class DashboardService {
   // ── Payment Comparison: Expected vs Paid by Contract ───────────────────
 
   readonly paymentComparisonByContract = computed<PaymentComparisonContract[]>(() => {
-    const year = this.appContext.anoExercicio();
     const contracts = this.filteredContracts();
 
     return contracts
       .map(c => {
-        let expected = 0;
-        if (c.valor_mensal && c.data_inicio) {
-          const start = new Date(c.data_inicio);
-          const end = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
-          const cur = new Date(start);
-          cur.setDate(1);
-          while (cur <= end && cur.getFullYear() <= year) {
-            if (cur.getFullYear() === year) expected += c.valor_mensal;
-            cur.setMonth(cur.getMonth() + 1);
-          }
-        }
+        const gross = Number(c.total_empenhado) || 0;
+        const cancelled = Number(c.total_cancelado) || 0;
+        const netCommitted = Math.max(0, gross - cancelled);
         const paid = Number(c.total_pago) || 0;
-        return { contract: c.contrato, contratada: c.contratada, expected, paid, diff: expected - paid };
+        return { contract: c.contrato, contratada: c.contratada, expected: netCommitted, paid, diff: Math.max(0, netCommitted - paid) };
       })
       .filter(d => d.expected > 0 || d.paid > 0)
       .sort((a, b) => b.expected - a.expected)
