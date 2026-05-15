@@ -413,17 +413,12 @@ export class DashboardService {
   readonly budgetMetrics = computed<BudgetMetrics>(() => {
     const year = this.appContext.anoExercicio();
     const totalBudget = this.budgetService.dotacoes().reduce((acc, b) => acc + b.valor_dotacao, 0);
-    const annualUsed = this.financialService.transactions()
-      .filter(t => {
-        const txYear = new Date(t.date).getFullYear();
-        return txYear === year && (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT);
-      })
-      .reduce((acc, t) => acc + (t.amount || 0), 0);
+    const totalUsed = this.totalCommittedValue();
     return {
       totalBudget,
-      totalUsed: annualUsed,
-      available: Math.max(0, totalBudget - annualUsed),
-      percentageUsed: totalBudget > 0 ? (annualUsed / totalBudget) * 100 : 0,
+      totalUsed,
+      available: Math.max(0, totalBudget - totalUsed),
+      percentageUsed: totalBudget > 0 ? Math.min(100, (totalUsed / totalBudget) * 100) : 0,
     };
   });
 
