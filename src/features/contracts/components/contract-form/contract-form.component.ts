@@ -6,6 +6,7 @@ import { CurrencyUtils } from '../../../../app/shared/utils/currency-utils';
 import { SupplierService } from '../../../suppliers/services/supplier.service';
 import { Supplier } from '../../../../shared/models/supplier.model';
 import { SupabaseService } from '../../../../core/services/supabase.service';
+import { ContractService } from '../../services/contract.service';
 
 interface UnidadeGestora {
   codigo: string;
@@ -23,17 +24,21 @@ export class ContractFormComponent implements OnInit {
   private supplierService = inject(SupplierService);
   private supabaseService = inject(SupabaseService);
   private router = inject(Router);
+  private contractService = inject(ContractService);
   
-  // Input para edição
+  // Input para edição (via modal)
   contract = input<any | null>(null);
+  
+  // Input para edição via rota (vinculado ao parâmetro :contractId)
+  contractId = input<string>('');
   
   // Outputs
   close = output<void>();
   cancel = output<void>();
   save = output<any>();
 
-  // Helper to check if editing
-  isEditing = computed(() => !!this.contract());
+  // Helper to check if editing (via modal input or route param)
+  isEditing = computed(() => !!this.contract() || !!this.contractId());
 
   // Unidade Gestora - mesma da Nota de Empenho
   unidadesGestoras: UnidadeGestora[] = [
@@ -94,8 +99,18 @@ export class ContractFormComponent implements OnInit {
     effect(() => {
       const c = this.contract();
       if (c) {
-        console.log('[ContractForm] Mode edit, contract:', c);
+        console.log('[ContractForm] Mode edit via input, contract:', c);
         this.populateFormWithContract(c);
+      } else {
+        const id = this.contractId();
+        if (id) {
+          console.log('[ContractForm] Mode edit via route, contractId:', id);
+          const found = this.contractService.getContractById(id);
+          if (found) {
+            console.log('[ContractForm] Loaded contract by route id:', found);
+            this.populateFormWithContract(found);
+          }
+        }
       }
     });
   }
@@ -302,26 +317,59 @@ export class ContractFormComponent implements OnInit {
     }
   }
 
-  onSubmit() {
+  async onSubmit() {
     if (this.contractForm.valid) {
       const formData = { ...this.contractForm.value };
       
-      // Converte valores formatados em números puros antes de emitir
-      formData.totalValue = CurrencyUtils.parseBRL(formData.totalValue) || 0;
-      formData.monthlyValue = formData.monthlyValue ? CurrencyUtils.parseBRL(formData.monthlyValue) : null;
-      
-      // Tratamento do Dia de Pagamento (garantir que seja número ou null)
-      if (formData.paymentDate && formData.paymentDate !== '') {
-        formData.data_pagamento = Number(formData.paymentDate);
+      const contractData = {
+        contrato: formData.number,
+        processo_sei: formData.processNumber,
+        link_sei: formData.linkSei || null,
+        fornecedor_id: formData.fornecedor_id,
+        contratada: formData.supplier,
+        cnpj_contratada: formData.cnpjContratada || null,
+        objeto: formData.object,
+        data_inicio: formData.startDate,
+        data_fim: formData.endDate,
+        data_pagamento: formData.paymentDate != null && formData.paymentDate !== ''
+          ? Number(formData.paymentDate) : null,
+        valor_anual: CurrencyUtils.parseBRL(formData.totalValue) || 0,
+        valor_mensal: formData.monthlyValue
+          ? CurrencyUtils.parseBRL(formData.monthlyValue) : null,
+        unid_gestora: formData.unid_gestora,
+        setor_id: formData.department,
+        status: formData.status || 'VIGENTE',
+        tipo: formData.tipo,
+        gestor_contrato: formData.gestor_contrato || null,
+        fiscal_admin: formData.fiscal_admin || null,
+        fiscal_tecnico: formData.fiscal_tecnico || null,
+      };
+
+      // Quando usado como rota standalone (sem parent para tratar o save output),
+      // salva diretamente via service
+      const routeId = this.contractId();
+      if (routeId) {
+        console.log('[ContractForm] Salvando via rota standalone, contractId:', routeId);
+        const editingContract = this.contractService.getContractById(routeId);
+        if (editingContract) {
+          const result = await this.contractService.updateContract(editingContract.id, contractData as any);
+          if (result.error) {
+            alert('Erro ao atualizar contrato: ' + result.error);
+            return;
+          }
+        } else {
+          const result = await this.contractService.addContract(contractData as any);
+          if (result.error) {
+            alert('Erro ao salvar contrato: ' + result.error);
+            return;
+          }
+        }
       } else {
-        formData.data_pagamento = null;
+        // Quando usado como modal, emite o evento para o parent tratar
+        console.log('[ContractForm] Emitindo dados para o parent:', contractData);
+        this.save.emit(contractData);
       }
       
-      // Limpeza de campos temporários ou disparidade de nomes
-      delete formData.paymentDate;
-
-      console.log('Emitindo dados do contrato para salvamento:', formData);
-      this.save.emit(formData);
       this.router.navigate(['/contracts']);
     } else {
       this.contractForm.markAllAsTouched();

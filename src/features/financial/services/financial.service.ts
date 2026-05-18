@@ -133,16 +133,18 @@ export class FinancialService {
         if (!o.vltotal) return;
         const obNum = o.nuordembancaria || 'S/N';
         const docNum = o.nudocumento || obNum;
+        const obDate = o.dtpagamento || o.dtlancamento || '';
         transactions.push({
           id: `cache-ob-${obNum}-${docNum}`,
           contract_id: '', description: `PAGAMENTO OB ${obNum}`,
           commitment_id: o.nunotaempenho || '',
-          date: o.dtpagamento ? new Date(o.dtpagamento) : (o.dtlancamento ? new Date(o.dtlancamento) : new Date()),
+          date: obDate ? new Date(obDate) : new Date(),
           type: TransactionType.LIQUIDATION,
           amount: Math.abs(Number(o.vltotal) || 0),
           department: '', budget_description: '',
           contract_number: 'N/A',
           ob_number: obNum, document_number: docNum,
+          payment_month: obDate ? obDate.substring(0, 7) : undefined,
         } as Transaction);
       });
 
@@ -304,17 +306,19 @@ export class FinancialService {
           if (!o.vltotal) return;
           const obNum = o.nuordembancaria || 'S/N';
           const docNum = o.nudocumento || obNum;
+          const obDate = o.dtpagamento || o.dtlancamento || '';
           transactions.push({
             id: `cache-ob-${obNum}-${docNum}`,
             contract_id: contractId,
             description: `PAGAMENTO OB ${obNum}`,
             commitment_id: o.nunotaempenho || '',
-            date: o.dtpagamento ? new Date(o.dtpagamento) : (o.dtlancamento ? new Date(o.dtlancamento) : new Date()),
+            date: obDate ? new Date(obDate) : new Date(),
             type: TransactionType.LIQUIDATION,
             amount: Math.abs(Number(o.vltotal) || 0),
             department: '', budget_description: '',
             contract_number: 'N/A',
             ob_number: obNum, document_number: docNum,
+            payment_month: obDate ? obDate.substring(0, 7) : undefined,
           } as Transaction);
         });
       }

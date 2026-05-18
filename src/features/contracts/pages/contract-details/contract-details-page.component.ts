@@ -233,9 +233,14 @@ export class ContractDetailsPageComponent {
       const isPast = installmentDate < today;
       const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 
-      const matches = transactions.filter(t =>
-        t.type === 'LIQUIDATION' && t.parcela_referencia === reference
-      );
+      const matches = transactions.filter(t => {
+        if (t.type !== 'LIQUIDATION') return false;
+        if (t.parcela_referencia === reference) return true;
+        if (t.payment_month === reference) return true;
+        const txDate = new Date(t.date);
+        const txRef = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+        return txRef === reference;
+      });
 
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
 

@@ -281,13 +281,25 @@ export class ContractService {
 
     const valorGlobalAtualizado = this.parseNumeric(raw.valor_anual) + totalAditivosValor;
 
+    // Calcular Valor Mensal Efetivo considerando aditivos com novo_valor_mensal
+    const aditivosComNovoMensal = aditivos
+      .filter(a => a.novo_valor_mensal != null && a.data_inicio_novo != null)
+      .sort((a, b) => (b.data_inicio_novo?.getTime() || 0) - (a.data_inicio_novo?.getTime() || 0));
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const aditivoMensalVigente = aditivosComNovoMensal.find(a =>
+      a.data_inicio_novo! <= hoje
+    );
+    const valorMensalEfetivo = aditivoMensalVigente
+      ? aditivoMensalVigente.novo_valor_mensal!
+      : (raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined);
+
     let dataFimEfetiva: Date;
     let diasRestantes: number;
     
     if (aditivosComVigencia.length > 0 && aditivosComVigencia[0].nova_vigencia) {
       dataFimEfetiva = aditivosComVigencia[0].nova_vigencia;
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
       const dataFimZero = new Date(dataFimEfetiva);
       dataFimZero.setHours(0, 0, 0, 0);
       
@@ -345,7 +357,7 @@ export class ContractService {
       total_pago: totalPago,
       saldo_a_pagar: totalEmpenhado - totalCancelado - totalPago,
       data_ultimo_pagamento: dataUltimoPagamento || (raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined),
-      valor_mensal: raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined,
+      valor_mensal: valorMensalEfetivo,
       valor_global_atualizado: valorGlobalAtualizado,
       total_aditivos_valor: totalAditivosValor,
       parcelas_pagas_manual: Array.isArray(raw.parcelas_pagas_manual) ? raw.parcelas_pagas_manual : 
