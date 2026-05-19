@@ -673,9 +673,20 @@ export class ContractDetailsPageComponent {
     this.closeDotacaoModal();
   }
 
+  goBack() {
+    const c = this.contract();
+    let view = 'vigentes';
+    if (c) {
+      const isRescinded = c.status === ContractStatus.RESCINDIDO;
+      const isExpired = (c.dias_restantes ?? 0) < 0;
+      if (isRescinded) view = 'rescindidos';
+      else if (isExpired) view = 'finalizados';
+    }
+    this.router.navigate(['/contracts'], { queryParams: { view } });
+  }
+
   openEditContract() {
     console.log('[ContractDetails] Editar contrato clicado');
-    // Emit the contract object so the form can be populated
     this.router.navigate(['/contracts', this.contractId(), 'edit']);
   }
   

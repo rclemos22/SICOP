@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal, computed, inject, OnInit, OnDestroy, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { AppContextService } from '../../../../core/services/app-context.service';
@@ -21,6 +21,7 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   public contractService = inject(ContractService);
   private appContext = inject(AppContextService);
   private router = inject(Router);
+  private activatedRoute = inject(ActivatedRoute);
 
   // Input from parent (for editing)
   initialContract = input<any | null>(null);
@@ -56,6 +57,14 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
         distinctUntilChanged()
       )
       .subscribe(query => this.searchQuery.set(query));
+
+    // Restore view mode from query param (when coming back from contract details)
+    this.activatedRoute.queryParams.subscribe(params => {
+      const view = params['view'];
+      if (view && ['vigentes', 'finalizados', 'rescindidos'].includes(view)) {
+        this.viewMode.set(view as 'vigentes' | 'finalizados' | 'rescindidos');
+      }
+    });
 
     // Check if there's an initial contract to edit (passed from parent)
     const initial = this.initialContract();
@@ -302,6 +311,8 @@ export class ContractsPageComponent implements OnInit, OnDestroy {
   }
 
   handleSelect(contractId: string) {
-    this.router.navigate(['/contracts', contractId]);
+    this.router.navigate(['/contracts', contractId], {
+      queryParams: { view: this.viewMode() }
+    });
   }
 }
