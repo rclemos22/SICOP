@@ -523,23 +523,24 @@ export class FinancialService {
         }
 
         // ═══════════════════════════════════════════
-        // D. Limpeza de registros antigos + Upsert
+        // D. Upsert + Limpeza de registros antigos
         // ═══════════════════════════════════════════
 
-        // Deleta transações legadas do cache para esta NE (serão substituídas)
+        // Upsert primeiro, depois limpa registros legados — evita perda de dados
+        // se o upsert falhar (ex: falta UNIQUE constraint em sigef_id)
         if (transactionsToUpsert.length > 0) {
+          const { error } = await this.supabaseService.client
+            .from('transacoes')
+            .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
+          if (error) throw error;
+          this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
+
           await this.supabaseService.client
             .from('transacoes')
             .delete()
             .eq('contract_id', contractId)
             .eq('commitment_id', neValue)
             .like('sigef_id', 'cache-%');
-
-          const { error } = await this.supabaseService.client
-            .from('transacoes')
-            .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
-          if (error) throw error;
-          this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
           // Atualiza a dotação com totais calculados (alimenta vw_saldo_dotacoes e o SQL trigger)
           const totalCom = transactionsToUpsert

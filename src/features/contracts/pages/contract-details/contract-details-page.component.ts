@@ -568,7 +568,8 @@ export class ContractDetailsPageComponent {
       'ADITIVO_VALOR': 'Aditivo de Valor',
       'ADITIVO_OBJETO': 'Aditivo de Objeto',
       'DISTRATO': 'Distrato',
-      'ALTERACAO': 'Alteração'
+      'ALTERACAO': 'Alteração',
+      'MUDANCA_RAZAO_SOCIAL': 'Mudança de Razão Social'
     };
     return labels[tipo] || tipo.replace('_', ' ');
   }
@@ -581,9 +582,19 @@ export class ContractDetailsPageComponent {
   }
 
   /**
+   * Verifica se o aditivo é de mudança de razão social.
+   */
+  isMudancaRazaoSocial(tipo: string): boolean {
+    return tipo === 'MUDANCA_RAZAO_SOCIAL';
+  }
+
+  /**
    * Retorna a classe CSS para o badge de tipo de aditivo.
    */
   getAditivoTipoBadge(tipo: string): string {
+    if (tipo === 'MUDANCA_RAZAO_SOCIAL') {
+      return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800';
+    }
     if (tipo.includes('PRAZO')) {
       return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800';
     }

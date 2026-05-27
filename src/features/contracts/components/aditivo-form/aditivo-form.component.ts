@@ -6,6 +6,8 @@ import { ContractService } from '../../services/contract.service';
 import { Aditivo } from '../../../../shared/models/contract.model';
 import { SupabaseService } from '../../../../core/services/supabase.service';
 import { TipoAditivoService } from '../../services/tipo-aditivo.service';
+import { SupplierService } from '../../../suppliers/services/supplier.service';
+import { Supplier } from '../../../../shared/models/supplier.model';
 
 
 @Component({
@@ -19,12 +21,18 @@ export class AditivoFormComponent implements OnInit {
   private contractService = inject(ContractService);
   private supabaseService = inject(SupabaseService);
   private tipoAditivoService = inject(TipoAditivoService);
+  private supplierService = inject(SupplierService);
 
   // Tipos de aditivo carregados do banco via Service
   tiposAditivo = this.tipoAditivoService.tipos;
   
   // Tipo do contrato pai para lógica condicional
   contractTipo = signal<'serviço' | 'material' | undefined>(undefined);
+
+  // Supplier search state
+  supplierSearch = signal('');
+  supplierResults = signal<Supplier[]>([]);
+  showSupplierDropdown = signal(false);
 
   // Inputs & Outputs
   contractId = input.required<string>();
@@ -45,7 +53,9 @@ export class AditivoFormComponent implements OnInit {
       nova_vigencia: [''],
       valor_aditivo: ['', [CurrencyUtils.currencyValidator(0)]],
       novo_valor_mensal: [{ value: '', disabled: true }, [CurrencyUtils.currencyValidator(0)]],
-      data_inicio_novo: ['']
+      data_inicio_novo: [''],
+      nova_razao_social: [''],
+      novo_cnpj: ['']
     });
   }
 
@@ -77,8 +87,13 @@ export class AditivoFormComponent implements OnInit {
         nova_vigencia: aditivoData.nova_vigencia ? new Date(aditivoData.nova_vigencia).toISOString().split('T')[0] : '',
         valor_aditivo: CurrencyUtils.formatBRL(aditivoData.valor_aditivo),
         novo_valor_mensal: CurrencyUtils.formatBRL(aditivoData.novo_valor_mensal),
-        data_inicio_novo: aditivoData.data_inicio_novo ? new Date(aditivoData.data_inicio_novo).toISOString().split('T')[0] : ''
+        data_inicio_novo: aditivoData.data_inicio_novo ? new Date(aditivoData.data_inicio_novo).toISOString().split('T')[0] : '',
+        nova_razao_social: aditivoData.nova_razao_social || '',
+        novo_cnpj: aditivoData.novo_cnpj || ''
       });
+      if (aditivoData.nova_razao_social) {
+        this.supplierSearch.set(aditivoData.nova_razao_social);
+      }
     } else {
       // Preencher o campo numero_contrato automaticamente
       const numeroContrato = this.numeroContrato();
@@ -127,8 +142,52 @@ export class AditivoFormComponent implements OnInit {
     return tipoNome.includes('PRAZO') || tipoNome.includes('PRORROGACAO');
   }
 
+  isMudancaRazaoSocial(): boolean {
+    const tipo_id = this.aditivoForm.get('tipo_id')?.value;
+    if (!tipo_id) return false;
+    const selectedTipo = this.tiposAditivo().find(t => t.id === tipo_id);
+    return selectedTipo?.nome === 'MUDANCA_RAZAO_SOCIAL';
+  }
+
   get isEditing(): boolean {
     return !!this.aditivo();
+  }
+
+  // ── Supplier Search ─────────────────────────────────────────────────────────
+  onSupplierInput(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    this.supplierSearch.set(value);
+    
+    if (value.length >= 2) {
+      const results = this.supplierService.suppliers().filter(s => 
+        s.razao_social.toLowerCase().includes(value.toLowerCase()) ||
+        s.nome_fantasia.toLowerCase().includes(value.toLowerCase()) ||
+        s.cnpj.includes(value)
+      );
+      this.supplierResults.set(results);
+      this.showSupplierDropdown.set(results.length > 0);
+    } else {
+      this.supplierResults.set([]);
+      this.showSupplierDropdown.set(false);
+    }
+  }
+
+  selectSupplier(supplier: Supplier) {
+    this.aditivoForm.patchValue({
+      nova_razao_social: supplier.nome_fantasia || supplier.razao_social,
+      novo_cnpj: supplier.cnpj || ''
+    });
+    this.supplierSearch.set(supplier.nome_fantasia || supplier.razao_social);
+    this.showSupplierDropdown.set(false);
+  }
+
+  clearSupplierSelection() {
+    this.aditivoForm.patchValue({
+      nova_razao_social: '',
+      novo_cnpj: ''
+    });
+    this.supplierSearch.set('');
+    this.showSupplierDropdown.set(false);
   }
 
   // loadTiposAditivo removido pois TipoAditivoService gerencia isso
@@ -149,7 +208,9 @@ export class AditivoFormComponent implements OnInit {
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
             valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null,
             novo_valor_mensal: CurrencyUtils.parseBRL(formData.novo_valor_mensal) || null,
-            data_inicio_novo: formData.data_inicio_novo ? new Date(formData.data_inicio_novo) : null
+            data_inicio_novo: formData.data_inicio_novo ? new Date(formData.data_inicio_novo) : null,
+            nova_razao_social: formData.nova_razao_social || null,
+            novo_cnpj: formData.novo_cnpj || null
           };
           
           console.log('Updating aditivo:', formData.id, updateData);
@@ -174,7 +235,9 @@ export class AditivoFormComponent implements OnInit {
             nova_vigencia: formData.nova_vigencia ? new Date(formData.nova_vigencia) : null,
             valor_aditivo: CurrencyUtils.parseBRL(formData.valor_aditivo) || null,
             novo_valor_mensal: CurrencyUtils.parseBRL(formData.novo_valor_mensal) || null,
-            data_inicio_novo: formData.data_inicio_novo ? new Date(formData.data_inicio_novo) : null
+            data_inicio_novo: formData.data_inicio_novo ? new Date(formData.data_inicio_novo) : null,
+            nova_razao_social: formData.nova_razao_social || null,
+            novo_cnpj: formData.novo_cnpj || null
           };
           
           console.log('Creating aditivo with contract_id:', this.contractId());

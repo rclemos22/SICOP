@@ -533,6 +533,13 @@
                             @if (isAditivoDePrazo(aditivo.tipo)) {
                               <span class="text-gray-500">Nova Vig.: <span class="font-medium text-gray-900 dark:text-white">{{ aditivo.nova_vigencia ? (aditivo.nova_vigencia | date:'dd/MM/yyyy') : '---' }}</span></span>
                             }
+                            @if (isMudancaRazaoSocial(aditivo.tipo) && aditivo.nova_razao_social) {
+                              <span class="text-gray-500">Nova Razão Social: <span class="font-medium text-gray-900 dark:text-white">{{ aditivo.nova_razao_social }}</span></span>
+                              @if (aditivo.novo_cnpj) {
+                                <span class="text-gray-500">Novo CNPJ: <span class="font-medium text-gray-900 dark:text-white">{{ aditivo.novo_cnpj }}</span></span>
+                              }
+                              <span class="text-gray-500">Início: <span class="font-medium text-gray-900 dark:text-white">{{ aditivo.data_inicio_novo ? (aditivo.data_inicio_novo | date:'dd/MM/yyyy') : '---' }}</span></span>
+                            }
                           </div>
                           <div class="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800">
                              <div class="flex justify-between items-center">
@@ -576,15 +583,16 @@
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead class="bg-gray-50 dark:bg-gray-800">
 <tr>
-                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº Aditivo</th>
-                           <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
-                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Assinatura</th>
-                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nova Vigência</th>
-                           <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor</th>
-                           <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Novo Mensal</th>
-                           <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Início Novo</th>
-                           <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
-                         </tr>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº Aditivo</th>
+                            <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Assinatura</th>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nova Vigência</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Valor</th>
+                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Novo Mensal</th>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Início Novo</th>
+                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nova Razão Social</th>
+                            <th class="px-5 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                          </tr>
                       </thead>
                       <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
                         @for (aditivo of sortedAditivos(); track aditivo.id) {
@@ -650,6 +658,20 @@
                             <!-- Data Início Novo -->
                             <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                               {{ aditivo.data_inicio_novo ? (aditivo.data_inicio_novo | date:'dd/MM/yyyy') : '---' }}
+                            </td>
+
+                            <!-- Nova Razão Social -->
+                            <td class="px-5 py-4 whitespace-nowrap">
+                              @if (isMudancaRazaoSocial(aditivo.tipo) && aditivo.nova_razao_social) {
+                                <div class="flex flex-col">
+                                  <span class="text-sm font-medium text-gray-900 dark:text-white">{{ aditivo.nova_razao_social }}</span>
+                                  @if (aditivo.novo_cnpj) {
+                                    <span class="text-[10px] text-gray-500">{{ aditivo.novo_cnpj }}</span>
+                                  }
+                                </div>
+                              } @else {
+                                <span class="text-sm text-gray-400">---</span>
+                              }
                             </td>
 
                             <!-- Ações -->

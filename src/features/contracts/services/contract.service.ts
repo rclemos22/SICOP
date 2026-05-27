@@ -327,13 +327,21 @@ export class ContractService {
       : (raw.status === 'VIGENTE' && diasRestantes <= 90) ? ContractStatus.FINALIZANDO
       : ContractStatus.VIGENTE;
 
+    // Aplicar mudança de razão social do aditivo mais recente (se data_inicio_novo <= hoje)
+    const aditivoRazaoSocial = aditivos
+      .filter(a => a.tipo === 'MUDANCA_RAZAO_SOCIAL' && a.nova_razao_social && a.data_inicio_novo)
+      .sort((a, b) => (b.data_inicio_novo?.getTime() || 0) - (a.data_inicio_novo?.getTime() || 0));
+    const mudancaVigente = aditivoRazaoSocial.find(a => a.data_inicio_novo! <= hoje);
+    const contratadaFinal = mudancaVigente?.nova_razao_social ?? raw.contratada ?? raw.fornecedores?.razao_social ?? raw.razao_social ?? '';
+    const cnpjFinal = mudancaVigente?.novo_cnpj ?? raw.cnpj_contratada ?? raw.cnpj ?? undefined;
+
     return {
       id: raw.id,
       contrato: raw.contrato ?? '',
       processo_sei: raw.processo_sei ?? undefined,
       link_sei: raw.link_sei ?? undefined,
-      contratada: raw.contratada ?? raw.fornecedores?.razao_social ?? raw.razao_social ?? '',
-      cnpj_contratada: raw.cnpj_contratada ?? raw.cnpj ?? undefined,
+      contratada: contratadaFinal,
+      cnpj_contratada: cnpjFinal,
       fornecedor_id: raw.fornecedor_id ?? undefined,
       fornecedor_nome: raw.fornecedores?.razao_social ?? raw.fornecedor_nome ?? undefined,
       data_inicio: this.parseDate(raw.data_inicio),
@@ -384,7 +392,9 @@ export class ContractService {
       nova_vigencia: raw.nova_vigencia ? this.parseDate(raw.nova_vigencia) : undefined,
       valor_aditivo: raw.valor_aditivo != null ? this.parseNumeric(raw.valor_aditivo) : undefined,
       novo_valor_mensal: raw.novo_valor_mensal != null ? this.parseNumeric(raw.novo_valor_mensal) : undefined,
-      data_inicio_novo: raw.data_inicio_novo ? this.parseDate(raw.data_inicio_novo) : undefined
+      data_inicio_novo: raw.data_inicio_novo ? this.parseDate(raw.data_inicio_novo) : undefined,
+      nova_razao_social: raw.nova_razao_social ?? undefined,
+      novo_cnpj: raw.novo_cnpj ?? undefined
     };
   }
 

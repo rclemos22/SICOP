@@ -15,7 +15,7 @@ export enum ContractStatus {
   ENCERRADO = 'ENCERRADO'
 }
 
-export type TipoAditivo = 'ALTERACAO' | 'PRORROGACAO' | 'ADITIVO_PRAZO' | 'ADITIVO_PRAZO_VALOR' | 'ADITIVO_VALOR' | 'ADITIVO_OBJETO' | 'DISTRATO';
+export type TipoAditivo = 'ALTERACAO' | 'PRORROGACAO' | 'ADITIVO_PRAZO' | 'ADITIVO_PRAZO_VALOR' | 'ADITIVO_VALOR' | 'ADITIVO_OBJETO' | 'DISTRATO' | 'MUDANCA_RAZAO_SOCIAL';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -31,6 +31,8 @@ export interface Aditivo {
   valor_aditivo?: number;
   novo_valor_mensal?: number;
   data_inicio_novo?: Date;
+  nova_razao_social?: string;
+  novo_cnpj?: string;
 }
 
 

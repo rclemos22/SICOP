@@ -10,6 +10,8 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
   - Busca em todos os contratos (3+ caracteres)
   - Formulário com autocomplete de fornecedores
   - Campos: Unidade Gestora, Setor, Gestor do Contrato, Fiscais, Processo SEI, Link SEI
+  - Tipos de aditivo: Prazo, Valor, Prazo+Valor, Objeto, Distrato, Mudança de Razão Social
+  - Aditivo "Mudança de Razão Social" altera nome/CNPJ da contratada com data de início programada
 - **Controle Financeiro**: 
   - Visualização de Notas de Empenho via API SIGEF
   - Lançamentos de Empenho, Reforço, Anulação e Liquidação
@@ -113,6 +115,26 @@ src/
 - **Supabase**: https://xhowiwekqliqfckndupo.supabase.co
 - **Tabelas**: contratos, aditivos, dotacoes, fornecedores, transacoes
 - **Views**: vw_saldo_dotacoes, vw_contratos_vigencia
+- **Migrations**: `supabase/migrations/` (aplicar no SQL Editor do Supabase)
+
+### Tabela `aditivos`
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| id | UUID | PK |
+| contrato_id | UUID | FK → contratos |
+| tipo_id | UUID | FK → tipo_aditivo |
+| numero | INTEGER | Número sequencial do aditivo |
+| data_inicio_nova | DATE | Nova data de início (aditivos de prazo) |
+| data_fim_novo | DATE | Nova data de fim (aditivos de prazo) |
+| valor_adicional | DECIMAL | Valor adicional (aditivos de valor) |
+| novo_objeto | TEXT | Novo objeto (aditivos de objeto) |
+| nova_razao_social | VARCHAR(255) | Nova razão social (aditivos MUDANCA_RAZAO_SOCIAL) |
+| novo_cnpj | VARCHAR(20) | Novo CNPJ (aditivos MUDANCA_RAZAO_SOCIAL) |
+| data_inicio_novo | DATE | Data de início da mudança |
+| observacao | TEXT | Observações |
+| created_at | TIMESTAMP | Data de criação |
+| updated_at | TIMESTAMP | Data de atualização |
 
 ## License
 
