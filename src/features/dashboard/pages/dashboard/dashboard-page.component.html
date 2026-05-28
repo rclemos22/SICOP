@@ -26,13 +26,15 @@
       <button (click)="retry()" class="px-6 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors font-bold shadow-lg shadow-red-500/20">Tentar Novamente</button>
     </div>
   } @else {
-    <!-- Alertas -->
-    @if (overdueInstallments().length > 0) {
-      <app-overdue-alerts-card [alerts]="overdueInstallments()" (viewContract)="handleViewContract($event)" />
-    }
-    @if (lowBudgetAlerts().length > 0) {
-      <app-low-budget-card [alerts]="lowBudgetAlerts()" (viewContract)="handleViewContract($event)" />
-    }
+    <!-- Alertas lado a lado -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      @if (overdueInstallments().length > 0) {
+        <app-overdue-alerts-card [alerts]="overdueInstallments()" (viewContract)="handleViewContract($event)" />
+      }
+      @if (lowBudgetAlerts().length > 0) {
+        <app-low-budget-card [alerts]="lowBudgetAlerts()" (viewContract)="handleViewContract($event)" />
+      }
+    </div>
 
     <!-- Main Metrics Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

@@ -52,35 +52,87 @@ export class FinancialService {
     }
 
     try {
-      // 1. Buscar apenas transações vinculadas a contratos cadastrados E que possuem Nota de Empenho (NE)
-      const { data, error } = await this.supabaseService.client
-        .from('transacoes')
-        .select('*, contratos!contract_id!inner(id, contrato)')
-        .not('commitment_id', 'is', null)
-        .neq('commitment_id', '')
-        .order('date', { ascending: false });
+      // 0. Carregar dotações em paralelo para enriquecer transações
+      const [transacoesResult, dotacoesResult] = await Promise.all([
+        this.supabaseService.client
+          .from('transacoes')
+          .select('*, contratos!contract_id!inner(id, contrato)')
+          .not('commitment_id', 'is', null)
+          .neq('commitment_id', '')
+          .order('date', { ascending: false }),
+        this.supabaseService.client
+          .from('vw_saldo_dotacoes')
+          .select('contract_id, nunotaempenho, dotacao, numero_contrato')
+      ]);
+
+      const { data, error } = transacoesResult;
 
       if (error) {
         throw error;
       }
 
-      // 2. Mapear e filtrar dados inválidos
+      // 0.1 Construir mapa de enriquecimento: (contract_id|NE) -> { dotacao, contrato }
+      const dotacaoMap = new Map<string, { dotacao: string; contrato: string }>();
+      // Indexar também só por NE para fallback (quando contract_id é vazio)
+      const neLookup = new Map<string, { dotacao: string; contrato: string; contract_id: string }>();
+      for (const d of dotacoesResult.data || []) {
+        if (d.contract_id && d.nunotaempenho) {
+          const key = `${d.contract_id}|${d.nunotaempenho}`;
+          if (!dotacaoMap.has(key)) {
+            dotacaoMap.set(key, { dotacao: d.dotacao, contrato: d.numero_contrato || '' });
+          }
+        }
+        if (d.nunotaempenho && !neLookup.has(d.nunotaempenho)) {
+          neLookup.set(d.nunotaempenho, {
+            dotacao: d.dotacao,
+            contrato: d.numero_contrato || '',
+            contract_id: d.contract_id || ''
+          });
+        }
+      }
+
+      // 1. Mapear e filtrar dados inválidos
       const transactions = (data || [])
         .filter(raw => {
-          // Remover transações sem contrato válido ou com dados essenciais faltando
           if (!raw.contract_id) return false;
           if (!raw.contratos?.contrato) return false;
           if (!raw.date || isNaN(new Date(raw.date).getTime())) return false;
           if (isNaN(Number(raw.amount)) || Number(raw.amount) <= 0) return false;
           return true;
         })
-        .map(this.mapRawToTransaction);
+        .map(raw => {
+          const t = this.mapRawToTransaction(raw);
+          // Enriquecer com dotação se estiver faltando
+          if (!t.budget_description && !t.department) {
+            const key = `${raw.contract_id}|${raw.commitment_id}`;
+            const info = dotacaoMap.get(key);
+            if (info) {
+              t.budget_description = info.dotacao;
+              t.department = info.dotacao;
+            }
+          }
+          return t;
+        });
 
-      // 3. Ordenar por data decrescente
+      // 2. Ordenar por data decrescente
       transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
+
+      // 3. Se vazio, carregar do cache SIGEF e enriquecer
       if (transactions.length === 0) {
-        await this._loadTransactionsFromCache(transactions);
+        await this._loadTransactionsFromCache(transactions, neLookup);
+      } else {
+        // Enriquecer transações do cache que podem ter vindo sem contrato/dotação
+        for (const t of transactions) {
+          if ((!t.contract_number || t.contract_number === 'N/A' || !t.budget_description) && t.commitment_id) {
+            const neInfo = neLookup.get(t.commitment_id);
+            if (neInfo) {
+              if (!t.contract_number || t.contract_number === 'N/A') t.contract_number = neInfo.contrato;
+              if (!t.budget_description) t.budget_description = neInfo.dotacao;
+              if (!t.department || t.department === 'Não informado') t.department = neInfo.dotacao;
+              if (!t.contract_id) t.contract_id = neInfo.contract_id;
+            }
+          }
+        }
       }
 
       this._transactions.set(transactions);
@@ -101,7 +153,10 @@ export class FinancialService {
   }
 
   /** Carrega dados do cache SIGEF como fallback quando transacoes está vazio */
-  private async _loadTransactionsFromCache(transactions: Transaction[]): Promise<void> {
+  private async _loadTransactionsFromCache(
+    transactions: Transaction[],
+    neLookup?: Map<string, { dotacao: string; contrato: string; contract_id: string }>
+  ): Promise<void> {
     try {
       const year = new Date().getFullYear();
       const [movData, obData] = await Promise.all([
@@ -113,19 +168,41 @@ export class FinancialService {
           .select('nunotaempenho, nuordembancaria, nudocumento, vltotal, dtpagamento, dtlancamento, cdsituacaoordembancaria'),
       ]);
 
+      const enrichByNe = (ne: string): { contract_id: string; contract_number: string; department: string; budget_description: string } => {
+        const info = neLookup?.get(ne);
+        if (info) {
+          return {
+            contract_id: info.contract_id,
+            contract_number: info.contrato,
+            department: info.dotacao,
+            budget_description: info.dotacao,
+          };
+        }
+        return {
+          contract_id: '',
+          contract_number: 'N/A',
+          department: '',
+          budget_description: '',
+        };
+      };
+
       (movData.data || []).forEach((m: any) => {
         if (!m.vlnotaempenho) return;
         let type = TransactionType.COMMITMENT;
         if (m.cdevento === 400012) type = TransactionType.CANCELLATION;
         else if (m.cdevento === 400011) type = TransactionType.REINFORCEMENT;
+        const ne = m.nunotaempenho || '';
+        const enriched = enrichByNe(ne);
         transactions.push({
-          id: `cache-mov-${m.nunotaempenho}-${m.cdevento}`,
-          contract_id: '', description: `Movimento NE ${m.nunotaempenho}`,
-          commitment_id: m.nunotaempenho || '',
+          id: `cache-mov-${ne}-${m.cdevento}`,
+          contract_id: enriched.contract_id,
+          description: `Movimento NE ${ne}`,
+          commitment_id: ne,
           date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
           type, amount: Math.abs(Number(m.vlnotaempenho) || 0),
-          department: '', budget_description: '',
-          contract_number: 'N/A',
+          department: enriched.department,
+          budget_description: enriched.budget_description,
+          contract_number: enriched.contract_number,
         } as Transaction);
       });
 
@@ -134,15 +211,19 @@ export class FinancialService {
         const obNum = o.nuordembancaria || 'S/N';
         const docNum = o.nudocumento || obNum;
         const obDate = o.dtpagamento || o.dtlancamento || '';
+        const ne = o.nunotaempenho || '';
+        const enriched = enrichByNe(ne);
         transactions.push({
           id: `cache-ob-${obNum}-${docNum}`,
-          contract_id: '', description: `PAGAMENTO OB ${obNum}`,
-          commitment_id: o.nunotaempenho || '',
+          contract_id: enriched.contract_id,
+          description: `PAGAMENTO OB ${obNum}`,
+          commitment_id: ne,
           date: obDate ? new Date(obDate) : new Date(),
           type: TransactionType.LIQUIDATION,
           amount: Math.abs(Number(o.vltotal) || 0),
-          department: '', budget_description: '',
-          contract_number: 'N/A',
+          department: enriched.department,
+          budget_description: enriched.budget_description,
+          contract_number: enriched.contract_number,
           ob_number: obNum, document_number: docNum,
           payment_month: obDate ? obDate.substring(0, 7) : undefined,
         } as Transaction);
@@ -270,6 +351,17 @@ export class FinancialService {
         budgets.map(b => b.nunotaempenho?.trim()).filter(Boolean) as string[]
       )];
 
+      // Construir lookup de dotação por NE
+      const neBudgetMap = new Map<string, { dotacao: string; numero_contrato: string }>();
+      for (const b of budgets) {
+        if (b.nunotaempenho && !neBudgetMap.has(b.nunotaempenho)) {
+          neBudgetMap.set(b.nunotaempenho, {
+            dotacao: b.dotacao || '',
+            numero_contrato: b.numero_contrato || '',
+          });
+        }
+      }
+
       const transactions: Transaction[] = [];
       for (const ne of allNes) {
         const [movimentos, obs] = await Promise.all([
@@ -285,6 +377,8 @@ export class FinancialService {
             .order('dtlancamento', { ascending: true }),
         ]);
 
+        const budgetInfo = neBudgetMap.get(ne);
+
         (movimentos.data || []).forEach((m: any, idx: number) => {
           if (!m.vlnotaempenho) return;
           let type = TransactionType.COMMITMENT;
@@ -297,8 +391,9 @@ export class FinancialService {
             commitment_id: m.nunotaempenho || '',
             date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
             type, amount: Math.abs(Number(m.vlnotaempenho) || 0),
-            department: '', budget_description: '',
-            contract_number: 'N/A',
+            department: budgetInfo?.dotacao || '',
+            budget_description: budgetInfo?.dotacao || '',
+            contract_number: budgetInfo?.numero_contrato || 'N/A',
           } as Transaction);
         });
 
@@ -315,8 +410,9 @@ export class FinancialService {
             date: obDate ? new Date(obDate) : new Date(),
             type: TransactionType.LIQUIDATION,
             amount: Math.abs(Number(o.vltotal) || 0),
-            department: '', budget_description: '',
-            contract_number: 'N/A',
+            department: budgetInfo?.dotacao || '',
+            budget_description: budgetInfo?.dotacao || '',
+            contract_number: budgetInfo?.numero_contrato || 'N/A',
             ob_number: obNum, document_number: docNum,
             payment_month: obDate ? obDate.substring(0, 7) : undefined,
           } as Transaction);

@@ -4,7 +4,7 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 
 ## Funcionalidades
 
-- **Dashboard**: Métricas gerais, alertas de contratos próximos ao vencimento (≤90 dias), gráficos de distribuição
+- **Dashboard**: Métricas gerais, alertas de pagamentos em atraso, saldo de empenho baixo, contratos próximos ao vencimento (≤90 dias), gráficos de distribuição. Cards de alerta com layout lado a lado, expansão para ver todos os itens.
 - **Gestão de Contratos**: Cadastro, edição, aditivos e acompanhamento
   - Abas: Vigentes, Finalizados, Rescindidos
   - Busca em todos os contratos (3+ caracteres)
@@ -14,7 +14,7 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
   - Aditivo "Mudança de Razão Social" altera nome/CNPJ da contratada com data de início programada
 - **Controle Financeiro**: 
   - Visualização de Notas de Empenho via API SIGEF
-  - Lançamentos de Empenho, Reforço, Anulação e Liquidação
+  - Lançamentos de Empenho, Reforço, Anulação e Liquidação com vínculo a contrato e dotação orçamentária
   - Busca de Ordens Bancárias
 - **Orçamento**: Controle de dotações orçamentárias com vinculação de NE
 - **Fornecedores**: Cadastro e gestão de fornecedores

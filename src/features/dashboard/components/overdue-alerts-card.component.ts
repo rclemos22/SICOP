@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { OverdueAlert } from '../services/dashboard.service';
 
@@ -6,8 +6,9 @@ import { OverdueAlert } from '../services/dashboard.service';
   selector: 'app-overdue-alerts-card',
   standalone: true,
   imports: [CurrencyPipe],
+  host: { style: 'display: block; height: 100%' },
   template: `
-    <div class="mb-8 overflow-hidden bg-white dark:bg-gray-800 border-l-4 border-red-500 shadow-sm">
+    <div class="h-full flex flex-col overflow-hidden bg-white dark:bg-gray-800 border-l-4 border-red-500 shadow-sm">
       <div class="p-4 bg-red-50/30 dark:bg-red-900/10 flex items-center justify-between border-b border-red-100 dark:border-red-900/20">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-red-500">warning</span>
@@ -17,9 +18,9 @@ import { OverdueAlert } from '../services/dashboard.service';
           {{ alerts().length }} {{ alerts().length === 1 ? 'PENDÊNCIA' : 'PENDÊNCIAS' }}
         </span>
       </div>
-      <div class="p-2 max-h-[220px] overflow-y-auto custom-scrollbar">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-          @for (a of alerts(); track a.contractId + a.reference) {
+      <div class="flex-1 p-2 overflow-y-auto min-h-0">
+        <div class="grid grid-cols-2 gap-2">
+          @for (a of displayedAlerts(); track a.contractId + a.reference) {
             <div
               (click)="viewContract.emit(a.contractName)"
               class="flex items-center p-3 bg-gray-50/50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-900/50 hover:bg-red-50/20 transition-all cursor-pointer group"
@@ -44,10 +45,28 @@ import { OverdueAlert } from '../services/dashboard.service';
           }
         </div>
       </div>
+      @if (alerts().length > 4) {
+        <button
+          (click)="toggleExpand()"
+          class="w-full py-2 text-[11px] font-bold uppercase tracking-wider border-t border-red-100 dark:border-red-900/20 bg-red-50/30 dark:bg-red-900/10 text-red-600 dark:text-red-400 hover:bg-red-100/50 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1"
+        >
+          <span class="material-symbols-outlined text-[16px]">{{ _isExpanded() ? 'expand_less' : 'expand_more' }}</span>
+          {{ _isExpanded() ? 'Ver menos' : 'Ver mais (' + (alerts().length - 4) + ')' }}
+        </button>
+      }
     </div>
   `,
 })
 export class OverdueAlertsCardComponent {
   readonly alerts = input<OverdueAlert[]>([]);
   readonly viewContract = output<string>();
+  readonly _isExpanded = signal(false);
+
+  displayedAlerts() {
+    return this._isExpanded() ? this.alerts() : this.alerts().slice(0, 4);
+  }
+
+  toggleExpand() {
+    this._isExpanded.update(v => !v);
+  }
 }
