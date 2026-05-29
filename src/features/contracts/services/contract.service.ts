@@ -177,6 +177,19 @@ export class ContractService {
 
       if (error) throw error;
 
+      // Se for mudança de razão social, atualizar o contrato com o novo nome/CNPJ
+      if (data?.tipo_aditivo?.nome === 'MUDANCA_RAZAO_SOCIAL' && data.nova_razao_social) {
+        const updateData: Record<string, any> = { contratada: data.nova_razao_social };
+        if (data.novo_cnpj) {
+          updateData.cnpj_contratada = data.novo_cnpj;
+        }
+        const { error: updateError } = await this.supabaseService.client
+          .from('contratos')
+          .update(updateData)
+          .eq('id', data.contract_id);
+        if (updateError) console.warn('[ContractService] Erro ao atualizar contratada no contrato:', updateError);
+      }
+
       await this.loadContracts();
 
       const newAditivo = this.mapRawToAditivo(data);
@@ -197,6 +210,19 @@ export class ContractService {
         .single();
 
       if (error) throw error;
+
+      // Se for mudança de razão social, atualizar o contrato com o novo nome/CNPJ
+      if (data?.tipo_aditivo?.nome === 'MUDANCA_RAZAO_SOCIAL' && data.nova_razao_social) {
+        const updateData: Record<string, any> = { contratada: data.nova_razao_social };
+        if (data.novo_cnpj) {
+          updateData.cnpj_contratada = data.novo_cnpj;
+        }
+        const { error: updateError } = await this.supabaseService.client
+          .from('contratos')
+          .update(updateData)
+          .eq('id', data.contract_id);
+        if (updateError) console.warn('[ContractService] Erro ao atualizar contratada no contrato:', updateError);
+      }
 
       await this.loadContracts();
 

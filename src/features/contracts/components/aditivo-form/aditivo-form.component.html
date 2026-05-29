@@ -69,25 +69,27 @@
       </div>
     }
 
-    <!-- Valor Aditivo -->
-    <div>
-      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Valor do Aditivo (R$)</label>
-      <input 
-        formControlName="valor_aditivo" 
-        type="text"
-        (input)="onCurrencyInput($event)"
-        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow"
-        [class.border-red-500]="f['valor_aditivo'].touched && f['valor_aditivo'].invalid"
-        placeholder="0,00"
-      >
-      @if (f['valor_aditivo'].touched && f['valor_aditivo'].invalid) {
-        <p class="text-xs text-red-500 mt-1 font-medium italic">Valor inválido.</p>
-      }
-      <p class="text-xs text-gray-500 mt-1">Deixe 0 se houver apenas alteração de prazo ou cláusulas sem custo.</p>
-    </div>
+    <!-- Valor Aditivo (oculto para Mudança de Razão Social) -->
+    @if (!isMudancaRazaoSocial()) {
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Valor do Aditivo (R$)</label>
+        <input 
+          formControlName="valor_aditivo" 
+          type="text"
+          (input)="onCurrencyInput($event)"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow"
+          [class.border-red-500]="f['valor_aditivo'].touched && f['valor_aditivo'].invalid"
+          placeholder="0,00"
+        >
+        @if (f['valor_aditivo'].touched && f['valor_aditivo'].invalid) {
+          <p class="text-xs text-red-500 mt-1 font-medium italic">Valor inválido.</p>
+        }
+        <p class="text-xs text-gray-500 mt-1">Deixe 0 se houver apenas alteração de prazo ou cláusulas sem custo.</p>
+      </div>
+    }
 
-    <!-- Novo Valor Mensal e Data Início (Apenas para Serviços) -->
-    @if (contractTipo() === 'serviço') {
+    <!-- Novo Valor Mensal e Data Início (Apenas para Serviços, oculto para Mudança de Razão Social) -->
+    @if (contractTipo() === 'serviço' && !isMudancaRazaoSocial()) {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30 animate-in fade-in slide-in-from-top-2 duration-300">
         <div>
           <label class="block text-xs font-bold text-blue-700 dark:text-blue-400 uppercase mb-1">Novo Valor Mensal (R$)</label>
@@ -150,24 +152,32 @@
           }
         </div>
 
-        <!-- Hidden fields for form data -->
+        <!-- Hidden field for form data -->
         <input type="hidden" formControlName="nova_razao_social">
-        <input type="hidden" formControlName="novo_cnpj">
 
         @if (aditivoForm.get('nova_razao_social')?.value) {
           <div class="flex items-center justify-between bg-white dark:bg-gray-800 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-amber-600 text-[16px]">check_circle</span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">{{ aditivoForm.get('nova_razao_social')?.value }}</span>
-              @if (aditivoForm.get('novo_cnpj')?.value) {
-                <span class="text-xs text-gray-500">• {{ aditivoForm.get('novo_cnpj')?.value }}</span>
-              }
             </div>
             <button type="button" (click)="clearSupplierSelection()" class="text-gray-400 hover:text-red-500 transition-colors">
               <span class="material-symbols-outlined text-[16px]">close</span>
             </button>
           </div>
         }
+
+        <!-- Novo CNPJ (visível, pois pode ser alterado por incorporação/fusão) -->
+        <div>
+          <label class="block text-xs font-bold text-amber-700 dark:text-amber-400 uppercase mb-1">Novo CNPJ</label>
+          <input 
+            formControlName="novo_cnpj"
+            type="text"
+            class="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow font-mono"
+            placeholder="00.000.000/0000-00"
+          >
+          <p class="text-[10px] text-amber-600 dark:text-amber-500 mt-1">Preenchido automaticamente ao selecionar um fornecedor. Pode ser editado manualmente.</p>
+        </div>
 
         <!-- Data Início da Mudança -->
         <div>

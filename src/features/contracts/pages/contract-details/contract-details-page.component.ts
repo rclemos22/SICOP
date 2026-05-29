@@ -366,7 +366,6 @@ export class ContractDetailsPageComponent {
     const selectedYear = this.appContext.anoExercicio();
     const allBudgets = this.budgets();
     
-    // Filtra dotações pelo ano selecionado
     const filteredBudgets = allBudgets.filter(b => {
       const budgetDate = new Date(b.data_disponibilidade);
       return budgetDate.getFullYear() === selectedYear;
@@ -398,13 +397,19 @@ export class ContractDetailsPageComponent {
   });
 
   financialSummary = computed(() => {
+    const selectedYear = this.appContext.anoExercicio();
     const trans = this.transactions();
 
-    const totalPaid = trans
+    const transFilteredByYear = trans.filter(t => {
+      const txDate = new Date(t.date);
+      return !isNaN(txDate.getTime()) && txDate.getFullYear() === selectedYear;
+    });
+
+    const totalPaid = transFilteredByYear
       .filter(t => t.type === 'LIQUIDATION')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const totalCommitted = trans
+    const totalCommitted = transFilteredByYear
       .reduce((sum, t) => {
         if (t.type === 'COMMITMENT' || t.type === 'REINFORCEMENT') {
           return sum + t.amount;

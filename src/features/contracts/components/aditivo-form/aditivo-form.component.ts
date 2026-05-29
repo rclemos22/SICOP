@@ -158,6 +158,9 @@ export class AditivoFormComponent implements OnInit {
     const value = (event.target as HTMLInputElement).value;
     this.supplierSearch.set(value);
     
+    // Sincroniza o campo visível com o form control (inclusive para digitação manual)
+    this.aditivoForm.get('nova_razao_social')?.setValue(value, { emitEvent: false });
+    
     if (value.length >= 2) {
       const results = this.supplierService.suppliers().filter(s => 
         s.razao_social.toLowerCase().includes(value.toLowerCase()) ||
