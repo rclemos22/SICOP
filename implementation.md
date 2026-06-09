@@ -368,3 +368,16 @@ Ao vincular uma OB a uma parcela, o sistema agora recalcula automaticamente os v
 ### Alerta de Saldo de Empenho Baixo
 
 Novo card no dashboard que alerta quando o saldo de empenho (total_empenhado) é igual ou menor que 150% do valor estimado mensal do contrato. Este alerta ajuda a identificar dotações que podem precisar de reforço.
+
+### Correção: Dashboard sem dados do mês atual
+
+**Problema:** O dashboard não exibia dados do mês corrente quando a tabela `transacoes` estava desatualizada, pois o fallback para o cache SIGEF só era acionado se `transacoes` estivesse completamente vazia.
+
+**Solução (3 frentes):**
+1. As queries do cache SIGEF (`sigef_ne_movimentos` e `sigef_ordens_bancarias`) agora filtram por ano com `.gte`/`.lte`, usando o ano corrente como alvo
+2. O cache SIGEF é **sempre** consultado para complementar os dados da `transacoes`, com deduplicação por chave `(NE|tipo|valor)` para evitar registros duplicados
+3. O sinal `isLoading` do dashboard agora monitora também o `FinancialService`, evitando renderização antes dos dados financeiros estarem prontos
+
+### Melhoria: Gráfico comparativo sem limite de contratos
+
+O `paymentComparisonByContract` no dashboard não possui mais o `.slice(0, 10)`, exibindo agora **todos os contratos ativos** com valores empenhados ou pagos maiores que zero no gráfico "Comparativo Financeiro por Contrato".

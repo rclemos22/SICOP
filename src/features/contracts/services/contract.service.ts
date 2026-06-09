@@ -30,6 +30,7 @@ export class ContractService {
   private _contracts = signal<Contract[]>([]);
   private _loading = signal<boolean>(false);
   private _error = signal<string | null>(null);
+  private _hasLoaded = false;
 
   // Cache de aditivos por contract_id
   private _aditivosCache = signal<Map<string, Aditivo[]>>(new Map());
@@ -41,9 +42,10 @@ export class ContractService {
 
   constructor() {
     // Reagir a mudanças no ano de exercício global
+    // Silent=true após a primeira carga para evitar flicker na tela
     effect(() => {
       const year = this.appContext.anoExercicio();
-      this.loadContracts(year);
+      this.loadContracts(year, this._hasLoaded);
     });
   }
 
@@ -122,6 +124,7 @@ export class ContractService {
       });
 
       this._contracts.set(contracts);
+      this._hasLoaded = true;
     } catch (err: any) {
       if (!silent) {
         this.errorHandler.handle(err, 'ContractService.loadContracts');
@@ -190,7 +193,7 @@ export class ContractService {
         if (updateError) console.warn('[ContractService] Erro ao atualizar contratada no contrato:', updateError);
       }
 
-      await this.loadContracts();
+      await this.loadContracts(undefined, true);
 
       const newAditivo = this.mapRawToAditivo(data);
       return ok(newAditivo);
@@ -224,7 +227,7 @@ export class ContractService {
         if (updateError) console.warn('[ContractService] Erro ao atualizar contratada no contrato:', updateError);
       }
 
-      await this.loadContracts();
+      await this.loadContracts(undefined, true);
 
       const updatedAditivo = this.mapRawToAditivo(data);
       return ok(updatedAditivo);
@@ -243,7 +246,7 @@ export class ContractService {
 
       if (error) throw error;
 
-      await this.loadContracts();
+      await this.loadContracts(undefined, true);
 
       return ok(null);
     } catch (err: any) {
@@ -433,7 +436,7 @@ export class ContractService {
         .insert(contract as any);
 
       if (error) throw error;
-      await this.loadContracts();
+      await this.loadContracts(undefined, true);
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'ContractService.addContract');
@@ -474,7 +477,7 @@ export class ContractService {
       }
       
       console.log('[ContractService.updateContract] Update successful');
-      await this.loadContracts();
+      await this.loadContracts(undefined, true);
       return ok(null);
     } catch (err: any) {
       console.error('[ContractService.updateContract] Caught error:', err);

@@ -117,20 +117,19 @@ export class FinancialService {
       // 2. Ordenar por data decrescente
       transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-      // 3. Se vazio, carregar do cache SIGEF e enriquecer
-      if (transactions.length === 0) {
-        await this._loadTransactionsFromCache(transactions, neLookup);
-      } else {
-        // Enriquecer transações do cache que podem ter vindo sem contrato/dotação
-        for (const t of transactions) {
-          if ((!t.contract_number || t.contract_number === 'N/A' || !t.budget_description) && t.commitment_id) {
-            const neInfo = neLookup.get(t.commitment_id);
-            if (neInfo) {
-              if (!t.contract_number || t.contract_number === 'N/A') t.contract_number = neInfo.contrato;
-              if (!t.budget_description) t.budget_description = neInfo.dotacao;
-              if (!t.department || t.department === 'Não informado') t.department = neInfo.dotacao;
-              if (!t.contract_id) t.contract_id = neInfo.contract_id;
-            }
+      // 3. Complementar com cache SIGEF (garante dados do mês atual mesmo se transacoes estiver desatualizada)
+      const existingKeys = new Set(transactions.map(t => `${t.commitment_id}|${t.type}|${t.amount}`));
+      await this._loadTransactionsFromCache(transactions, neLookup, undefined, existingKeys);
+
+      // 4. Enriquecer transações com contrato/dotação
+      for (const t of transactions) {
+        if ((!t.contract_number || t.contract_number === 'N/A' || !t.budget_description) && t.commitment_id) {
+          const neInfo = neLookup.get(t.commitment_id);
+          if (neInfo) {
+            if (!t.contract_number || t.contract_number === 'N/A') t.contract_number = neInfo.contrato;
+            if (!t.budget_description) t.budget_description = neInfo.dotacao;
+            if (!t.department || t.department === 'Não informado') t.department = neInfo.dotacao;
+            if (!t.contract_id) t.contract_id = neInfo.contract_id;
           }
         }
       }
@@ -155,17 +154,23 @@ export class FinancialService {
   /** Carrega dados do cache SIGEF como fallback quando transacoes está vazio */
   private async _loadTransactionsFromCache(
     transactions: Transaction[],
-    neLookup?: Map<string, { dotacao: string; contrato: string; contract_id: string }>
+    neLookup?: Map<string, { dotacao: string; contrato: string; contract_id: string }>,
+    year?: number,
+    existingKeys?: Set<string>
   ): Promise<void> {
     try {
-      const year = new Date().getFullYear();
+      const targetYear = year ?? new Date().getFullYear();
       const [movData, obData] = await Promise.all([
         this.supabaseService.client
           .from('sigef_ne_movimentos')
-          .select('nunotaempenho, cdevento, vlnotaempenho, dtlancamento'),
+          .select('nunotaempenho, cdevento, vlnotaempenho, dtlancamento')
+          .gte('dtlancamento', `${targetYear}-01-01`)
+          .lte('dtlancamento', `${targetYear}-12-31`),
         this.supabaseService.client
           .from('sigef_ordens_bancarias')
-          .select('nunotaempenho, nuordembancaria, nudocumento, vltotal, dtpagamento, dtlancamento, cdsituacaoordembancaria'),
+          .select('nunotaempenho, nuordembancaria, nudocumento, vltotal, dtpagamento, dtlancamento, cdsituacaoordembancaria')
+          .gte('dtpagamento', `${targetYear}-01-01`)
+          .lte('dtpagamento', `${targetYear}-12-31`),
       ]);
 
       const enrichByNe = (ne: string): { contract_id: string; contract_number: string; department: string; budget_description: string } => {
@@ -192,6 +197,10 @@ export class FinancialService {
         if (m.cdevento === 400012) type = TransactionType.CANCELLATION;
         else if (m.cdevento === 400011) type = TransactionType.REINFORCEMENT;
         const ne = m.nunotaempenho || '';
+        const amount = Math.abs(Number(m.vlnotaempenho) || 0);
+        const dedupKey = `${ne}|${type}|${amount}`;
+        if (existingKeys?.has(dedupKey)) return;
+        existingKeys?.add(dedupKey);
         const enriched = enrichByNe(ne);
         transactions.push({
           id: `cache-mov-${ne}-${m.cdevento}`,
@@ -199,7 +208,7 @@ export class FinancialService {
           description: `Movimento NE ${ne}`,
           commitment_id: ne,
           date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
-          type, amount: Math.abs(Number(m.vlnotaempenho) || 0),
+          type, amount,
           department: enriched.department,
           budget_description: enriched.budget_description,
           contract_number: enriched.contract_number,
@@ -212,6 +221,10 @@ export class FinancialService {
         const docNum = o.nudocumento || obNum;
         const obDate = o.dtpagamento || o.dtlancamento || '';
         const ne = o.nunotaempenho || '';
+        const amount = Math.abs(Number(o.vltotal) || 0);
+        const dedupKey = `${ne}|${TransactionType.LIQUIDATION}|${amount}`;
+        if (existingKeys?.has(dedupKey)) return;
+        existingKeys?.add(dedupKey);
         const enriched = enrichByNe(ne);
         transactions.push({
           id: `cache-ob-${obNum}-${docNum}`,
@@ -220,7 +233,7 @@ export class FinancialService {
           commitment_id: ne,
           date: obDate ? new Date(obDate) : new Date(),
           type: TransactionType.LIQUIDATION,
-          amount: Math.abs(Number(o.vltotal) || 0),
+          amount,
           department: enriched.department,
           budget_description: enriched.budget_description,
           contract_number: enriched.contract_number,
@@ -807,7 +820,7 @@ export class FinancialService {
         })
         .eq('id', contractId);
 
-      this.contractService.loadContracts();
+      this.contractService.loadContracts(undefined, true);
     } catch (err) {
       console.error('[FinancialService] Erro ao atualizar totais do contrato:', contractId, err);
     }

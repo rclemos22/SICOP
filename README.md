@@ -4,7 +4,7 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 
 ## Funcionalidades
 
-- **Dashboard**: Métricas gerais, alertas de pagamentos em atraso, saldo de empenho baixo, contratos próximos ao vencimento (≤90 dias), gráficos de distribuição. Cards de alerta com layout lado a lado, expansão para ver todos os itens.
+- **Dashboard**: Métricas gerais, alertas de pagamentos em atraso, saldo de empenho baixo, contratos próximos ao vencimento (≤90 dias), gráficos de distribuição. Cards de alerta com layout lado a lado, expansão para ver todos os itens. Gráfico comparativo financeiro exibe todos os contratos ativos sem limite.
 - **Gestão de Contratos**: Cadastro, edição, aditivos e acompanhamento
   - Abas: Vigentes, Finalizados, Rescindidos
   - Busca em todos os contratos (3+ caracteres)

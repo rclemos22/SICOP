@@ -114,7 +114,7 @@ export class BudgetService {
 
       await Promise.all([
         this.loadDotacoes(),
-        this.contractService.loadContracts() // Atualiza dashboard
+        this.contractService.loadContracts(undefined, true)
       ]);
       return ok(null);
     } catch (err: any) {
@@ -168,7 +168,7 @@ export class BudgetService {
       
       await Promise.all([
         this.loadDotacoes(),
-        this.contractService.loadContracts() // Atualiza dashboard
+        this.contractService.loadContracts(undefined, true)
       ]);
       return ok(null);
     } catch (err: any) {
@@ -188,7 +188,7 @@ export class BudgetService {
       
       await Promise.all([
         this.loadDotacoes(),
-        this.contractService.loadContracts() // Atualiza dashboard
+        this.contractService.loadContracts(undefined, true)
       ]);
       return ok(null);
     } catch (err: any) {

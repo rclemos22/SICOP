@@ -107,7 +107,7 @@ export class DashboardService {
   private _isFirstLoad = true;
 
   /** Exibe loading apenas na primeira carga. Refreshes silenciosos não piscam a tela. */
-  readonly isLoading = computed(() => this._isFirstLoad && (this.contractService.loading() || this.budgetService.loading()));
+  readonly isLoading = computed(() => this._isFirstLoad && (this.contractService.loading() || this.budgetService.loading() || this.financialService.loading()));
 
   readonly hasError = computed(() => this.contractService.error() || this.budgetService.error());
 
@@ -259,8 +259,7 @@ export class DashboardService {
         return { contract: c.contrato, contratada: c.contratada, expected: netCommitted, paid, diff: Math.max(0, netCommitted - paid) };
       })
       .filter(d => d.expected > 0 || d.paid > 0)
-      .sort((a, b) => b.expected - a.expected)
-      .slice(0, 10);
+      .sort((a, b) => b.expected - a.expected);
   });
 
   // ── Totals ─────────────────────────────────────────────────────────────

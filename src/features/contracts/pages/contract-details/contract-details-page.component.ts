@@ -736,7 +736,7 @@ export class ContractDetailsPageComponent {
       budgetsComNE.forEach(b => lastSyncMap.set(b.id, new Date()));
       this.sigefLastSync.set(lastSyncMap);
 
-      await this.contractService.loadContracts();
+      await this.contractService.loadContracts(undefined, true);
       await this.loadTransactions(contractId);
       await this.loadBudgets(contractId);
       await this.loadNesPagamentos(contractId);
@@ -935,7 +935,7 @@ export class ContractDetailsPageComponent {
       await this.loadTransactions(this.contractId());
       
       await this.loadBudgets(this.contractId());
-      await this.contractService.loadContracts(); // Atualiza dashboard
+      await this.contractService.loadContracts(undefined, true);
 
       this.closeLinkObModal();
       
@@ -1010,7 +1010,7 @@ export class ContractDetailsPageComponent {
       await this.loadTransactions(this.contractId());
       
       await this.loadBudgets(this.contractId());
-      await this.contractService.loadContracts(); // Atualiza dashboard
+      await this.contractService.loadContracts(undefined, true);
       this.closeLinkObModal();
       
     } catch (err: any) {
@@ -1045,7 +1045,7 @@ export class ContractDetailsPageComponent {
       // Recarrega TUDO para garantir que os cards superiores (view SQL) se atualizem
       await this.loadTransactions(this.contractId());
       await this.loadBudgets(this.contractId());
-      await this.contractService.loadContracts(); // Atualiza dashboard
+      await this.contractService.loadContracts(undefined, true);
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao desvincular:', err);
       alert('Erro ao desvincular: ' + (err.message || 'Erro desconhecido'));
@@ -1092,7 +1092,7 @@ export class ContractDetailsPageComponent {
       }
 
       console.log('[ContractDetails] Sucesso no banco. Sincronizando dados...');
-      await this.contractService.loadContracts();
+      await this.contractService.loadContracts(undefined, true);
 
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao desmarcar pagamento:', err);
@@ -1129,7 +1129,7 @@ export class ContractDetailsPageComponent {
         }
 
         console.log('[ContractDetails] Sucesso no banco. Sincronizando dados...');
-        await this.contractService.loadContracts();
+        await this.contractService.loadContracts(undefined, true);
       }
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao marcar como pago:', err);

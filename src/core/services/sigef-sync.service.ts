@@ -313,7 +313,7 @@ export class SigefSyncService {
     if (!ready) {
       console.log('[SIGEF SYNC] Espelho vazio (bulk pendente). Recarregando apenas dados locais.');
       await Promise.all([
-        this.contractService.loadContracts(),
+        this.contractService.loadContracts(undefined, true),
         this.financialService.loadAllTransactions(),
       ]).catch(err => console.error('[SIGEF SYNC] Erro ao recarregar dados locais:', err));
       return;
@@ -322,7 +322,7 @@ export class SigefSyncService {
     console.log('[SIGEF SYNC] Carregando dados do espelho para contratos...');
 
     if (this.contractService.contracts().length === 0) {
-      await this.contractService.loadContracts();
+      await this.contractService.loadContracts(undefined, true);
     }
 
     const contracts = this.contractService.contracts();
@@ -384,7 +384,7 @@ export class SigefSyncService {
       }
 
       await Promise.all([
-        this.contractService.loadContracts(),
+        this.contractService.loadContracts(undefined, true),
         this.financialService.loadAllTransactions(),
         this.budgetService.loadDotacoes()
       ]);
