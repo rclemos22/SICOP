@@ -9,6 +9,7 @@ export const routes: Routes = [
   { path: 'financial', loadComponent: () => import('./features/financial/pages/financial/financial-page.component').then(m => m.FinancialPageComponent) },
   { path: 'budget', loadComponent: () => import('./features/budget/pages/budget/budget-page.component').then(m => m.BudgetPageComponent) },
   { path: 'suppliers', loadComponent: () => import('./features/suppliers/pages/suppliers/suppliers-page.component').then(m => m.SuppliersPageComponent) },
+  { path: 'atas', loadComponent: () => import('./features/atas/pages/atas/atas-page.component').then(m => m.AtasPageComponent) },
   { path: 'nota-empenho', loadComponent: () => import('./features/nota-empenho/pages/nota-empenho/nota-empenho-page.component').then(m => m.NotaEmpenhoPageComponent) },
   { path: 'ordem-bancaria', loadComponent: () => import('./features/ordem-bancaria/pages/ordem-bancaria/ordem-bancaria-page.component').then(m => m.OrdemBancariaPageComponent) },
   { path: '**', redirectTo: '' },

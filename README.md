@@ -18,6 +18,12 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
   - Busca de Ordens Bancárias
 - **Orçamento**: Controle de dotações orçamentárias com vinculação de NE
 - **Fornecedores**: Cadastro e gestão de fornecedores
+- **Atas de Licitação**: Gestão de atas de registro de preço
+  - Cadastro de atas com itens, fornecedor e vigência
+  - **Saldo por item**: Painel com barras de progresso (consumido vs registrado)
+  - **Consumo Interno**: Registro de consumo pelo órgão gerenciador (até 100% do item)
+  - **Adesões (Carona)**: Solicitação, autorização e rejeição com validação dos limites legais (Decreto 11.462/2023 — até 50% por órgão, 50% total)
+  - **Relatório PDF**: Exportação do relatório de saldo com tabela por item, consolidação e base legal
 - **Nota de Empenho**: Consulta de notas por número e unidade gestora
 - **Ordem Bancária**: Consulta de OBs por número e unidade gestora
 - **Sincronização SIGEF**: Persiste transações do SIGEF no banco local para preservar vínculos de parcelas
@@ -48,6 +54,7 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 - Supabase (banco de dados)
 - API SIGEF (dados governamentais)
 - D3.js (visualizações)
+- jsPDF + jspdf-autotable (geração de relatórios PDF)
 - Vite (build tool)
 
 ## Getting Started
@@ -96,6 +103,10 @@ O Angular proxy redireciona `/sigef-api/*` para `https://api.seplan.ma.gov.br/ap
 src/
 ├── core/services/       # Serviços (SIGEF, Supabase, Context)
 ├── features/            # Páginas e componentes por módulo
+│   ├── atas/            # Gestão de atas de licitação
+│   │   ├── pages/       # atas
+│   │   ├── components/  # ata-form, ata-saldo-panel
+│   │   └── services/    # ata.service.ts, saldo-ata.service.ts, ata-pdf.service.ts
 │   ├── budget/          # Gestão de dotações
 │   ├── contracts/       # Gestão de contratos
 │   │   ├── pages/       # contracts, contract-details
@@ -113,8 +124,8 @@ src/
 ## Banco de Dados
 
 - **Supabase**: https://xhowiwekqliqfckndupo.supabase.co
-- **Tabelas**: contratos, aditivos, dotacoes, fornecedores, transacoes
-- **Views**: vw_saldo_dotacoes, vw_contratos_vigencia
+- **Tabelas**: contratos, aditivos, dotacoes, fornecedores, transacoes, atas, ata_itens, ata_consumo_interno, ata_adesoes
+- **Views**: vw_saldo_dotacoes, vw_contratos_vigencia, vw_atas_resumo, vw_ata_saldo_item, vw_ata_saldo_resumo
 - **Migrations**: `supabase/migrations/` (aplicar no SQL Editor do Supabase)
 
 ### Tabela `aditivos`

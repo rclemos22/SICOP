@@ -1,0 +1,322 @@
+<div class="flex flex-col h-full">
+  <!-- Abas -->
+  <div class="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 shrink-0">
+    <button (click)="setActiveTab('saldo')"
+      class="px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors"
+      [class]="activeTab() === 'saldo' ? 'text-sco-blue border-b-2 border-sco-blue bg-white dark:bg-card-dark' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'">
+      Saldo
+    </button>
+    <button (click)="setActiveTab('consumo')"
+      class="px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors"
+      [class]="activeTab() === 'consumo' ? 'text-sco-blue border-b-2 border-sco-blue bg-white dark:bg-card-dark' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'">
+      Consumo Interno
+    </button>
+    <button (click)="setActiveTab('adesoes')"
+      class="px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors"
+      [class]="activeTab() === 'adesoes' ? 'text-sco-blue border-b-2 border-sco-blue bg-white dark:bg-card-dark' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'">
+      Adesões (Carona)
+    </button>
+  </div>
+
+  <div class="flex-1 overflow-y-auto p-4">
+    @if (validationError()) {
+      <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium">
+        {{ validationError() }}
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="flex items-center justify-center py-12">
+        <div class="animate-spin h-6 w-6 border-3 border-sco-blue border-t-transparent rounded-full"></div>
+      </div>
+    } @else {
+      <!-- Aba: Saldo -->
+      @if (activeTab() === 'saldo') {
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-gray-500 uppercase">Saldo por Item</span>
+          <button (click)="exportPdf()"
+            class="text-xs font-semibold text-sco-blue hover:text-blue-700 transition-colors flex items-center gap-1">
+            <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+            Exportar PDF
+          </button>
+        </div>
+
+        <!-- Resumo Global -->
+        <div class="grid grid-cols-4 gap-3 mb-4">
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
+            <span class="text-[10px] font-bold text-gray-500 uppercase">Registrado</span>
+            <p class="text-sm font-bold text-gray-900 dark:text-white mt-1">{{ saldoGlobal().registrado | number:'1.2-2' }}</p>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
+            <span class="text-[10px] font-bold text-gray-500 uppercase">Consumido</span>
+            <p class="text-sm font-bold text-amber-600 dark:text-amber-400 mt-1">{{ saldoGlobal().consumido | number:'1.2-2' }}</p>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
+            <span class="text-[10px] font-bold text-gray-500 uppercase">Aderido</span>
+            <p class="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">{{ saldoGlobal().aderido | number:'1.2-2' }}</p>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
+            <span class="text-[10px] font-bold text-gray-500 uppercase">Disponível</span>
+            <p class="text-sm font-bold text-green-600 dark:text-green-400 mt-1">{{ saldoGlobal().disponivel | number:'1.2-2' }}</p>
+          </div>
+        </div>
+
+        <!-- Saldo por Item -->
+        @if (saldos().length > 0) {
+          <div class="space-y-3">
+            @for (item of saldos(); track item.item_id) {
+              <div class="bg-white dark:bg-card-dark border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <span class="text-xs font-bold text-gray-500 font-mono">Item {{ item.numero_item }}</span>
+                    <p class="text-sm font-bold text-gray-900 dark:text-white mt-0.5">{{ item.descricao_item }}</p>
+                  </div>
+                  <span class="text-xs font-bold whitespace-nowrap"
+                    [class.text-green-600]="item.percentual_utilizado < 80"
+                    [class.text-amber-600]="item.percentual_utilizado >= 80 && item.percentual_utilizado < 100"
+                    [class.text-red-600]="item.percentual_utilizado >= 100">
+                    {{ item.percentual_utilizado }}%
+                  </span>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-2">
+                  @let pct = Math.min(item.percentual_utilizado, 100);
+                  <div class="h-full rounded-full transition-all duration-500"
+                    [style.width.%]="pct"
+                    [class]="percentBarClass(item.percentual_utilizado)"></div>
+                </div>
+                <div class="grid grid-cols-4 gap-2 text-xs">
+                  <div><span class="text-gray-400">Registrado:</span> <span class="font-mono font-bold text-gray-700 dark:text-gray-300">{{ item.quantidade_registrada }}</span></div>
+                  <div><span class="text-gray-400">Consumido:</span> <span class="font-mono font-bold text-amber-600">{{ item.quantidade_consumida_interna }}</span></div>
+                  <div><span class="text-gray-400">Aderido:</span> <span class="font-mono font-bold text-blue-600">{{ item.quantidade_aderida }}</span></div>
+                  <div><span class="text-gray-400">Disponível:</span> <span class="font-mono font-bold text-green-600">{{ item.saldo_disponivel }}</span></div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="text-center py-8 text-gray-400 text-sm">Nenhum saldo disponível.</div>
+        }
+      }
+
+      <!-- Aba: Consumo Interno -->
+      @if (activeTab() === 'consumo') {
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-gray-500 uppercase">{{ consumos().length }} registro(s)</span>
+          @if (!showConsumoForm()) {
+            <button (click)="openConsumoForm()"
+              class="text-xs font-semibold text-sco-blue hover:text-blue-700 transition-colors flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">add_circle</span>
+              Registrar Consumo
+            </button>
+          }
+        </div>
+
+        <!-- Formulário de Consumo -->
+        @if (showConsumoForm()) {
+          <div class="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Item</label>
+                <select [(ngModel)]="consumoForm.ata_item_id"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white">
+                  <option value="">Selecione...</option>
+                  @for (item of saldos(); track item.item_id) {
+                    <option [value]="item.item_id">Item {{ item.numero_item }} — {{ item.descricao_item }}</option>
+                  }
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Quantidade</label>
+                <input [(ngModel)]="consumoForm.quantidade" type="number" step="0.01" min="0"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Documento SEI</label>
+                <input [(ngModel)]="consumoForm.documento_sei" type="text"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white"
+                  placeholder="Nº do documento">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Data</label>
+                <input [(ngModel)]="consumoForm.data_consumo" type="date"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Observação</label>
+              <input [(ngModel)]="consumoForm.observacao" type="text"
+                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white"
+                placeholder="Observações">
+            </div>
+            <div class="flex gap-2 pt-1">
+              <button (click)="submitConsumo()"
+                class="px-4 py-1.5 text-xs font-semibold text-white bg-sco-blue hover:bg-blue-700 rounded-lg transition-colors">
+                Salvar
+              </button>
+              <button (click)="showConsumoForm.set(false)"
+                class="px-4 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- Lista de Consumos -->
+        @if (consumos().length > 0) {
+          <div class="space-y-2">
+            @for (c of consumos(); track c.id) {
+              <div class="flex items-center justify-between bg-white dark:bg-card-dark border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="font-mono font-bold text-gray-900 dark:text-white">{{ c.quantidade }}</span>
+                    <span class="text-gray-400">unidade(s)</span>
+                    @if (c.documento_sei) {
+                      <span class="text-xs text-gray-400 font-mono">| SEI: {{ c.documento_sei }}</span>
+                    }
+                  </div>
+                  <div class="text-xs text-gray-500 mt-0.5">
+                    {{ c.data_consumo | date:'dd/MM/yyyy' }}
+                    @if (c.observacao) { <span>— {{ c.observacao }}</span> }
+                  </div>
+                </div>
+                <button (click)="excluirConsumo(c.id!)"
+                  class="text-gray-400 hover:text-red-500 transition-colors shrink-0 ml-2">
+                  <span class="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="text-center py-8 text-gray-400 text-sm">Nenhum consumo registrado.</div>
+        }
+      }
+
+      <!-- Aba: Adesões -->
+      @if (activeTab() === 'adesoes') {
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-gray-500 uppercase">{{ adesoes().length }} solicitação(ões)</span>
+          @if (!showAdesaoForm()) {
+            <button (click)="openAdesaoForm()"
+              class="text-xs font-semibold text-sco-blue hover:text-blue-700 transition-colors flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">add_circle</span>
+              Nova Solicitação
+            </button>
+          }
+        </div>
+
+        <!-- Formulário de Adesão -->
+        @if (showAdesaoForm()) {
+          <div class="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Item</label>
+                <select [(ngModel)]="adesaoForm.ata_item_id"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white">
+                  <option value="">Selecione...</option>
+                  @for (item of saldos(); track item.item_id) {
+                    <option [value]="item.item_id">Item {{ item.numero_item }} — {{ item.descricao_item }}</option>
+                  }
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">CNPJ do Órgão</label>
+                <input [(ngModel)]="adesaoForm.cnpj_orgao" type="text"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white"
+                  placeholder="00.000.000/0000-00">
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Razão Social do Órgão</label>
+                <input [(ngModel)]="adesaoForm.razao_orgao" type="text"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white"
+                  placeholder="Nome do órgão solicitante">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Quantidade Solicitada</label>
+                <input [(ngModel)]="adesaoForm.quantidade_solicitada" type="number" step="0.01" min="0"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Justificativa</label>
+              <textarea [(ngModel)]="adesaoForm.justificativa" rows="2"
+                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white resize-none"
+                placeholder="Justificativa para a adesão"></textarea>
+            </div>
+            <div class="flex gap-2 pt-1">
+              <button (click)="submitAdesao()"
+                class="px-4 py-1.5 text-xs font-semibold text-white bg-sco-blue hover:bg-blue-700 rounded-lg transition-colors">
+                Solicitar
+              </button>
+              <button (click)="showAdesaoForm.set(false)"
+                class="px-4 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- Limites Legais -->
+        <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <p class="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase mb-1">Base Legal — Decreto 11.462/2023</p>
+          <ul class="text-xs text-blue-600 dark:text-blue-300 space-y-0.5">
+            <li>• Cada órgão aderente pode solicitar até <strong>50%</strong> da quantidade registrada por item.</li>
+            <li>• O total de adesões não pode exceder <strong>50%</strong> da quantidade registrada.</li>
+          </ul>
+        </div>
+
+        <!-- Lista de Adesões -->
+        @if (adesoes().length > 0) {
+          <div class="space-y-2">
+            @for (a of adesoes(); track a.id) {
+              <div class="bg-white dark:bg-card-dark border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ a.razao_orgao }}</div>
+                    <div class="text-xs text-gray-500 font-mono">{{ a.cnpj_orgao }}</div>
+                    <div class="flex items-center gap-3 mt-1.5 text-sm">
+                      <span class="font-mono font-bold text-gray-900 dark:text-white">{{ a.quantidade_solicitada }}</span>
+                      <span class="text-gray-400">solicitado</span>
+                      @if (a.quantidade_autorizada) {
+                        <span class="text-green-600 font-mono font-bold">{{ a.quantidade_autorizada }}</span>
+                        <span class="text-gray-400">autorizado</span>
+                      }
+                    </div>
+                    <div class="text-xs text-gray-400 mt-0.5">{{ a.data_solicitacao | date:'dd/MM/yyyy' }}</div>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0 ml-2">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase border"
+                      [class]="getAdesaoStatusClass(a.status)">
+                      {{ getAdesaoStatusLabel(a.status) }}
+                    </span>
+                    @if (a.status === 'PENDENTE') {
+                      <button (click)="autorizarAdesao(a)"
+                        class="p-1 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                        title="Autorizar">
+                        <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                      </button>
+                      <button (click)="rejeitarAdesao(a)"
+                        class="p-1 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                        title="Rejeitar">
+                        <span class="material-symbols-outlined text-[16px]">cancel</span>
+                      </button>
+                    }
+                    @if (a.status === 'AUTORIZADA' || a.status === 'PENDENTE') {
+                      <button (click)="cancelarAdesao(a)"
+                        class="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        title="Cancelar">
+                        <span class="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="text-center py-8 text-gray-400 text-sm">Nenhuma solicitação de adesão.</div>
+        }
+      }
+    }
+  </div>
+</div>

@@ -1,0 +1,193 @@
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col h-full bg-white dark:bg-card-dark rounded-lg">
+  <div class="flex-1 overflow-y-auto space-y-5 p-6">
+
+    <!-- Número do Processo + Número da Ata -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nº Processo</label>
+        <input formControlName="numero_processo" type="text"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow"
+          [class.border-red-500]="f['numero_processo'].invalid && f['numero_processo'].touched"
+          placeholder="Ex: 001/2024">
+        @if (f['numero_processo'].invalid && f['numero_processo'].touched) {
+          <p class="text-xs text-red-500 mt-1 font-medium">O Nº do Processo é obrigatório.</p>
+        }
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nº Ata</label>
+        <input formControlName="numero_ata" type="text"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow"
+          [class.border-red-500]="f['numero_ata'].invalid && f['numero_ata'].touched"
+          placeholder="Ex: 001/2024">
+        @if (f['numero_ata'].invalid && f['numero_ata'].touched) {
+          <p class="text-xs text-red-500 mt-1 font-medium">O Nº da Ata é obrigatório.</p>
+        }
+      </div>
+    </div>
+
+    <!-- Fornecedor (Autocomplete) -->
+    <div class="relative">
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fornecedor</label>
+      <input type="text"
+        [value]="supplierSearch()"
+        (input)="onSupplierInput($any($event.target).value)"
+        (focus)="showSupplierDropdown.set(supplierSearch().length >= 2)"
+        (blur)="onSupplierBlur()"
+        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow"
+        placeholder="Digite o nome do fornecedor">
+      @if (showSupplierDropdown() && filteredSuppliers().length) {
+        <div class="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          @for (s of filteredSuppliers(); track s.id) {
+            <button type="button" (mousedown)="selectSupplier(s)"
+              class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors">
+              {{ s.razao_social }}
+              @if (s.cnpj) {
+                <span class="text-gray-400 text-xs ml-2">{{ s.cnpj }}</span>
+              }
+            </button>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Objeto -->
+    <div>
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Objeto</label>
+      <textarea formControlName="objeto" rows="2"
+        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow resize-none"
+        placeholder="Descrição do objeto da ata"></textarea>
+    </div>
+
+    <!-- Datas -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data Assinatura</label>
+        <input formControlName="data_assinatura" type="date"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white transition-shadow">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Vigência Início</label>
+        <input formControlName="vigencia_inicio" type="date"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white transition-shadow">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Vigência Fim</label>
+        <input formControlName="vigencia_fim" type="date"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white transition-shadow">
+      </div>
+    </div>
+
+    <!-- Status + Observação -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
+        <select formControlName="status"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white cursor-pointer">
+          <option value="ATIVA">Ativa</option>
+          <option value="SUSPENSA">Suspensa</option>
+          <option value="ENCERRADA">Encerrada</option>
+          <option value="CANCELADA">Cancelada</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Observação</label>
+        <input formControlName="observacao" type="text"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow"
+          placeholder="Observações adicionais">
+      </div>
+    </div>
+
+    <!-- Itens da Ata -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-xs font-bold text-gray-500 uppercase">Itens</label>
+        <button type="button" (click)="addItem()"
+          class="text-xs font-semibold text-sco-blue hover:text-blue-700 transition-colors flex items-center gap-1">
+          <span class="material-symbols-outlined text-[16px]">add_circle</span>
+          Adicionar Item
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 dark:border-gray-700">
+              <th class="text-left text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-12">#</th>
+              <th class="text-left text-xs font-bold text-gray-500 uppercase py-2 pr-2">Descrição</th>
+              <th class="text-left text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-20">Unid.</th>
+              <th class="text-right text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-24">Qtd</th>
+              <th class="text-right text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-28">Valor Unit.</th>
+              <th class="text-right text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-28">Subtotal</th>
+              <th class="w-10 py-2"></th>
+            </tr>
+          </thead>
+          <tbody formArrayName="itens">
+            @for (itemCtrl of itensArray.controls; track idx; let idx = $index) {
+              <tr [formGroupName]="idx" class="border-b border-gray-100 dark:border-gray-800">
+                <td class="py-2 pr-2 text-sm text-gray-700 dark:text-gray-300 font-mono text-center">
+                  {{ idx + 1 }}
+                </td>
+                <td class="py-2 pr-2">
+                  <input formControlName="descricao" type="text"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white"
+                    [class.border-red-500]="itemCtrl.get('descricao')?.invalid && itemCtrl.get('descricao')?.touched"
+                    placeholder="Descrição do item">
+                </td>
+                <td class="py-2 pr-2">
+                  <input formControlName="unidade" type="text"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white"
+                    placeholder="UN">
+                </td>
+                <td class="py-2 pr-2">
+                  <input formControlName="quantidade" type="number" step="0.01" min="0"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white text-right"
+                    [class.border-red-500]="itemCtrl.get('quantidade')?.invalid && itemCtrl.get('quantidade')?.touched">
+                </td>
+                <td class="py-2 pr-2">
+                  <input formControlName="valor_unitario" type="number" step="0.01" min="0"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white text-right"
+                    [class.border-red-500]="itemCtrl.get('valor_unitario')?.invalid && itemCtrl.get('valor_unitario')?.touched">
+                </td>
+                <td class="py-2 pr-2 text-right text-sm font-mono text-gray-700 dark:text-gray-300">
+                  {{ (itemCtrl.get('quantidade')?.value || 0) * (itemCtrl.get('valor_unitario')?.value || 0) | number:'1.2-2' }}
+                </td>
+                <td class="py-2 text-center">
+                  <button type="button" (click)="removeItem(idx)"
+                    class="text-gray-400 hover:text-red-500 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">remove_circle</span>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (itensArray.controls.length === 0) {
+        <p class="text-xs text-gray-400 text-center py-4">Nenhum item adicionado. Clique em "Adicionar Item".</p>
+      }
+    </div>
+
+    <!-- Total Global -->
+    <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
+      <div class="text-right">
+        <span class="text-xs font-bold text-gray-500 uppercase">Valor Global</span>
+        <p class="text-xl font-bold text-sco-blue dark:text-blue-400">{{ totalCalculado | number:'1.2-2' }}</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer Actions -->
+  <div class="p-4 mt-auto border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex gap-3 shrink-0 rounded-b-lg">
+    <button type="button" (click)="onCancel()"
+      class="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:ring-2 focus:ring-gray-200 outline-none">
+      Cancelar
+    </button>
+    <button type="submit"
+      class="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-sco-blue hover:bg-blue-700 rounded-lg transition-colors focus:ring-2 focus:ring-blue-300 outline-none shadow-sm flex items-center justify-center gap-2">
+      <span class="material-symbols-outlined text-[18px]">save</span>
+      Salvar
+    </button>
+  </div>
+</form>
