@@ -128,6 +128,13 @@ src/
 - **Views**: vw_saldo_dotacoes, vw_contratos_vigencia, vw_atas_resumo, vw_ata_saldo_item, vw_ata_saldo_resumo
 - **Migrations**: `supabase/migrations/` (aplicar no SQL Editor do Supabase)
 
+### Migrations Recentes
+
+| # | Arquivo | Descrição |
+|---|---------|-----------|
+| 033 | `033_atualizar_valor_mensal_contratos.sql` | Atualiza `contratos.valor_mensal` com base no aditivo vigente mais recente |
+| 034 | `034_recalcular_totais_liquidos_contratos.sql` | Recalcula `total_empenhado` e `saldo_a_pagar` descontando anulações |
+
 ### Tabela `aditivos`
 
 | Coluna | Tipo | Descrição |

@@ -189,7 +189,7 @@ export class ContractDetailsPageComponent {
 
   paymentSchedule = computed(() => {
     const c = this.contract();
-    if (!c || !c.data_inicio || !c.data_pagamento || !c.valor_mensal) {
+    if (!c || !c.data_inicio || !c.data_pagamento || (c.valor_mensal_original == null && c.valor_mensal == null)) {
       return [];
     }
 
@@ -208,7 +208,7 @@ export class ContractDetailsPageComponent {
       .sort((a, b) => new Date(a.data_inicio_novo!).getTime() - new Date(b.data_inicio_novo!).getTime());
 
     function valorParaMes(ano: number, mes: number): number {
-      let valor = Number(c.valor_mensal);
+      let valor = c.valor_mensal_original ?? Number(c.valor_mensal);
       for (const ad of aditivosReajuste) {
         const inicio = new Date(ad.data_inicio_novo!);
         if (ano > inicio.getFullYear() || (ano === inicio.getFullYear() && mes >= inicio.getMonth() + 1)) {
@@ -371,7 +371,7 @@ export class ContractDetailsPageComponent {
       return budgetDate.getFullYear() === selectedYear;
     });
     
-    const totalEmpenhado = filteredBudgets.reduce((sum, b) => sum + (b.total_empenhado || 0), 0);
+    const totalEmpenhado = filteredBudgets.reduce((sum, b) => sum + ((b.total_empenhado || 0) - (b.total_cancelado || 0)), 0);
     const totalPago = filteredBudgets.reduce((sum, b) => sum + (b.total_pago || 0), 0);
     const saldoDisponivel = filteredBudgets.reduce((sum, b) => sum + (b.saldo_disponivel || 0), 0);
     
@@ -383,8 +383,11 @@ export class ContractDetailsPageComponent {
   paymentProgress = computed(() => {
     const rows = this.filteredNesPagamentos();
     const empenhoRows = rows.filter(r => r.tipo === 'EMPENHO');
+    const anulacaoRows = rows.filter(r => r.tipo === 'ANULACAO');
     const pagamentoRows = rows.filter(r => r.tipo === 'PAGAMENTO' && r.obNumber);
-    const totalEmpenhado = empenhoRows.reduce((s, r) => s + r.amount, 0);
+    const totalEmpenhadoBruto = empenhoRows.reduce((s, r) => s + r.amount, 0);
+    const totalAnulado = anulacaoRows.reduce((s, r) => s + r.amount, 0);
+    const totalEmpenhado = Math.max(0, totalEmpenhadoBruto - totalAnulado);
     const totalPago = pagamentoRows.reduce((s, r) => s + r.amount, 0);
     const neCount = new Set(empenhoRows.map(r => r.ne)).size;
     return {
@@ -444,6 +447,9 @@ export class ContractDetailsPageComponent {
   /** Armazena o queryId atual para permitir cancelamento */
   private currentQueryId: string | null = null;
 
+  /** Último contractId que teve dados carregados (para evitar recarga desnecessária) */
+  private _loadedContractId: string | null = null;
+
   /** Intervalo de auto-refresh (15 minutos) */
   private autoRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -452,21 +458,38 @@ export class ContractDetailsPageComponent {
      * Efeito reativo: carrega aditivos, orçamentos e transações
      * automaticamente quando o contrato é selecionado.
      * Cancela consultas anteriores ao mudar de contrato.
+     * 
+     * Só executa as cargas completas quando navega para um contrato DIFERENTE.
+     * Re-execuções causadas por loadContracts() não disparam recargas desnecessárias,
+     * evitando flickering e loops de sincronização.
      */
     effect(() => {
       const c = this.contract();
-      if (c) {
-        // Cancela consultas pendentes do contrato anterior
-        this.cancelCurrentQueries();
-        
-        // Gera novo queryId para este contrato
-        this.currentQueryId = `contract-${c.id}-${Date.now()}`;
-        this.sigefService.enqueueQuery(this.currentQueryId);
-        
-        this.loadAditivos(c.id);
-        this.loadBudgets(c.id);
-        this.loadTransactions(c.id);
-        this.loadNesPagamentos(c.id);
+      const currentId = this.contractId();
+      if (c && currentId) {
+        if (this._loadedContractId !== currentId) {
+          this._loadedContractId = currentId;
+
+          // Cancela consultas pendentes do contrato anterior
+          this.cancelCurrentQueries();
+
+          // Gera novo queryId para este contrato
+          this.currentQueryId = `contract-${c.id}-${Date.now()}`;
+          this.sigefService.enqueueQuery(this.currentQueryId);
+
+          this.loadAditivos(c.id);
+          this.loadBudgets(c.id);
+          this.loadTransactions(c.id);
+          this.loadNesPagamentos(c.id);
+
+          // Persiste dados do cache SIGEF nas tabelas de negócio (dotacoes/transacoes)
+          // para que os cards de dotação e totais do contrato reflitam os valores
+          // sem depender de ação manual ou ciclo automático de sincronização.
+          this.financialService.syncSigefTransactions(c.id).then(() => {
+            this.loadBudgets(c.id);
+            this.loadTransactions(c.id);
+          });
+        }
       }
     });
 
@@ -547,7 +570,10 @@ export class ContractDetailsPageComponent {
    * Carrega aditivos do contrato via service.
    */
   private async loadAditivos(contractId: string): Promise<void> {
-    this.aditivosLoading.set(true);
+    const isFirstLoad = this.aditivos().length === 0;
+    if (isFirstLoad) {
+      this.aditivosLoading.set(true);
+    }
     this.aditivosError.set(null);
 
     const result = await this.contractService.getAditivosPorContractId(contractId);
@@ -559,7 +585,9 @@ export class ContractDetailsPageComponent {
       this.aditivos.set(result.data ?? []);
     }
 
-    this.aditivosLoading.set(false);
+    if (isFirstLoad) {
+      this.aditivosLoading.set(false);
+    }
   }
 
   /**

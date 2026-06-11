@@ -68,6 +68,7 @@ export interface Contract {
   saldo_a_pagar?: number;
   data_ultimo_pagamento?: Date;
   valor_mensal?: number;
+  valor_mensal_original?: number;
   valor_global_atualizado?: number;
   total_aditivos_valor?: number;
   parcelas_pagas_manual?: string[]; // Referências das parcelas marcadas como pagas manualmente (formato: YYYY-MM)

@@ -252,9 +252,7 @@ export class DashboardService {
 
     return contracts
       .map(c => {
-        const gross = Number(c.total_empenhado) || 0;
-        const cancelled = Number(c.total_cancelado) || 0;
-        const netCommitted = Math.max(0, gross - cancelled);
+        const netCommitted = Number(c.total_empenhado) || 0;
         const paid = Number(c.total_pago) || 0;
         return { contract: c.contrato, contratada: c.contratada, expected: netCommitted, paid, diff: Math.max(0, netCommitted - paid) };
       })

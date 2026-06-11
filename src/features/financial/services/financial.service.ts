@@ -820,7 +820,6 @@ export class FinancialService {
         })
         .eq('id', contractId);
 
-      this.contractService.loadContracts(undefined, true);
     } catch (err) {
       console.error('[FinancialService] Erro ao atualizar totais do contrato:', contractId, err);
     }
@@ -877,7 +876,8 @@ export class FinancialService {
       console.error('[FinancialService] Erro ao buscar contratos para backfill:', err);
     }
 
-    // Recarregar transações na UI após o backfill
+    // Recarregar contratos e transações na UI após o backfill
+    await this.contractService.loadContracts(undefined, true);
     await this.loadAllTransactions();
 
     console.log('[FinancialService] Backfill concluído.');

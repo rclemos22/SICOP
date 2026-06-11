@@ -193,6 +193,8 @@ export class ContractService {
         if (updateError) console.warn('[ContractService] Erro ao atualizar contratada no contrato:', updateError);
       }
 
+      await this.updateEffectiveMonthlyValue(data.contract_id);
+
       await this.loadContracts(undefined, true);
 
       const newAditivo = this.mapRawToAditivo(data);
@@ -227,6 +229,8 @@ export class ContractService {
         if (updateError) console.warn('[ContractService] Erro ao atualizar contratada no contrato:', updateError);
       }
 
+      await this.updateEffectiveMonthlyValue(data.contract_id);
+
       await this.loadContracts(undefined, true);
 
       const updatedAditivo = this.mapRawToAditivo(data);
@@ -239,6 +243,14 @@ export class ContractService {
 
   async deleteAditivo(id: string): Promise<Result<null>> {
     try {
+      const { data: aditivo, error: fetchError } = await this.supabaseService.client
+        .from('aditivos')
+        .select('contract_id')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
       const { error } = await this.supabaseService.client
         .from('aditivos')
         .delete()
@@ -246,12 +258,41 @@ export class ContractService {
 
       if (error) throw error;
 
+      if (aditivo?.contract_id) {
+        await this.updateEffectiveMonthlyValue(aditivo.contract_id);
+      }
+
       await this.loadContracts(undefined, true);
 
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'ContractService.deleteAditivo');
       return fail(err.message || 'Erro ao excluir aditivo');
+    }
+  }
+
+  /**
+   * Atualiza contratos.valor_mensal no banco com base no aditivo vigente.
+   * O valor mensal efetivo é o novo_valor_mensal do aditivo mais recente
+   * cujo data_inicio_novo já tenha passado.
+   */
+  private async updateEffectiveMonthlyValue(contractId: string): Promise<void> {
+    const { data } = await this.supabaseService.client
+      .from('aditivos')
+      .select('novo_valor_mensal')
+      .eq('contract_id', contractId)
+      .not('novo_valor_mensal', 'is', null)
+      .not('data_inicio_novo', 'is', null)
+      .lte('data_inicio_novo', new Date().toISOString().split('T')[0])
+      .order('data_inicio_novo', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data?.novo_valor_mensal != null) {
+      await this.supabaseService.client
+        .from('contratos')
+        .update({ valor_mensal: data.novo_valor_mensal })
+        .eq('id', contractId);
     }
   }
 
@@ -282,12 +323,15 @@ export class ContractService {
           }
         }
       });
+      // Subtrai anulações do total empenhado para refletir o valor líquido
+      totalEmpenhado = Math.max(0, totalEmpenhado - totalCancelado);
     }
 
-    // Fallback: se a soma das dotações for zero, usar os totais calculados da tabela contratos
-    if (totalEmpenhado === 0 && totalPago === 0) {
+    // Fallback: se não houver dotações agregadas, usar os totais calculados da tabela contratos
+    if (!raw.dotacoes || !Array.isArray(raw.dotacoes) || raw.dotacoes.length === 0) {
       totalEmpenhado = Number(raw.total_empenhado) || 0;
       totalPago = Number(raw.total_pago) || 0;
+      totalCancelado = 0;
     }
     
     // Filtrar aditivos que alteram vigência (Prorrogação/Prazo)
@@ -320,9 +364,10 @@ export class ContractService {
     const aditivoMensalVigente = aditivosComNovoMensal.find(a =>
       a.data_inicio_novo! <= hoje
     );
+    const valorMensalOriginal = raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined;
     const valorMensalEfetivo = aditivoMensalVigente
       ? aditivoMensalVigente.novo_valor_mensal!
-      : (raw.valor_mensal != null ? this.parseNumeric(raw.valor_mensal) : undefined);
+      : valorMensalOriginal;
 
     let dataFimEfetiva: Date;
     let diasRestantes: number;
@@ -392,9 +437,10 @@ export class ContractService {
       total_empenhado: totalEmpenhado,
       total_cancelado: totalCancelado,
       total_pago: totalPago,
-      saldo_a_pagar: totalEmpenhado - totalCancelado - totalPago,
+      saldo_a_pagar: Math.max(0, totalEmpenhado - totalPago),
       data_ultimo_pagamento: dataUltimoPagamento || (raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined),
       valor_mensal: valorMensalEfetivo,
+      valor_mensal_original: valorMensalOriginal,
       valor_global_atualizado: valorGlobalAtualizado,
       total_aditivos_valor: totalAditivosValor,
       parcelas_pagas_manual: Array.isArray(raw.parcelas_pagas_manual) ? raw.parcelas_pagas_manual : 
