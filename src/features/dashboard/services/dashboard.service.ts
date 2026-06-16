@@ -325,7 +325,7 @@ export class DashboardService {
     return result;
   });
 
-  // ── Expiring Contracts (≤ 90 days) ────────────────────────────────────
+  // ── Expiring Contracts (≤ 120 days) ───────────────────────────────────
 
   readonly expiringContracts = computed(() =>
     this.filteredContracts()

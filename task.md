@@ -16,7 +16,7 @@ Desenvolver um sistema web para gestão de contratos públicos que permita:
 2. Registro de aditivos (alteração de prazo e valor) com edição e exclusão
 3. Integração com API SIGEF para Notas de Empenho
 4. Visualização de transações financeiras (empenho, pagamento, cancelamento)
-5. Alertas automáticos para contratos com menos de 90 dias restantes
+5. Alertas automáticos para contratos com menos de 120 dias restantes
 6. Selector de ano fiscal para filtragem de dados
 7. Interface responsiva com sidebar de navegação
 8. **Gestão de Dotações**: Cadastro, edição e exclusão de dotações vinculadas a contratos
@@ -134,7 +134,7 @@ O formulário também possui autocomplete de fornecedores que preenche automatic
 - Carregamento automático de dados ao abrir a página
 - Métricas de contratos por status (Vigentes, Finalizando, Rescindidos)
 - Valor total dos contratos vigentes
-- Lista de contratos expirando em breve (≤90 dias)
+- Lista de contratos expirando em breve (≤120 dias)
 - Gráfico de rosca de execução orçamentária (D3.js)
 - Gráfico de rosca de distribuição de contratos por status (D3.js)
 - KPIs: Total Contratos, Dotações, Empenhado

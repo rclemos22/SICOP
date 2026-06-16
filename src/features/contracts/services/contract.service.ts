@@ -70,7 +70,7 @@ export class ContractService {
       return { data, error: null };
     } catch (err) {
       console.error('[ContractService] Erro na query de contratos:', err);
-      return { data: [], error: null };
+      throw err;
     }
   }
 
@@ -398,7 +398,7 @@ export class ContractService {
     // Importante: Pick de status para satisfazer a interface
     const statusEfetivo = (raw.status === 'RESCINDIDO') ? ContractStatus.RESCINDIDO 
       : (raw.status === 'ENCERRADO') ? ContractStatus.ENCERRADO
-      : (raw.status === 'VIGENTE' && diasRestantes <= 90) ? ContractStatus.FINALIZANDO
+      : (raw.status === 'VIGENTE' && diasRestantes <= 120) ? ContractStatus.FINALIZANDO
       : ContractStatus.VIGENTE;
 
     // Aplicar mudança de razão social do aditivo mais recente (se data_inicio_novo <= hoje)
@@ -450,7 +450,7 @@ export class ContractService {
 
   private calculateEffectiveStatus(status: string, diasRestantes: number): ContractStatus {
     if (status === ContractStatus.RESCINDIDO) return ContractStatus.RESCINDIDO;
-    if (diasRestantes <= 90) return ContractStatus.FINALIZANDO;
+    if (diasRestantes <= 120) return ContractStatus.FINALIZANDO;
     return ContractStatus.VIGENTE;
   }
 

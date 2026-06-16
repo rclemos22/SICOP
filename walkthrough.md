@@ -45,7 +45,7 @@ No header, há um seletor de ano que filtra todos os dados da aplicação confor
 - Cards com métricas: Total de contratos, valor total, contratos ativos
 - Gráfico de rosca de execução orçamentária (Empenhado vs Disponível)
 - Gráfico de distribuição de contratos por status (Vigentes, Finalizando, Rescindidos)
-- Lista de contratos próximos ao vencimento (≤90 dias)
+- Lista de contratos próximos ao vencimento (≤120 dias)
 - Tabela de últimos pagamentos
 
 ### Contratos

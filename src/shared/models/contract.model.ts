@@ -80,8 +80,8 @@ export interface Contract {
 /**
  * Determina o status efetivo do contrato conforme regras de negócio.
  *
- * **Regra de Negócio — Gatilho de 90 dias:**
- * Contratos vigentes cujo término é ≤ 90 dias recebem o status visual
+ * **Regra de Negócio — Gatilho de 120 dias:**
+ * Contratos vigentes cujo término é ≤ 120 dias recebem o status visual
  * `FINALIZANDO` para alertar a equipe sobre a necessidade de renovação
  * ou nova licitação. Contratos rescindidos mantêm seu status original
  * independentemente dos dias restantes.
@@ -99,7 +99,7 @@ export function getEffectiveStatus(contract: Pick<Contract, 'status'>, daysRemai
     return ContractStatus.ENCERRADO;
   }
 
-  if (daysRemaining <= 90) {
+  if (daysRemaining <= 120) {
     return ContractStatus.FINALIZANDO;
   }
 

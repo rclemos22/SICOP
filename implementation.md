@@ -117,8 +117,8 @@ src/
 ## Regras de Negócio
 
 ### Status de Contrato
-- **VIGENTE**: Contrato com mais de 90 dias restantes
-- **FINALIZANDO**: Contrato com ≤90 dias restantes
+- **VIGENTE**: Contrato com mais de 120 dias restantes
+- **FINALIZANDO**: Contrato com ≤120 dias restantes
 - **RESCINDIDO**: Contrato rescindido
 
 ### Cálculo de Vigência Efetiva
@@ -139,7 +139,7 @@ const dataFimEfetiva = aditivosComVigencia[0]?.nova_vigencia || dataFimOriginal;
 const diasRestantes = Math.ceil((dataFimEfetiva - hoje) / dias);
 
 // 4. Atualizar status efetivo
-const statusEfetivo = diasRestantes <= 90 ? 'FINALIZANDO' : 'VIGENTE';
+const statusEfetivo = diasRestantes <= 120 ? 'FINALIZANDO' : 'VIGENTE';
 ```
 
 ### Acompanhamento de Dotações e Empenho
