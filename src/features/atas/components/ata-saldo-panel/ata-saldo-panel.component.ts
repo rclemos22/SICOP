@@ -18,10 +18,11 @@ export class AtaSaldoPanelComponent implements OnInit {
   ata = input.required<Ata>();
   itens = input<AtaItem[]>([]);
 
-  activeTab = signal<'saldo' | 'consumo' | 'adesoes'>('saldo');
+  activeTab = signal<'itens' | 'saldo' | 'consumo' | 'adesoes'>('itens');
 
   readonly saldos = this.saldoService.saldos;
   readonly loading = this.saldoService.loading;
+  readonly saldoError = this.saldoService.error;
 
   // Consumo form
   showConsumoForm = signal(false);
@@ -41,6 +42,11 @@ export class AtaSaldoPanelComponent implements OnInit {
   // Helpers
   getAdesaoStatusLabel = getAdesaoStatusLabel;
   getAdesaoStatusClass = getAdesaoStatusClass;
+
+  // Total dos itens
+  totalItens = computed(() =>
+    this.itens().reduce((acc, i) => acc + (i.quantidade * i.valor_unitario), 0)
+  );
 
   // Saldo total
   saldoGlobal = computed(() => {
@@ -76,7 +82,7 @@ export class AtaSaldoPanelComponent implements OnInit {
     if (!result.error) this.adesoes.set(result.data!);
   }
 
-  setActiveTab(tab: 'saldo' | 'consumo' | 'adesoes') {
+  setActiveTab(tab: 'itens' | 'saldo' | 'consumo' | 'adesoes') {
     this.activeTab.set(tab);
     this.validationError.set(null);
   }

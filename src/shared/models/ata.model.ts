@@ -1,4 +1,4 @@
-export type AtaStatus = 'ATIVA' | 'VENCIDA' | 'SUSPENSA' | 'CANCELADA';
+export type AtaStatus = 'ATIVA' | 'VENCIDA' | 'SUSPENSA' | 'CANCELADA' | 'ENCERRADA';
 
 export interface Ata {
   id: string;
@@ -33,6 +33,7 @@ export function getAtaStatusLabel(status: AtaStatus): string {
     case 'VENCIDA': return 'Vencida';
     case 'SUSPENSA': return 'Suspensa';
     case 'CANCELADA': return 'Cancelada';
+    case 'ENCERRADA': return 'Encerrada';
     default: return status;
   }
 }
@@ -43,6 +44,7 @@ export function getAtaStatusClass(status: AtaStatus): string {
     case 'VENCIDA': return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800';
     case 'SUSPENSA': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800';
     case 'CANCELADA': return 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700';
+    case 'ENCERRADA': return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
     default: return 'bg-gray-50 text-gray-600 border-gray-200';
   }
 }

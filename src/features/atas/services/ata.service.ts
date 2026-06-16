@@ -35,7 +35,9 @@ export class AtaService {
         this.errorHandler.handle(err, 'AtaService.loadAtas');
         this._error.set(err.message || 'Erro ao carregar atas');
       }
-      this._atas.set([]);
+      if (!silent) {
+        this._atas.set([]);
+      }
     } finally {
       if (!silent) this._loading.set(false);
     }
@@ -68,9 +70,9 @@ export class AtaService {
     }
   }
 
-  async addAta(ata: Partial<Ata>): Promise<Result<null>> {
+  async addAta(ata: Partial<Ata>): Promise<Result<string>> {
     try {
-      const { error } = await this.supabaseService.client
+      const { data, error } = await this.supabaseService.client
         .from('atas')
         .insert({
           numero_processo: ata.numero_processo,
@@ -83,11 +85,16 @@ export class AtaService {
           valor_global: ata.valor_global || 0,
           status: ata.status || 'ATIVA',
           observacao: ata.observacao || null,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
-      await this.loadAtas(true);
-      return ok(null);
+      if (data) {
+        const nova: Ata = this.mapRawToAta(data);
+        this._atas.update(current => [nova, ...current]);
+      }
+      return ok(data?.id);
     } catch (err: any) {
       this.errorHandler.handle(err, 'AtaService.addAta');
       return fail(err.message || 'Erro ao adicionar ata');

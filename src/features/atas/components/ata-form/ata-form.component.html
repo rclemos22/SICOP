@@ -1,4 +1,4 @@
-<form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col h-full bg-white dark:bg-card-dark rounded-lg">
+<form #formEl [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col h-full bg-white dark:bg-card-dark rounded-lg">
   <div class="flex-1 overflow-y-auto space-y-5 p-6">
 
     <!-- Número do Processo + Número da Ata -->
@@ -25,15 +25,18 @@
       </div>
     </div>
 
-    <!-- Fornecedor (Autocomplete) -->
+    <!-- Fornecedor (Autocomplete com base na tabela de fornecedores) -->
     <div class="relative">
-      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fornecedor</label>
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fornecedor <span class="text-red-500">*</span></label>
       <input type="text"
         [value]="supplierSearch()"
         (input)="onSupplierInput($any($event.target).value)"
         (focus)="showSupplierDropdown.set(supplierSearch().length >= 2)"
         (blur)="onSupplierBlur()"
-        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow"
+        class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 transition-shadow"
+        [class.border-gray-300]="f['fornecedor_id'].valid || !f['fornecedor_id'].touched"
+        [class.border-red-500]="f['fornecedor_id'].invalid && f['fornecedor_id'].touched"
+        [class.dark:border-gray-600]="f['fornecedor_id'].valid || !f['fornecedor_id'].touched"
         placeholder="Digite o nome do fornecedor">
       @if (showSupplierDropdown() && filteredSuppliers().length) {
         <div class="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -47,6 +50,9 @@
             </button>
           }
         </div>
+      }
+      @if (f['fornecedor_id'].invalid && f['fornecedor_id'].touched) {
+        <p class="text-xs text-red-500 mt-1 font-medium">Selecione um fornecedor válido da lista.</p>
       }
     </div>
 
@@ -184,10 +190,19 @@
       class="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:ring-2 focus:ring-gray-200 outline-none">
       Cancelar
     </button>
-    <button type="submit"
-      class="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-sco-blue hover:bg-blue-700 rounded-lg transition-colors focus:ring-2 focus:ring-blue-300 outline-none shadow-sm flex items-center justify-center gap-2">
-      <span class="material-symbols-outlined text-[18px]">save</span>
-      Salvar
+    <button type="submit" [disabled]="saving()"
+      class="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg transition-colors focus:ring-2 focus:ring-blue-300 outline-none shadow-sm flex items-center justify-center gap-2"
+      [class.bg-sco-blue]="!saving()"
+      [class.hover:bg-blue-700]="!saving()"
+      [class.bg-gray-400]="saving()"
+      [class.cursor-not-allowed]="saving()">
+      @if (saving()) {
+        <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+        Salvando...
+      } @else {
+        <span class="material-symbols-outlined text-[18px]">save</span>
+        Salvar
+      }
     </button>
   </div>
 </form>

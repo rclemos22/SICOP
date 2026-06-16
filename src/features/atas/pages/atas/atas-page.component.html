@@ -144,9 +144,19 @@
         </div>
 
         @if (isEditing() || isCreating()) {
+          @if (saveError(); as errorMsg) {
+            <div class="shrink-0 mx-4 mt-4 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+              <span class="material-symbols-outlined text-[18px] text-red-500 mt-0.5">error</span>
+              <div class="text-sm text-red-700 dark:text-red-400 font-medium">{{ errorMsg }}</div>
+              <button (click)="saveError.set(null)" class="ml-auto text-red-400 hover:text-red-600">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+          }
           <app-ata-form
             class="flex-1 overflow-hidden flex flex-col"
             [ata]="isEditing() ? selectedAta() : null"
+            [saving]="saving()"
             (save)="saveChanges($event)"
             (cancel)="isCreating() ? closeDetails() : toggleEditMode()"
           ></app-ata-form>

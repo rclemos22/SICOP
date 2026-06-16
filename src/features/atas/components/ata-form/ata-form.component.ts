@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, input, output, OnInit, signal, computed } from '@angular/core';
+import { Component, computed, inject, input, output, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators, FormGroup, FormArray } from '@angular/forms';
 import { Ata, AtaItem } from '../../../../shared/models/ata.model';
 import { SupplierService } from '../../../suppliers/services/supplier.service';
+import { Supplier } from '../../../../shared/models/supplier.model';
 
 @Component({
   selector: 'app-ata-form',
@@ -15,8 +16,11 @@ export class AtaFormComponent implements OnInit {
   private supplierService = inject(SupplierService);
 
   ata = input<Ata | null>(null);
+  saving = input(false);
   save = output<{ header: Partial<Ata>; itens: AtaItem[] }>();
   cancel = output<void>();
+
+  @ViewChild('formEl') formEl!: ElementRef<HTMLFormElement>;
 
   readonly suppliers = this.supplierService.suppliers;
 
@@ -24,10 +28,13 @@ export class AtaFormComponent implements OnInit {
   showSupplierDropdown = signal(false);
 
   filteredSuppliers = computed(() => {
-    const q = this.supplierSearch().toLowerCase();
-    return q.length >= 2
-      ? this.suppliers().filter(s => s.razao_social.toLowerCase().includes(q) || s.cnpj?.includes(q))
-      : [];
+    const query = this.supplierSearch().toLowerCase();
+    if (query.length < 2) return [];
+    return this.suppliers().filter(s =>
+      s.razao_social.toLowerCase().includes(query) ||
+      s.nome_fantasia.toLowerCase().includes(query) ||
+      s.cnpj.includes(query)
+    );
   });
 
   form: FormGroup;
@@ -36,8 +43,7 @@ export class AtaFormComponent implements OnInit {
     this.form = this.fb.group({
       numero_processo: ['', Validators.required],
       numero_ata: ['', Validators.required],
-      fornecedor_id: [''],
-      fornecedor_nome: [''],
+      fornecedor_id: ['', Validators.required],
       objeto: [''],
       data_assinatura: [''],
       vigencia_inicio: [''],
@@ -49,6 +55,7 @@ export class AtaFormComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.supplierService.loadSuppliers();
     this.populateForm();
   }
 
@@ -72,8 +79,7 @@ export class AtaFormComponent implements OnInit {
       this.form.patchValue({
         numero_processo: current.numero_processo,
         numero_ata: current.numero_ata,
-        fornecedor_id: current.fornecedor_id,
-        fornecedor_nome: current.fornecedor_nome,
+        fornecedor_id: current.fornecedor_id || '',
         objeto: current.objeto,
         data_assinatura: current.data_assinatura ? new Date(current.data_assinatura).toISOString().split('T')[0] : '',
         vigencia_inicio: current.vigencia_inicio ? new Date(current.vigencia_inicio).toISOString().split('T')[0] : '',
@@ -112,18 +118,15 @@ export class AtaFormComponent implements OnInit {
     });
   }
 
-  selectSupplier(supplier: { id: string; razao_social: string }) {
-    this.form.patchValue({
-      fornecedor_id: supplier.id,
-      fornecedor_nome: supplier.razao_social,
-    });
+  selectSupplier(supplier: Supplier) {
+    this.form.patchValue({ fornecedor_id: supplier.id });
     this.supplierSearch.set(supplier.razao_social);
     this.showSupplierDropdown.set(false);
   }
 
   onSupplierInput(value: string) {
     this.supplierSearch.set(value);
-    this.form.patchValue({ fornecedor_id: '', fornecedor_nome: value });
+    this.form.patchValue({ fornecedor_id: '' });
     this.showSupplierDropdown.set(value.length >= 2);
   }
 
@@ -132,12 +135,20 @@ export class AtaFormComponent implements OnInit {
   }
 
   onSubmit() {
+    if (this.saving()) return;
+
+    if (this.itensArray.length === 0) {
+      this.form.markAllAsTouched();
+      this.scrollToFirstError();
+      return;
+    }
+
     if (this.form.valid) {
       const raw = this.form.value;
       const header: Partial<Ata> = {
         numero_processo: raw.numero_processo,
         numero_ata: raw.numero_ata,
-        fornecedor_id: raw.fornecedor_id || null,
+        fornecedor_id: raw.fornecedor_id,
         objeto: raw.objeto || null,
         data_assinatura: raw.data_assinatura || null,
         vigencia_inicio: raw.vigencia_inicio || null,
@@ -156,7 +167,18 @@ export class AtaFormComponent implements OnInit {
       this.save.emit({ header, itens });
     } else {
       this.form.markAllAsTouched();
+      this.scrollToFirstError();
     }
+  }
+
+  private scrollToFirstError() {
+    setTimeout(() => {
+      const firstError = this.formEl?.nativeElement.querySelector('.ng-invalid');
+      if (firstError) {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (firstError as HTMLElement).focus();
+      }
+    }, 100);
   }
 
   onCancel() {

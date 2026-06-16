@@ -1,6 +1,11 @@
 <div class="flex flex-col h-full">
   <!-- Abas -->
   <div class="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 shrink-0">
+    <button (click)="setActiveTab('itens')"
+      class="px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors"
+      [class]="activeTab() === 'itens' ? 'text-sco-blue border-b-2 border-sco-blue bg-white dark:bg-card-dark' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'">
+      Itens
+    </button>
     <button (click)="setActiveTab('saldo')"
       class="px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors"
       [class]="activeTab() === 'saldo' ? 'text-sco-blue border-b-2 border-sco-blue bg-white dark:bg-card-dark' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'">
@@ -30,6 +35,46 @@
         <div class="animate-spin h-6 w-6 border-3 border-sco-blue border-t-transparent rounded-full"></div>
       </div>
     } @else {
+      <!-- Aba: Itens -->
+      @if (activeTab() === 'itens') {
+        @if (itens().length > 0) {
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th class="text-left text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-12">#</th>
+                  <th class="text-left text-xs font-bold text-gray-500 uppercase py-2 pr-2">Descrição</th>
+                  <th class="text-left text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-20">Unid.</th>
+                  <th class="text-right text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-24">Quantidade</th>
+                  <th class="text-right text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-28">Valor Unit.</th>
+                  <th class="text-right text-xs font-bold text-gray-500 uppercase py-2 pr-2 w-28">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of itens(); track item.numero_item) {
+                  <tr class="border-b border-gray-100 dark:border-gray-800">
+                    <td class="py-2 pr-2 text-sm text-gray-700 dark:text-gray-300 font-mono text-center">{{ item.numero_item }}</td>
+                    <td class="py-2 pr-2 text-sm text-gray-900 dark:text-white font-medium">{{ item.descricao }}</td>
+                    <td class="py-2 pr-2 text-sm text-gray-700 dark:text-gray-300">{{ item.unidade || '-' }}</td>
+                    <td class="py-2 pr-2 text-sm text-gray-900 dark:text-white font-mono text-right">{{ item.quantidade }}</td>
+                    <td class="py-2 pr-2 text-sm text-gray-900 dark:text-white font-mono text-right">{{ item.valor_unitario | number:'1.2-2' }}</td>
+                    <td class="py-2 pr-2 text-sm text-gray-900 dark:text-white font-mono text-right font-bold">{{ (item.quantidade * item.valor_unitario) | number:'1.2-2' }}</td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr class="border-t-2 border-gray-300 dark:border-gray-600">
+                  <td colspan="5" class="py-2 pr-2 text-sm font-bold text-gray-700 dark:text-gray-300 text-right">Valor Global</td>
+                  <td class="py-2 pr-2 text-sm font-bold text-sco-blue dark:text-blue-400 font-mono text-right">{{ totalItens() | number:'1.2-2' }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        } @else {
+          <div class="text-center py-8 text-gray-400 text-sm">Nenhum item cadastrado.</div>
+        }
+      }
+
       <!-- Aba: Saldo -->
       @if (activeTab() === 'saldo') {
         <div class="flex items-center justify-between mb-3">
@@ -62,6 +107,12 @@
         </div>
 
         <!-- Saldo por Item -->
+        @if (saldoError()) {
+          <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium">
+            {{ saldoError() }}
+          </div>
+        }
+
         @if (saldos().length > 0) {
           <div class="space-y-3">
             @for (item of saldos(); track item.item_id) {

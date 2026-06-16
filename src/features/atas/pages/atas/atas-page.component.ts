@@ -24,6 +24,8 @@ export class AtasPageComponent {
   selectedAtaItens = signal<AtaItem[]>([]);
   isEditing = signal(false);
   isCreating = signal(false);
+  saving = signal(false);
+  saveError = signal<string | null>(null);
 
   // Helpers
   getStatusClass = getAtaStatusClass;
@@ -92,22 +94,52 @@ export class AtasPageComponent {
   }
 
   async saveChanges(data: { header: Partial<Ata>; itens: AtaItem[] }) {
-    if (this.isCreating()) {
-      const result = await this.ataService.addAta(data.header);
-      if (!result.error) {
-        this.closeDetails();
-      }
-    } else if (this.isEditing() && this.selectedAta()) {
-      const id = this.selectedAta()!.id;
-      const result = await this.ataService.updateAta(id, data.header);
-      if (!result.error) {
-        const saveResult = await this.ataService.saveItens(id, data.itens);
-        if (!saveResult.error) {
-          this.selectedAta.update(current => current ? { ...current, ...data.header, itens: data.itens } : null);
-          this.isEditing.set(false);
+    this.saving.set(true);
+    this.saveError.set(null);
+
+    try {
+      if (this.isCreating()) {
+        const result = await this.ataService.addAta(data.header);
+        if (result.error) {
+          this.saveError.set(result.error);
+          return;
         }
+
+        const createdId = result.data;
+        if (createdId && data.itens.length > 0) {
+          const itensResult = await this.ataService.saveItens(createdId, data.itens);
+          if (itensResult.error) {
+            this.saveError.set(itensResult.error);
+            return;
+          }
+        }
+
+        this.closeDetails();
+      } else if (this.isEditing() && this.selectedAta()) {
+        const id = this.selectedAta()!.id;
+        const result = await this.ataService.updateAta(id, data.header);
+        if (result.error) {
+          this.saveError.set(result.error);
+          return;
+        }
+
+        const itensResult = await this.ataService.saveItens(id, data.itens);
+        if (itensResult.error) {
+          this.saveError.set(itensResult.error);
+          return;
+        }
+
+        this.selectedAta.update(current => current ? { ...current, ...data.header, itens: data.itens } : null);
+        this.isEditing.set(false);
       }
+    } catch (err: any) {
+      this.saveError.set(err.message || 'Erro inesperado ao salvar');
+      return;
+    } finally {
+      this.saving.set(false);
     }
+
+    await this.ataService.loadAtas(false);
   }
 
   async deleteAta(ata: Ata) {
