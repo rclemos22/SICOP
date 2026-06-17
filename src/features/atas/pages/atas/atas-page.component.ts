@@ -138,8 +138,6 @@ export class AtasPageComponent {
     } finally {
       this.saving.set(false);
     }
-
-    await this.ataService.loadAtas(false);
   }
 
   async deleteAta(ata: Ata) {

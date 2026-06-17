@@ -489,6 +489,10 @@ export class ContractDetailsPageComponent {
             this.loadBudgets(c.id);
             this.loadTransactions(c.id);
           });
+
+          // Busca dados atualizados do SIGEF via API para alimentar o cache local,
+          // garantindo que empenhos recém-cadastrados apareçam sem esperar 15min.
+          this.atualizarLancamentos();
         }
       }
     });

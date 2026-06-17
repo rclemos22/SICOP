@@ -121,7 +121,9 @@ export class AtaService {
         .eq('id', id);
 
       if (error) throw error;
-      await this.loadAtas(true);
+      this._atas.update(current =>
+        current.map(a => a.id === id ? { ...a, ...ata } : a)
+      );
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'AtaService.updateAta');
@@ -169,7 +171,6 @@ export class AtaService {
         if (insertError) throw insertError;
       }
 
-      await this.loadAtas(true);
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'AtaService.saveItens');
