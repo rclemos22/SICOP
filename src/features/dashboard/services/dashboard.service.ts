@@ -339,7 +339,7 @@ export class DashboardService {
     this.contractService.contracts()
       .filter(c => {
         const vigente = c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO;
-        return vigente && !!c.valor_mensal && c.valor_mensal > 0;
+        return vigente && c.tipo !== 'material';
       })
       .map(c => {
         const totalEmpenhado = Number(c.total_empenhado) || 0;
@@ -352,7 +352,7 @@ export class DashboardService {
           percentage: valorMensal > 0 ? (saldoEmpenho / valorMensal) * 100 : 0,
         };
       })
-      .filter(a => a.saldoEmpenho > 0 && a.saldoEmpenho <= a.valorMensal)
+      .filter(a => a.saldoEmpenho <= a.valorMensal)
       .sort((a, b) => a.percentage - b.percentage)
       .slice(0, 10)
   );

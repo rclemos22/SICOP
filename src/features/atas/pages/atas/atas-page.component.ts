@@ -1,8 +1,10 @@
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Ata, AtaStatus, AtaItem, getAtaStatusClass, getAtaStatusLabel } from '../../../../shared/models/ata.model';
 import { AtaService } from '../../services/ata.service';
+import { SaldoAtaService } from '../../services/saldo-ata.service';
+import { AtaExportService } from '../../services/ata-export.service';
 import { AtaFormComponent } from '../../components/ata-form/ata-form.component';
 import { AtaSaldoPanelComponent } from '../../components/ata-saldo-panel/ata-saldo-panel.component';
 
@@ -12,12 +14,28 @@ import { AtaSaldoPanelComponent } from '../../components/ata-saldo-panel/ata-sal
   imports: [CommonModule, FormsModule, DatePipe, DecimalPipe, AtaFormComponent, AtaSaldoPanelComponent],
   templateUrl: './atas-page.component.html',
 })
-export class AtasPageComponent {
+export class AtasPageComponent implements OnInit {
   private ataService = inject(AtaService);
+  private saldoAtaService = inject(SaldoAtaService);
+  private exportService = inject(AtaExportService);
 
   // State
   searchQuery = signal('');
   filterStatus = signal<'ALL' | AtaStatus>('ALL');
+
+  // Pending adesões count per ata
+  pendingCounts = signal<Record<string, number>>({});
+
+  ngOnInit(): void {
+    this.loadPendingCounts();
+  }
+
+  private async loadPendingCounts() {
+    const result = await this.saldoAtaService.contarPendentesPorAta();
+    if (!result.error && result.data) {
+      this.pendingCounts.set(result.data);
+    }
+  }
 
   // Drawer
   selectedAta = signal<Ata | null>(null);
@@ -138,6 +156,10 @@ export class AtasPageComponent {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  exportCsv() {
+    this.exportService.exportAtasListCsv(this.filteredAtas());
   }
 
   async deleteAta(ata: Ata) {

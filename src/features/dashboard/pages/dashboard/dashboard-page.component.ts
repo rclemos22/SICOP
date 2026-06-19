@@ -1,13 +1,16 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, viewChild, ElementRef, effect, signal } from '@angular/core';
+import { Component, inject, viewChild, ElementRef, effect, signal, computed, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { DashboardService } from '../../services/dashboard.service';
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { AtaService } from '../../../atas/services/ata.service';
+import { SaldoAtaService } from '../../../atas/services/saldo-ata.service';
 import { OverdueAlertsCardComponent } from '../../components/overdue-alerts-card.component';
 import { LowBudgetCardComponent } from '../../components/low-budget-card.component';
 import { ExpiringContractsComponent } from '../../components/expiring-contracts.component';
 import { RecentPaymentsTableComponent } from '../../components/recent-payments-table.component';
+import { AtaAlertsCardComponent, AtaAlertMetric } from '../../components/ata-alerts-card.component';
 import { StatusChart } from '../../charts/status-chart';
 import { MonthlyExecutionChart } from '../../charts/monthly-execution-chart';
 import { PaymentComparisonChart } from '../../charts/payment-comparison-chart';
@@ -16,14 +19,16 @@ import { ContractComparisonChart } from '../../charts/contract-comparison-chart'
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, OverdueAlertsCardComponent, LowBudgetCardComponent, ExpiringContractsComponent, RecentPaymentsTableComponent],
+  imports: [CommonModule, OverdueAlertsCardComponent, LowBudgetCardComponent, ExpiringContractsComponent, RecentPaymentsTableComponent, AtaAlertsCardComponent],
   templateUrl: './dashboard-page.component.html',
 })
-export class DashboardPageComponent {
+export class DashboardPageComponent implements OnInit {
   private router = inject(Router);
   readonly dashboardService = inject(DashboardService);
   readonly appContext = inject(AppContextService);
   readonly sigefSync = inject(SigefSyncService);
+  private ataService = inject(AtaService);
+  private saldoAtaService = inject(SaldoAtaService);
 
   // D3 Chart Instances
   private statusChart = new StatusChart();
@@ -63,6 +68,24 @@ export class DashboardPageComponent {
   readonly isSyncing = this.dashboardService.isSyncing;
   readonly lastSyncTimestamp = this.dashboardService.lastSyncTimestamp;
 
+  private ataPendingCounts = signal<Record<string, number>>({});
+  private ataCriticalCount = signal(0);
+
+  readonly ataAlertMetrics = computed<AtaAlertMetric>(() => {
+    const atas = this.ataService.atas();
+    const now = new Date();
+    const expiring = atas.filter(a => {
+      if (a.status !== 'ATIVA' || !a.vigencia_fim) return false;
+      const dias = Math.ceil((new Date(a.vigencia_fim).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return dias >= 0 && dias <= 60;
+    });
+    return {
+      expiringCount: expiring.length,
+      pendingAdesoesCount: Object.values(this.ataPendingCounts()).reduce((s, c) => s + c, 0),
+      criticalSaldoCount: this.ataCriticalCount(),
+    };
+  });
+
   constructor() {
     effect(() => {
       const newYear = this.appContext.anoExercicio();
@@ -96,6 +119,15 @@ export class DashboardPageComponent {
 
   ngOnInit() {
     this.dashboardService.loadAllData();
+    this.loadAtaAlerts();
+  }
+
+  private async loadAtaAlerts() {
+    await this.ataService.loadAtas(true);
+    const pendResult = await this.saldoAtaService.contarPendentesPorAta();
+    if (!pendResult.error && pendResult.data) {
+      this.ataPendingCounts.set(pendResult.data);
+    }
   }
 
   retry() { this.dashboardService.loadAllData(); }
@@ -107,6 +139,7 @@ export class DashboardPageComponent {
   goToContracts() { this.router.navigate(['/contracts']); }
   goToFinancial() { this.router.navigate(['/financial']); }
   goToBudget() { this.router.navigate(['/budget']); }
+  goToAtas() { this.router.navigate(['/atas']); }
   handleViewContract(contractNumber: string) { this.router.navigate(['/contracts', contractNumber]); }
 
   async syncAllSigef() { await this.dashboardService.syncAllSigef(); }

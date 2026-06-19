@@ -79,11 +79,18 @@
       @if (activeTab() === 'saldo') {
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-gray-500 uppercase">Saldo por Item</span>
-          <button (click)="exportPdf()"
-            class="text-xs font-semibold text-sco-blue hover:text-blue-700 transition-colors flex items-center gap-1">
-            <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
-            Exportar PDF
-          </button>
+          <div class="flex items-center gap-2">
+            <button (click)="exportCsv()"
+              class="text-xs font-semibold text-gray-500 hover:text-sco-blue transition-colors flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">table</span>
+              CSV
+            </button>
+            <button (click)="exportPdf()"
+              class="text-xs font-semibold text-sco-blue hover:text-blue-700 transition-colors flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+              PDF
+            </button>
+          </div>
         </div>
 
         <!-- Resumo Global -->
@@ -106,6 +113,23 @@
           </div>
         </div>
 
+        <!-- Barra de Legenda dos Limites -->
+        <div class="mb-4 p-3 bg-blue-50/50 dark:bg-blue-900/5 border border-blue-100 dark:border-blue-900/20 rounded-lg">
+          <div class="flex items-center gap-4 text-[10px]">
+            <span class="font-bold text-gray-500 uppercase">Limites Legais (Art. 86):</span>
+            <span class="flex items-center gap-1">
+              <span class="w-3 h-px border-t-2 border-dashed border-orange-500 inline-block"></span>
+              <span class="text-orange-600 dark:text-orange-400 font-semibold">50%</span>
+              <span class="text-gray-400">individual</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="w-3 h-px border-t-2 border-dashed border-red-500 inline-block"></span>
+              <span class="text-red-600 dark:text-red-400 font-semibold">200%</span>
+              <span class="text-gray-400">coletivo</span>
+            </span>
+          </div>
+        </div>
+
         <!-- Saldo por Item -->
         @if (saldoError()) {
           <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium">
@@ -117,36 +141,81 @@
           <div class="space-y-3">
             @for (item of saldos(); track item.item_id) {
               <div class="bg-white dark:bg-card-dark border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                <div class="flex justify-between items-start mb-2">
-                  <div>
-                    <span class="text-xs font-bold text-gray-500 font-mono">Item {{ item.numero_item }}</span>
-                    <p class="text-sm font-bold text-gray-900 dark:text-white mt-0.5">{{ item.descricao_item }}</p>
+                <!-- Header -->
+                <div class="flex items-start justify-between mb-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-bold text-gray-500 font-mono">Item {{ item.numero_item }}</span>
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase border"
+                        [class]="riskLevel(item.percentual_utilizado).class">
+                        {{ riskLevel(item.percentual_utilizado).label }}
+                      </span>
+                    </div>
+                    <p class="text-sm font-bold text-gray-900 dark:text-white mt-0.5 truncate">{{ item.descricao_item }}</p>
                   </div>
-                  <span class="text-xs font-bold whitespace-nowrap"
-                    [class.text-green-600]="item.percentual_utilizado < 80"
-                    [class.text-amber-600]="item.percentual_utilizado >= 80 && item.percentual_utilizado < 100"
+                  <span class="text-xs font-bold whitespace-nowrap shrink-0 ml-2"
+                    [class.text-green-600]="item.percentual_utilizado < 50"
+                    [class.text-amber-600]="item.percentual_utilizado >= 50 && item.percentual_utilizado < 80"
+                    [class.text-orange-600]="item.percentual_utilizado >= 80 && item.percentual_utilizado < 100"
                     [class.text-red-600]="item.percentual_utilizado >= 100">
-                    {{ item.percentual_utilizado }}%
+                    {{ item.percentual_utilizado }}% utilizado
                   </span>
                 </div>
-                <!-- Progress Bar -->
-                <div class="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-2">
+
+                <!-- Progress Bar com indicadores de limite legal -->
+                <div class="relative w-full h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-2">
                   @let pct = Math.min(item.percentual_utilizado, 100);
                   <div class="h-full rounded-full transition-all duration-500"
                     [style.width.%]="pct"
                     [class]="percentBarClass(item.percentual_utilizado)"></div>
+                  <!-- Linha de 50% (limite individual) -->
+                  <div class="absolute top-0 w-px h-full border-l-2 border-dashed border-orange-500 z-10"
+                    [style.left.%]="50" title="Limite individual (50%)"></div>
+                  <!-- Linha de 100% (limite do item) -->
+                  <div class="absolute top-0 w-px h-full border-l border-dashed border-gray-400 z-10"
+                    [style.left.%]="100" title="Quantidade registrada (100%)"></div>
                 </div>
-                <div class="grid grid-cols-4 gap-2 text-xs">
-                  <div><span class="text-gray-400">Registrado:</span> <span class="font-mono font-bold text-gray-700 dark:text-gray-300">{{ item.quantidade_registrada }}</span></div>
-                  <div><span class="text-gray-400">Consumido:</span> <span class="font-mono font-bold text-amber-600">{{ item.quantidade_consumida_interna }}</span></div>
-                  <div><span class="text-gray-400">Aderido:</span> <span class="font-mono font-bold text-blue-600">{{ item.quantidade_aderida }}</span></div>
-                  <div><span class="text-gray-400">Disponível:</span> <span class="font-mono font-bold text-green-600">{{ item.saldo_disponivel }}</span></div>
+
+                <!-- Detalhamento -->
+                <div class="grid grid-cols-5 gap-2 text-xs mb-2">
+                  <div class="text-center">
+                    <div class="text-gray-400">Registrado</div>
+                    <div class="font-mono font-bold text-gray-700 dark:text-gray-300">{{ item.quantidade_registrada }}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-amber-500">Consumido</div>
+                    <div class="font-mono font-bold text-amber-600">{{ item.quantidade_consumida_interna }}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-blue-500">Aderido</div>
+                    <div class="font-mono font-bold text-blue-600">{{ item.quantidade_aderida }}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-green-500">Disponível</div>
+                    <div class="font-mono font-bold text-green-600">{{ item.saldo_disponivel }}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-purple-500">Valor Unit.</div>
+                    <div class="font-mono font-bold text-gray-700 dark:text-gray-300">{{ item.valor_unitario | number:'1.2-2' }}</div>
+                  </div>
+                </div>
+
+                <!-- Limites Legais do Item -->
+                <div class="flex items-center gap-3 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-800 pt-2 mt-1">
+                  <span class="font-semibold">Limites:</span>
+                  <span>Individual (50%): <strong class="text-orange-600 dark:text-orange-400">{{ item.quantidade_registrada * 0.5 | number:'1.2-2' }}</strong></span>
+                  <span>Coletivo (200%): <strong class="text-red-600 dark:text-red-400">{{ item.quantidade_registrada * 2.0 | number:'1.2-2' }}</strong></span>
+                  <span>Saldo adesão: <strong class="text-blue-600 dark:text-blue-400">{{ (item.saldo_adesao ?? Math.max(0, (item.quantidade_registrada * 2.0) - item.quantidade_aderida)) | number:'1.2-2' }}</strong></span>
                 </div>
               </div>
             }
           </div>
         } @else {
-          <div class="text-center py-8 text-gray-400 text-sm">Nenhum saldo disponível.</div>
+          <div class="flex flex-col items-center justify-center py-12 text-gray-400">
+            <span class="material-symbols-outlined text-4xl mb-2 opacity-50">database</span>
+            <p class="text-sm font-medium">Nenhum saldo disponível</p>
+            <p class="text-xs mt-1">Os dados de saldo serão carregados automaticamente.</p>
+          </div>
         }
       }
 
@@ -307,12 +376,13 @@
           </div>
         }
 
-        <!-- Limites Legais -->
+        <!-- Limites Legais — Art. 86, Lei 14.133/2021 -->
         <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <p class="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase mb-1">Base Legal — Decreto 11.462/2023</p>
+          <p class="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase mb-1">Dispositivo Legal — Art. 86, Lei 14.133/2021</p>
           <ul class="text-xs text-blue-600 dark:text-blue-300 space-y-0.5">
-            <li>• Cada órgão aderente pode solicitar até <strong>50%</strong> da quantidade registrada por item.</li>
-            <li>• O total de adesões não pode exceder <strong>50%</strong> da quantidade registrada.</li>
+            <li>• <strong>§ 3º — Limite individual:</strong> cada órgão não participante não poderá exceder <strong>50%</strong> dos quantitativos dos itens registrados em ata.</li>
+            <li>• <strong>§ 4º — Limite coletivo:</strong> o total das adesões externas não poderá exceder o <strong>dobro (200%)</strong> do quantitativo de cada item registrado, independentemente do número de aderentes.</li>
+            <li class="text-blue-400 mt-1">• Referência de cálculo: quantitativo original registrado na ata — não o saldo disponível.</li>
           </ul>
         </div>
 
@@ -325,6 +395,11 @@
                   <div class="flex-1 min-w-0">
                     <div class="text-sm font-bold text-gray-900 dark:text-white">{{ a.razao_orgao }}</div>
                     <div class="text-xs text-gray-500 font-mono">{{ a.cnpj_orgao }}</div>
+                    <!-- Item info -->
+                    @let saldoItem = saldos().find(s => s.item_id === a.ata_item_id);
+                    @if (saldoItem) {
+                      <div class="text-[10px] text-gray-400 font-medium mt-0.5">Item {{ saldoItem.numero_item }} — {{ saldoItem.descricao_item }}</div>
+                    }
                     <div class="flex items-center gap-3 mt-1.5 text-sm">
                       <span class="font-mono font-bold text-gray-900 dark:text-white">{{ a.quantidade_solicitada }}</span>
                       <span class="text-gray-400">solicitado</span>
@@ -341,12 +416,12 @@
                       {{ getAdesaoStatusLabel(a.status) }}
                     </span>
                     @if (a.status === 'PENDENTE') {
-                      <button (click)="autorizarAdesao(a)"
+                      <button (click)="openAuthModal(a)"
                         class="p-1 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
                         title="Autorizar">
                         <span class="material-symbols-outlined text-[16px]">check_circle</span>
                       </button>
-                      <button (click)="rejeitarAdesao(a)"
+                      <button (click)="openRejectModal(a)"
                         class="p-1 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                         title="Rejeitar">
                         <span class="material-symbols-outlined text-[16px]">cancel</span>
@@ -365,7 +440,117 @@
             }
           </div>
         } @else {
-          <div class="text-center py-8 text-gray-400 text-sm">Nenhuma solicitação de adesão.</div>
+          <div class="flex flex-col items-center justify-center py-8 text-gray-400">
+            <span class="material-symbols-outlined text-4xl mb-2 opacity-50">groups</span>
+            <p class="text-sm font-medium">Nenhuma solicitação de adesão</p>
+          </div>
+        }
+
+        <!-- Modal de Autorização -->
+        @if (showAuthModal(); as adesao) {
+          <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm"
+            (click)="cancelAuthModal()">
+            <div class="bg-white dark:bg-card-dark rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 overflow-hidden"
+              (click)="$event.stopPropagation()">
+              <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-gray-900 dark:text-white">Autorizar Adesão</h3>
+                <button (click)="cancelAuthModal()" class="text-gray-400 hover:text-gray-600">
+                  <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+              <div class="p-5 space-y-3">
+                <div class="text-sm">
+                  <p class="text-gray-500">Órgão: <strong class="text-gray-900 dark:text-white">{{ adesao.razao_orgao }}</strong></p>
+                  <p class="text-gray-500 text-xs font-mono mt-0.5">{{ adesao.cnpj_orgao }}</p>
+                  @let si = saldos().find(s => s.item_id === adesao.ata_item_id);
+                  @if (si) {
+                    <p class="text-gray-500 text-xs mt-1">Item {{ si.numero_item }} — {{ si.descricao_item }}</p>
+                  }
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Quantidade Solicitada</label>
+                  <p class="text-lg font-bold text-gray-900 dark:text-white">{{ adesao.quantidade_solicitada }}</p>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Quantidade a Autorizar</label>
+                  <input type="number" step="0.01" min="0"
+                    [value]="authQuantidade()"
+                    (input)="onAuthQuantidadeInput($event, adesao)"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white">
+                </div>
+                @if (authValidation(); as v) {
+                  @if (!v.permitido) {
+                    <div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium whitespace-pre-line">
+                      {{ v.motivo }}
+                    </div>
+                  } @else {
+                    <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-xs text-green-700 dark:text-green-400 font-medium">
+                      Quantidade dentro dos limites legais. Máximo permitido: {{ v.maximoPermitido }} unidades.
+                    </div>
+                  }
+                }
+              </div>
+              <div class="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex gap-2">
+                <button (click)="cancelAuthModal()"
+                  class="flex-1 px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                  Cancelar
+                </button>
+                <button (click)="confirmAutorizarAdesao()"
+                  [disabled]="!authValidation()?.permitido"
+                  class="flex-1 px-3 py-2 text-xs font-semibold text-white rounded-lg transition-colors"
+                  [class.bg-green-600]="authValidation()?.permitido"
+                  [class.hover:bg-green-700]="authValidation()?.permitido"
+                  [class.bg-gray-400]="!authValidation()?.permitido"
+                  [class.cursor-not-allowed]="!authValidation()?.permitido">
+                  Autorizar {{ authQuantidade() }} unidade(s)
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Modal de Rejeição -->
+        @if (showRejectModal(); as adesao) {
+          <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm"
+            (click)="cancelRejectModal()">
+            <div class="bg-white dark:bg-card-dark rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 overflow-hidden"
+              (click)="$event.stopPropagation()">
+              <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-gray-900 dark:text-white">Rejeitar Adesão</h3>
+                <button (click)="cancelRejectModal()" class="text-gray-400 hover:text-gray-600">
+                  <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+              <div class="p-5 space-y-3">
+                <div class="text-sm">
+                  <p class="text-gray-500">Órgão: <strong class="text-gray-900 dark:text-white">{{ adesao.razao_orgao }}</strong></p>
+                  <p class="text-gray-500 text-xs font-mono mt-0.5">{{ adesao.cnpj_orgao }}</p>
+                  <p class="text-gray-500 text-xs mt-1">Quantidade solicitada: <strong>{{ adesao.quantidade_solicitada }}</strong></p>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Justificativa <span class="text-red-500">*</span></label>
+                  <textarea [(ngModel)]="rejectJustificativa" rows="3"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white resize-none"
+                    placeholder="Informe o motivo da rejeição"></textarea>
+                </div>
+              </div>
+              <div class="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex gap-2">
+                <button (click)="cancelRejectModal()"
+                  class="flex-1 px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                  Cancelar
+                </button>
+                <button (click)="confirmRejeitarAdesao()"
+                  [disabled]="!rejectJustificativa().trim()"
+                  class="flex-1 px-3 py-2 text-xs font-semibold text-white rounded-lg transition-colors"
+                  [class.bg-red-600]="rejectJustificativa().trim()"
+                  [class.hover:bg-red-700]="rejectJustificativa().trim()"
+                  [class.bg-gray-400]="!rejectJustificativa().trim()"
+                  [class.cursor-not-allowed]="!rejectJustificativa().trim()">
+                  Rejeitar Solicitação
+                </button>
+              </div>
+            </div>
+          </div>
         }
       }
     }

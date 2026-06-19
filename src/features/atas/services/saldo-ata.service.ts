@@ -243,9 +243,27 @@ export class SaldoAtaService {
     }
   }
 
-  // ---- Validações Legais (Decreto 11.462/2023) ----
+  async contarPendentesPorAta(): Promise<Result<Record<string, number>>> {
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('ata_adesoes')
+        .select('ata_id')
+        .eq('status', 'PENDENTE');
 
-  async validarLimiteAdesao(ataItemId: string, quantidadePretendida: number): Promise<{
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      for (const row of data || []) {
+        counts[row.ata_id] = (counts[row.ata_id] || 0) + 1;
+      }
+      return ok(counts);
+    } catch (err: any) {
+      return fail(err.message || 'Erro ao contar pendências');
+    }
+  }
+
+  // ---- Validações Legais (Art. 86, Lei 14.133/2021) ----
+
+  async validarLimiteAdesao(ataItemId: string, quantidadePretendida: number, cnpjOrgao?: string): Promise<{
     permitido: boolean;
     motivo?: string;
     maximoPermitido: number;
@@ -256,22 +274,48 @@ export class SaldoAtaService {
     }
 
     const item = saldo.data;
-    // Cada órgão aderente pode solicitar até 50% da quantidade registrada
-    const maxPorOrgao = item.quantidade_registrada * 0.5;
 
-    // Total de adesões não pode ultrapassar 50% da quantidade registrada
-    const maxTotalAdesoes = item.quantidade_registrada * 0.5;
-    const saldoParaAdesoes = maxTotalAdesoes - item.quantidade_aderida;
+    // Art. 86, § 3º — Limite individual: cada órgão não participante não pode exceder 50%
+    const limiteIndividual = item.quantidade_registrada * 0.5;
 
-    const maximoPermitido = Math.min(maxPorOrgao, saldoParaAdesoes);
+    // Quanto este órgão já consumiu (para respeitar o § 3º cumulativamente)
+    let jaAutorizadoMesmoOrgao = 0;
+    if (cnpjOrgao) {
+      const { data: adesoesOrgao } = await this.supabaseService.client
+        .from('ata_adesoes')
+        .select('quantidade_autorizada')
+        .eq('ata_item_id', ataItemId)
+        .eq('cnpj_orgao', cnpjOrgao)
+        .eq('status', 'AUTORIZADA');
+
+      jaAutorizadoMesmoOrgao = (adesoesOrgao || []).reduce(
+        (sum, r) => sum + Number(r.quantidade_autorizada || 0), 0
+      );
+    }
+
+    const restanteIndividual = limiteIndividual - jaAutorizadoMesmoOrgao;
+
+    // Art. 86, § 4º — Limite coletivo: total das adesões não pode exceder 200% (dobro)
+    const limiteColetivo = item.quantidade_registrada * 2.0;
+    const restanteColetivo = Math.max(0, limiteColetivo - item.quantidade_aderida);
+
+    // Saldo físico ainda disponível no item
+    const saldoFisico = Math.max(0, item.saldo_disponivel);
+
+    const maximoPermitido = Math.min(restanteIndividual, restanteColetivo, saldoFisico);
 
     if (quantidadePretendida > maximoPermitido) {
-      return {
-        permitido: false,
-        motivo: `Quantidade excede o limite legal. Máximo permitido: ${maximoPermitido} unidades. `
-              + `(Limite por órgão: ${maxPorOrgao} | Saldo disponível para adesões: ${saldoParaAdesoes})`,
-        maximoPermitido,
-      };
+      let motivo = `Quantidade excede o limite legal. Máximo permitido: ${maximoPermitido} unidades.`;
+      if (restanteIndividual < quantidadePretendida) {
+        motivo += `\n• Limite individual (§ 3º, 50%): restam ${restanteIndividual} unidades para este órgão (já autorizado: ${jaAutorizadoMesmoOrgao}).`;
+      }
+      if (restanteColetivo < quantidadePretendida) {
+        motivo += `\n• Limite coletivo (§ 4º, 200%): restam ${restanteColetivo} unidades (já aderido: ${item.quantidade_aderida}).`;
+      }
+      if (saldoFisico < quantidadePretendida) {
+        motivo += `\n• Saldo disponível em ata: ${saldoFisico} unidades.`;
+      }
+      return { permitido: false, motivo, maximoPermitido };
     }
 
     return { permitido: true, maximoPermitido };
@@ -321,6 +365,9 @@ export class SaldoAtaService {
       numero_ata: raw.numero_ata ?? '',
       numero_processo: raw.numero_processo ?? '',
       ata_status: raw.ata_status ?? '',
+      limite_individual: raw.limite_individual != null ? Number(raw.limite_individual) : undefined,
+      limite_coletivo: raw.limite_coletivo != null ? Number(raw.limite_coletivo) : undefined,
+      saldo_adesao: raw.saldo_adesao != null ? Number(raw.saldo_adesao) : undefined,
     };
   }
 

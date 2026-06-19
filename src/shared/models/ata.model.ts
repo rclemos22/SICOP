@@ -94,6 +94,10 @@ export interface SaldoItem {
   numero_ata: string;
   numero_processo: string;
   ata_status: string;
+  // Limites legais (Art. 86, Lei 14.133/2021)
+  limite_individual?: number;
+  limite_coletivo?: number;
+  saldo_adesao?: number;
 }
 
 export interface SaldoResumo {

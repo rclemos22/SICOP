@@ -20,10 +20,14 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 - **Fornecedores**: Cadastro e gestão de fornecedores
 - **Atas de Licitação**: Gestão de atas de registro de preço
   - Cadastro de atas com itens, fornecedor e vigência
-  - **Saldo por item**: Painel com barras de progresso (consumido vs registrado)
+  - **Saldo por item**: Painel com barras de progresso com indicadores de limite legal (50% individual, 200% coletivo), badge de risco (Normal/Atenção/Crítico/Esgotado)
   - **Consumo Interno**: Registro de consumo pelo órgão gerenciador (até 100% do item)
-  - **Adesões (Carona)**: Solicitação, autorização e rejeição com validação dos limites legais (Decreto 11.462/2023 — até 50% por órgão, 50% total)
-  - **Relatório PDF**: Exportação do relatório de saldo com tabela por item, consolidação e base legal
+  - **Adesões (Carona)**: Solicitação, autorização e rejeição com validação dos limites legais (Art. 86, Lei 14.133/2021 — § 3º até 50% por órgão, § 4º até 200% total)
+  - **Modal de Autorização**: Substitui prompt() por modal com validação em tempo real dos limites legais por órgão
+  - **Badge de Pendências**: Indicador visual de adesões pendentes na listagem de atas
+  - **Relatório PDF**: Exportação do relatório de saldo com limites legais e nota legal atualizada
+  - **Exportação CSV**: Exportação do saldo por item e da listagem de atas
+  - **Dashboard**: Card de alertas de atas (vencimento ≤60 dias, adesões pendentes) com navegação direta
 - **Nota de Empenho**: Consulta de notas por número e unidade gestora
 - **Ordem Bancária**: Consulta de OBs por número e unidade gestora
 - **Sincronização SIGEF**: Persiste transações do SIGEF no banco local para preservar vínculos de parcelas
@@ -106,7 +110,7 @@ src/
 │   ├── atas/            # Gestão de atas de licitação
 │   │   ├── pages/       # atas
 │   │   ├── components/  # ata-form, ata-saldo-panel
-│   │   └── services/    # ata.service.ts, saldo-ata.service.ts, ata-pdf.service.ts
+│   │   └── services/    # ata.service.ts, saldo-ata.service.ts, ata-pdf.service.ts, ata-export.service.ts
 │   ├── budget/          # Gestão de dotações
 │   ├── contracts/       # Gestão de contratos
 │   │   ├── pages/       # contracts, contract-details
@@ -125,7 +129,7 @@ src/
 
 - **Supabase**: https://xhowiwekqliqfckndupo.supabase.co
 - **Tabelas**: contratos, aditivos, dotacoes, fornecedores, transacoes, atas, ata_itens, ata_consumo_interno, ata_adesoes
-- **Views**: vw_saldo_dotacoes, vw_contratos_vigencia, vw_atas_resumo, vw_ata_saldo_item, vw_ata_saldo_resumo
+- **Views**: vw_saldo_dotacoes, vw_contratos_vigencia, vw_atas_resumo, vw_ata_saldo_item (com limites legais: limite_individual, limite_coletivo, saldo_adesao), vw_ata_saldo_resumo
 - **Migrations**: `supabase/migrations/` (aplicar no SQL Editor do Supabase)
 
 ### Migrations Recentes
@@ -134,6 +138,7 @@ src/
 |---|---------|-----------|
 | 033 | `033_atualizar_valor_mensal_contratos.sql` | Atualiza `contratos.valor_mensal` com base no aditivo vigente mais recente |
 | 034 | `034_recalcular_totais_liquidos_contratos.sql` | Recalcula `total_empenhado` e `saldo_a_pagar` descontando anulações |
+| 036 | `036_create_vw_ata_saldo_limites.sql` | Atualiza `vw_ata_saldo_item` com colunas de limites legais (Art. 86): `limite_individual` (50%), `limite_coletivo` (200%), `saldo_adesao` |
 
 ### Tabela `aditivos`
 

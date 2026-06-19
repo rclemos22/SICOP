@@ -144,8 +144,10 @@ export class AtaPdfService {
     const yNota = (doc as any).lastAutoTable.finalY + 8;
     doc.setFontSize(7);
     doc.setTextColor(130);
-    doc.text('Base Legal: Lei 14.133/2021 (arts. 82-86) e Decreto 11.462/2023.', margin, yNota);
-    doc.text('Órgão gerenciador: até 100% do item. Cada órgão aderente: até 50% por item. Total de adesões: até 50% do item.', margin, yNota + 4);
+    doc.text('Dispositivo Legal: Art. 86, Lei 14.133/2021.', margin, yNota);
+    doc.text('§ 3º — Limite individual: cada órgão não participante não poderá exceder 50% dos quantitativos dos itens registrados em ata.', margin, yNota + 4);
+    doc.text('§ 4º — Limite coletivo: o total das adesões externas não poderá exceder o dobro (200%) do quantitativo de cada item.', margin, yNota + 8);
+    doc.text('Referência de cálculo: quantitativo original registrado na ata — não o saldo disponível.', margin, yNota + 12);
 
     // Salvar
     doc.save(`saldo_ata_${ata.numero_ata.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);

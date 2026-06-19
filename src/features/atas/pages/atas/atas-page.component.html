@@ -7,11 +7,18 @@
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Atas de Licitação</h1>
         <p class="text-sm text-gray-500 mt-1">Gestão de atas de registro de preço e licitações.</p>
       </div>
-      <button (click)="openCreate()"
-        class="bg-sco-blue hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg flex items-center gap-2 transition-colors shadow-sm text-sm">
-        <span class="material-symbols-outlined text-[20px]">add</span>
-        Nova Ata
-      </button>
+      <div class="flex items-center gap-2">
+        <button (click)="exportCsv()"
+          class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 font-semibold py-2.5 px-4 rounded-lg flex items-center gap-2 transition-colors border border-gray-200 dark:border-gray-700 text-sm">
+          <span class="material-symbols-outlined text-[18px]">table</span>
+          Exportar CSV
+        </button>
+        <button (click)="openCreate()"
+          class="bg-sco-blue hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg flex items-center gap-2 transition-colors shadow-sm text-sm">
+          <span class="material-symbols-outlined text-[20px]">add</span>
+          Nova Ata
+        </button>
+      </div>
     </div>
 
     <!-- Toolbar -->
@@ -67,7 +74,15 @@
               <tr (click)="openDetails(ata)"
                 class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer">
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="text-sm font-bold font-mono text-gray-900 dark:text-white">{{ ata.numero_ata }}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-bold font-mono text-gray-900 dark:text-white">{{ ata.numero_ata }}</span>
+                    @let pend = pendingCounts()[ata.id];
+                    @if (pend && pend > 0) {
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                        {{ pend }} pendente(s)
+                      </span>
+                    }
+                  </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="text-sm font-mono text-gray-600 dark:text-gray-400">{{ ata.numero_processo }}</span>
