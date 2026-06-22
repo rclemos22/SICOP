@@ -110,10 +110,10 @@
 
   <!-- Content: Grid or List -->
   @if (budgetService.loading()) {
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-10">
-      <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-      <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-      <div class="animate-pulse h-32 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-10">
+      <div class="animate-pulse h-24 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+      <div class="animate-pulse h-24 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
+      <div class="animate-pulse h-24 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
     </div>
   } @else if (budgetService.error()) {
     <div class="flex flex-col items-center justify-center py-16 text-red-500">
@@ -122,77 +122,78 @@
       <button (click)="budgetService.loadDotacoes()" class="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 transition-colors font-semibold">Tentar Novamente</button>
     </div>
   } @else if (filteredDotacoes().length > 0) {  @if (layoutMode() === 'grid') {
-  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-10">
-    @for (item of filteredDotacoes(); track item.id) {
+    @for (group of groupedDotacoes(); track group.ug) {
+    <!-- Section Header: Unidade Gestora -->
+    <div class="col-span-full mb-2 mt-4 first:mt-0">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border shadow-sm"
+          [class]="getBadgeClass(group.ug)">
+          {{ group.ug }}
+        </span>
+        <span class="text-xs text-gray-400 font-medium">{{ group.items.length }} dotação(ões)</span>
+        <div class="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-2 col-span-full">
+    @for (item of group.items; track item.id) {
     <div (click)="openDetails(item)"
-      class="bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-sco-blue/50 dark:hover:border-sco-blue/50 transition-all cursor-pointer flex flex-col group h-full relative overflow-hidden">
-      <div class="p-6 flex flex-col h-full">
-        <div class="mb-4">
+      class="bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-sco-blue/50 dark:hover:border-sco-blue/50 transition-all cursor-pointer flex flex-col group h-full relative overflow-hidden">
+      <div class="p-4 flex flex-col h-full">
+        <div class="mb-2">
           <span
-            class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-2 border"
+            class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider mb-1.5 border"
             [class]="getBadgeClass(item.unid_gestora)">
             {{ item.unid_gestora }}
           </span>
           <h3
-            class="text-base font-bold text-gray-900 dark:text-white leading-tight group-hover:text-sco-blue transition-colors">
+            class="text-sm font-bold text-gray-900 dark:text-white leading-tight group-hover:text-sco-blue transition-colors line-clamp-1">
             {{ item.dotacao }}
           </h3>
         </div>
 
-        <!-- Contract Info (Split Fields) -->
-        <div class="mb-6 space-y-3">
-          <!-- Contract Number Field -->
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-400 font-semibold uppercase">Contrato</span>
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300 font-mono">
+        <!-- Contract Info (Compact) -->
+        <div class="mb-3 space-y-1">
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] text-gray-400 font-semibold uppercase">Contrato</span>
+            <span class="text-xs font-medium text-gray-700 dark:text-gray-300 font-mono truncate ml-2">
               {{ item.numero_contrato }}
             </span>
           </div>
 
-          <!-- Contratada Field -->
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-400 font-semibold uppercase">Contratada</span>
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300 line-clamp-1" [title]="item.contratada">
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] text-gray-400 font-semibold uppercase">Contratada</span>
+            <span class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate ml-2" [title]="item.contratada">
               {{ item.contratada }}
             </span>
           </div>
 
-          <!-- Credit Type Field -->
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-400 font-semibold uppercase">Tipo de Crédito</span>
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] text-gray-400 font-semibold uppercase">Crédito</span>
+            <span class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate ml-2">
               {{ item.credito }}
             </span>
           </div>
 
-          <!-- Availability Date Field -->
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-400 font-semibold uppercase">Data Disponibilidade</span>
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] text-gray-400 font-semibold uppercase">Data</span>
+            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
               {{ item.data_disponibilidade | date:'dd/MM/yyyy' }}
-            </span>
-          </div>
-
-          <!-- Unidade Gestora Field (Visual check) -->
-          <div class="flex flex-col">
-            <span class="text-xs text-gray-400 font-semibold uppercase">UG</span>
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ item.unid_gestora }}
             </span>
           </div>
         </div>
 
         <!-- Footer Financials -->
-        <div class="mt-auto pt-4 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 gap-4">
+        <div class="mt-auto pt-2 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 gap-2">
           <div>
-            <span class="text-xs text-gray-400 block mb-0.5">Valor Total</span>
-            <span class="text-sm font-bold text-gray-900 dark:text-white">
+            <span class="text-[10px] text-gray-400 block mb-0.5">Valor Total</span>
+            <span class="text-xs font-bold text-gray-900 dark:text-white">
               {{ item.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}
             </span>
           </div>
           <div class="text-right">
-            <span class="text-xs text-gray-400 block mb-0.5">Saldo Disponível</span>
-            <span class="text-sm font-bold" [class]="getBalanceColor(item)">
+            <span class="text-[10px] text-gray-400 block mb-0.5">Saldo Disponível</span>
+            <span class="text-xs font-bold" [class]="getBalanceColor(item)">
               {{ calcSaldo(item) | currency:'BRL':'symbol':'1.2-2' }}
             </span>
           </div>
@@ -200,7 +201,8 @@
       </div>
     </div>
     }
-  </div>
+    </div>
+    }
   } @else {
   <!-- List View -->
   <div

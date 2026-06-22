@@ -78,7 +78,43 @@ export class BudgetPageComponent implements OnInit {
       if (minBalance !== null && saldo >= minBalance) return false;
 
       return true;
+    }).sort((a, b) => {
+      // 1. Unidade Gestora (ascending)
+      const ugA = a.unid_gestora || '';
+      const ugB = b.unid_gestora || '';
+      if (ugA !== ugB) return ugA.localeCompare(ugB);
+
+      // 2. Contrato (ascending, numeric-aware)
+      const cA = a.numero_contrato || '';
+      const cB = b.numero_contrato || '';
+      const cmpContrato = cA.localeCompare(cB, undefined, { numeric: true });
+      if (cmpContrato !== 0) return cmpContrato;
+
+      // 3. Saldo Disponível (ascending — menores primeiro)
+      return calcularSaldoDotacao(a) - calcularSaldoDotacao(b);
     });
+  });
+
+  groupedDotacoes = computed(() => {
+    const items = this.filteredDotacoes();
+    const groups: { ug: string; items: Dotacao[] }[] = [];
+    let currentUg = '';
+    let currentGroup: Dotacao[] = [];
+    for (const item of items) {
+      const ug = item.unid_gestora || 'SEM UG';
+      if (ug !== currentUg) {
+        if (currentGroup.length > 0) {
+          groups.push({ ug: currentUg, items: currentGroup });
+        }
+        currentUg = ug;
+        currentGroup = [];
+      }
+      currentGroup.push(item);
+    }
+    if (currentGroup.length > 0) {
+      groups.push({ ug: currentUg, items: currentGroup });
+    }
+    return groups;
   });
 
   // Actions

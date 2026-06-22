@@ -5,6 +5,7 @@ import { Transaction, TransactionType, getTransactionTypeLabel, getTransactionTy
 import { getUnidadeLabel } from '../../../../shared/models/budget.model';
 import { FinancialService } from '../../services/financial.service';
 import { BudgetService } from '../../../budget/services/budget.service';
+import { SigefService } from '../../../../core/services/sigef.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 import { SigefBulkSyncService } from '../../../../core/services/sigef-bulk-sync.service';
 
@@ -19,6 +20,7 @@ const PAGE_SIZE = 20;
 export class FinancialPageComponent {
   public financialService  = inject(FinancialService);
   public budgetService     = inject(BudgetService);
+  public sigefService      = inject(SigefService);
   public sigefSyncService  = inject(SigefSyncService);
   public bulkSyncService   = inject(SigefBulkSyncService);
 
@@ -202,9 +204,11 @@ export class FinancialPageComponent {
    */
   async syncGlobal() {
     try {
-      await this.bulkSyncService.downloadLast60Days();
-      await this.sigefSyncService.syncAllContractsFinance(true);
-      await this.financialService.loadAllTransactions();
+      await this.sigefService.withApiLock(async () => {
+        await this.bulkSyncService.downloadLast60Days();
+        await this.sigefSyncService.syncAllContractsFinance(true);
+        await this.financialService.loadAllTransactions();
+      });
     } catch (err: any) {
       console.error('[FinancialPage] Erro na atualização SIGEF:', err);
     }

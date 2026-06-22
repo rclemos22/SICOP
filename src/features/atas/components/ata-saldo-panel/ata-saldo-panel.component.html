@@ -396,8 +396,7 @@
                     <div class="text-sm font-bold text-gray-900 dark:text-white">{{ a.razao_orgao }}</div>
                     <div class="text-xs text-gray-500 font-mono">{{ a.cnpj_orgao }}</div>
                     <!-- Item info -->
-                    @let saldoItem = saldos().find(s => s.item_id === a.ata_item_id);
-                    @if (saldoItem) {
+                    @if (getSaldoItem(a.ata_item_id); as saldoItem) {
                       <div class="text-[10px] text-gray-400 font-medium mt-0.5">Item {{ saldoItem.numero_item }} — {{ saldoItem.descricao_item }}</div>
                     }
                     <div class="flex items-center gap-3 mt-1.5 text-sm">
@@ -462,8 +461,7 @@
                 <div class="text-sm">
                   <p class="text-gray-500">Órgão: <strong class="text-gray-900 dark:text-white">{{ adesao.razao_orgao }}</strong></p>
                   <p class="text-gray-500 text-xs font-mono mt-0.5">{{ adesao.cnpj_orgao }}</p>
-                  @let si = saldos().find(s => s.item_id === adesao.ata_item_id);
-                  @if (si) {
+                  @if (getSaldoItem(adesao.ata_item_id); as si) {
                     <p class="text-gray-500 text-xs mt-1">Item {{ si.numero_item }} — {{ si.descricao_item }}</p>
                   }
                 </div>

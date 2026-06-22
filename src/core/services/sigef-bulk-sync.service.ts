@@ -61,8 +61,8 @@ export class SigefBulkSyncService {
 
   // Constantes
   private readonly UG = '080901';
-  private readonly PAGE_DELAY_MS = 600;
-  private readonly MONTH_DELAY_MS = 1000;
+  private readonly PAGE_DELAY_MS = 300;
+  private readonly MONTH_DELAY_MS = 500;
 
   // Métodos auxiliares para progresso
   private _resetProgress(): void {
@@ -146,8 +146,9 @@ export class SigefBulkSyncService {
         this._setProgress('ne', current, total, totalNe, totalOb, errors, label);
 
         const neYear = parseInt(ano.toString(), 10);
+        const hoje = this._formatDate(new Date());
         const inicioNE = `${neYear}-01-01`;
-        const fimNE = `${neYear}-12-31`;
+        const fimNE = neYear === new Date().getFullYear() ? hoje : `${neYear}-12-31`;
 
         if (await this._isPeriodComplete(inicioNE, fimNE, 'NE')) {
           console.log(`[BulkSync] ${label} já sincronizado. Pulando.`);
@@ -178,8 +179,9 @@ export class SigefBulkSyncService {
         this._setProgress('ob', current, total, totalNe, totalOb, errors, label);
 
         const neYear = parseInt(ano.toString(), 10);
+        const hoje = this._formatDate(new Date());
         const inicioNE = `${neYear}-01-01`;
-        const fimNE = `${neYear}-12-31`;
+        const fimNE = neYear === new Date().getFullYear() ? hoje : `${neYear}-12-31`;
 
         if (await this._isPeriodComplete(inicioNE, fimNE, 'OB')) {
           console.log(`[BulkSync] OBs de ${label} já sincronizados. Pulando.`);
@@ -209,7 +211,7 @@ export class SigefBulkSyncService {
     }
   }
 
-  async downloadLast60Days(): Promise<void> {
+  async downloadLastDays(days: number = 60): Promise<void> {
     if (this._isRunning()) {
       console.warn('[BulkSync] Download já em andamento.');
       return;
@@ -220,13 +222,13 @@ export class SigefBulkSyncService {
 
     try {
       const hoje = new Date();
-      const inicio60 = new Date(hoje);
-      inicio60.setDate(hoje.getDate() - 60);
+      const inicio = new Date(hoje);
+      inicio.setDate(hoje.getDate() - days);
 
-      const inicioStr = this._formatDate(inicio60);
+      const inicioStr = this._formatDate(inicio);
       const fimStr = this._formatDate(hoje);
 
-      const label = `últimos 60 dias (${inicioStr} → ${fimStr})`;
+      const label = `últimos ${days} dias (${inicioStr} → ${fimStr})`;
       console.log(`[BulkSync] Atualizando ${label}...`);
 
       const registeredNEs = await this._getRegisteredNEs();
@@ -291,6 +293,10 @@ export class SigefBulkSyncService {
     } finally {
       this._isRunning.set(false);
     }
+  }
+
+  async downloadLast60Days(): Promise<void> {
+    return this.downloadLastDays(60);
   }
 
   async isInitialDownloadComplete(): Promise<boolean> {
@@ -409,9 +415,8 @@ export class SigefBulkSyncService {
 
       let page = 1;
       let hasNext = true;
-      const MAX_PAGES = 20;
 
-      while (hasNext && page <= MAX_PAGES) {
+      while (hasNext) {
         try {
           const result = await this._withRetry(() =>
             this.sigefService.getOrdemBancaria(
@@ -458,12 +463,13 @@ export class SigefBulkSyncService {
   private async _isPeriodComplete(inicio: string, fim: string, tipo: 'NE' | 'OB'): Promise<boolean> {
     const { data } = await this.client
       .from('sigef_sync_periods')
-      .select('status')
+      .select('periodo_fim')
       .eq('periodo_inicio', inicio)
-      .eq('periodo_fim', fim)
       .eq('tipo', tipo)
+      .eq('status', 'completed')
+      .gte('periodo_fim', fim)
       .maybeSingle();
-    return data?.status === 'completed';
+    return !!data;
   }
 
   private async _upsertPeriodRunning(inicio: string, fim: string, tipo: 'NE' | 'OB'): Promise<void> {

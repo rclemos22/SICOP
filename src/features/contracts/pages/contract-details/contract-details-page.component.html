@@ -32,19 +32,7 @@
            <span class="material-symbols-outlined text-[16px] md:text-[18px]">edit</span>
            Editar
          </button>
-         <button 
-            (click)="refreshSigefData()"
-            [disabled]="sigefSyncService.isGlobalSyncing()"
-            class="md:flex-none px-3 md:px-4 py-1.5 md:py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px]"
-          >
-            @if (sigefSyncService.isGlobalSyncing()) {
-              <span class="animate-spin material-symbols-outlined text-[16px] md:text-[18px]">sync</span>
-              <span class="text-[10px] sm:text-[11px] leading-tight text-center uppercase font-bold mt-0.5">Sincronizando</span>
-            } @else {
-              <span class="material-symbols-outlined text-[16px] md:text-[18px]">cloud_download</span>
-              <span class="text-[10px] sm:text-[11px] leading-tight text-center uppercase font-bold mt-0.5">Sincronizar<br>SIGEF</span>
-            }
-          </button>
+
           <button 
             (click)="atualizarLancamentos()"
             [disabled]="isUpdatingLancamentos()"
@@ -1292,14 +1280,6 @@
 
           <!-- Footer Buttons -->
           <div class="px-8 py-6 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900">
-            <button 
-              (click)="refreshSigefData(); closeLinkObModal()"
-              class="flex items-center gap-2 text-xs font-bold text-green-600 hover:text-green-700 transition-colors uppercase tracking-tight"
-            >
-              <span class="material-symbols-outlined text-[18px]">sync</span>
-              Sincronizar SIGEF agora
-            </button>
-            
             <div class="flex items-center gap-3">
               @if (selectedObIds().size > 0) {
                 <button 

@@ -497,10 +497,10 @@ export class ContractDetailsPageComponent {
       }
     });
 
-    // Auto-refresh a cada 15 minutos para buscar atualizações do cache local
+    // Auto-refresh a cada 5 minutos: busca atualizações do cache local
     this.autoRefreshInterval = setInterval(() => {
       this.atualizarLancamentos();
-    }, 15 * 60 * 1000); // 15 minutos
+    }, 5 * 60 * 1000); // 5 minutos
   }
 
   /**

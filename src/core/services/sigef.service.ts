@@ -128,6 +128,23 @@ export class SigefService implements OnDestroy {
   private pendingQueries: Map<string, { cancel: () => void }> = new Map();
   private currentQueryId: string | null = null;
 
+  // ─── Lock global da API ─────────────────────────────────────
+  // Impede que ciclos automáticos e manuais concorram simultaneamente
+  private _apiLocked = signal<boolean>(false);
+  readonly apiLocked = this._apiLocked.asReadonly();
+
+  async withApiLock<T>(fn: () => Promise<T>): Promise<T> {
+    if (this._apiLocked()) {
+      throw new Error('API SIGEF já está sendo utilizada por outra operação. Aguarde e tente novamente.');
+    }
+    this._apiLocked.set(true);
+    try {
+      return await fn();
+    } finally {
+      this._apiLocked.set(false);
+    }
+  }
+
   private readonly ACCESS_TOKEN_KEY = 'sigef_access_token';
   private readonly REFRESH_TOKEN_KEY = 'sigef_refresh_token';
   private readonly EXIRY_KEY = 'sigef_token_expiry';
@@ -377,7 +394,7 @@ export class SigefService implements OnDestroy {
 
       while (true) {
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 30000);
+        const id = setTimeout(() => controller.abort(), 60000);
 
         if (queryId) {
           const pending = this.pendingQueries.get(queryId);
@@ -414,15 +431,6 @@ export class SigefService implements OnDestroy {
 
           if (queryId && !this.pendingQueries.has(queryId)) {
             return new Response(null, { status: 499, statusText: 'Query cancelled' });
-          }
-
-          const isSlow = /tls|socket|timeout|etimedout|aggregateerror/i.test(err?.message || err?.cause?.message || String(err) || '');
-
-          // Timeout/connection errors: fail fast (server unreachable, retry não adianta)
-          if (isSlow) {
-            this.debug.warn(`API timeout: ${this._extractErrorMessage(err)} — ${url.substring(0, 80)}`);
-            this._cleanupQuery(queryId);
-            throw err;
           }
 
           if (this._isRetryableError(err) && currentRetries > 0) {
@@ -700,7 +708,7 @@ export class SigefService implements OnDestroy {
         }
         
         console.log(`[SIGEF] Scan pag.${page} para NE ${numeroNE}...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         const pResult = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora, bypassMirror, queryId);
         
         found = pResult.data.find(ne => 
@@ -763,7 +771,7 @@ export class SigefService implements OnDestroy {
         if (!result.next) break;
         page++;
         // Delay de cortesia entre páginas
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (err: any) {
         if (err.message === 'Query cancelled') {
           console.log(`[SIGEF] Busca de movimentações cancelada para NE ${numeroNE}.`);
@@ -999,7 +1007,7 @@ export class SigefService implements OnDestroy {
 
            let page = 2;
            let nextUrl = result.next;
-           while (nextUrl && page <= 10) {
+           while (nextUrl) {
              if (queryId && !this.pendingQueries.has(queryId)) {
                console.log(`[SIGEF OB] Consulta cancelada durante paginação da NE ${targetNE}`);
                break;

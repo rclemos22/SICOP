@@ -84,9 +84,8 @@ export class SigefSyncService {
   private autoSyncTimer: any;
 
   constructor() {
-    // Verifica o estado do bulk e agenda o ciclo automático apenas se pronto.
-    // O ciclo só começa 5 minutos após o boot, dando tempo ao download inicial.
-    setTimeout(() => { this._initAutoSync(); }, 5 * 60_000);
+    // O ciclo automático é iniciado pelo SigefSchedulerService.
+    // O delay inicial de 5 min dá tempo ao download bulk inicial.
   }
 
   /**
@@ -103,39 +102,24 @@ export class SigefSyncService {
     return this._bulkReady;
   }
 
-  private async _initAutoSync() {
-    const ready = await this._checkBulkReady();
-    if (!ready) {
-      console.log('[SIGEF SYNC] Espelho não está pronto. Ciclo automático adiado 10 min.');
-      this.autoSyncTimer = setTimeout(() => { this._initAutoSync(); }, 10 * 60_000);
-      return;
-    }
-    this.runAutomaticSyncCycle();
-  }
-
-  private async runAutomaticSyncCycle() {
+  /**
+   * Ciclo automático rápido: atualiza a UI a partir do mirror/cache.
+   * NÃO chama a API SIGEF — apenas copia mirror → cache.
+   * Executado a cada 5 minutos pelo SigefSchedulerService.
+   */
+  async runAutomaticSyncCycle(): Promise<void> {
+    if (this.isSyncing()) return;
     try {
-      if (!this.isSyncing()) {
-        const ready = await this._checkBulkReady();
-        if (!ready) {
-          console.log('[SIGEF SYNC] Espelho ainda vazio. Pulando ciclo automático.');
-          return;
-        }
-        const selectedYear = this.appContext.anoExercicio();
-        console.log(`[SIGEF SYNC] Ciclo automático: exercício ${selectedYear}`);
-        await this.syncAllContractsFinance(false, selectedYear);
+      const ready = await this._checkBulkReady();
+      if (!ready) {
+        console.log('[SIGEF SYNC] Espelho ainda vazio. Pulando ciclo automático.');
+        return;
       }
+      const selectedYear = this.appContext.anoExercicio();
+      console.log(`[SIGEF SYNC] Ciclo automático: exercício ${selectedYear}`);
+      await this.syncAllContractsFinance(false, selectedYear);
     } catch (err) {
       console.error('[SIGEF SYNC] Erro no ciclo automático:', err);
-    } finally {
-      if (this.autoSyncTimer) clearTimeout(this.autoSyncTimer);
-      this.autoSyncTimer = setTimeout(() => { this.runAutomaticSyncCycle(); }, 10 * 60_000);
-    }
-  }
-
-  startAutomaticSync() {
-    if (!this.autoSyncTimer) {
-      this.autoSyncTimer = setTimeout(() => { this.runAutomaticSyncCycle(); }, 10 * 60_000);
     }
   }
 
@@ -286,7 +270,7 @@ export class SigefSyncService {
             console.log(`[SIGEF SYNC] syncBatch cancelado após NE ${task.ne}.`);
             break;
           }
-          await this._delay(800);
+          await this._delay(300);
         }
       }
 
@@ -582,7 +566,7 @@ export class SigefSyncService {
     let page = 1;
     let hasNext = true;
 
-    while (hasNext && page <= 10) {
+    while (hasNext) {
       if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
         this.debug.warn(`fetchObs cancelado NE ${targetNE} pág ${page}`);
         return;
@@ -640,7 +624,7 @@ export class SigefSyncService {
           this.debug.warn(`fetchObs cancelado NE ${targetNE}`);
           return;
         }
-        if (hasNext) await this._delay(500);
+        if (hasNext) await this._delay(300);
       }
     }
   }

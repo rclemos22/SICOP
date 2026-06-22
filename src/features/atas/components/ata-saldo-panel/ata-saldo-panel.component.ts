@@ -258,6 +258,10 @@ export class AtaSaldoPanelComponent implements OnInit {
     this.exportService.exportSaldoCsv(this.ata(), this.saldos());
   }
 
+  getSaldoItem(ataItemId: string): SaldoItem | undefined {
+    return this.saldos().find(s => s.item_id === ataItemId);
+  }
+
   // ---- Utility ----
   percentBarClass(pct: number): string {
     if (pct >= 100) return 'bg-red-500';

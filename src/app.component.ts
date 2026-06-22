@@ -7,6 +7,7 @@ import { AppContextService } from './core/services/app-context.service';
 import { SigefService } from './core/services/sigef.service';
 import { SigefSyncService } from './core/services/sigef-sync.service';
 import { SigefBulkSyncService } from './core/services/sigef-bulk-sync.service';
+import { SigefSchedulerService } from './core/services/sigef-scheduler.service';
 
 registerLocaleData(localePt);
 
@@ -18,10 +19,11 @@ registerLocaleData(localePt);
   templateUrl: './app.component.html',
 })
 export class AppComponent {
-  public contextService   = inject(AppContextService);
-  public sigefService     = inject(SigefService);
-  public sigefSyncService = inject(SigefSyncService);
-  public bulkSyncService  = inject(SigefBulkSyncService);
+  public contextService    = inject(AppContextService);
+  public sigefService      = inject(SigefService);
+  public sigefSyncService  = inject(SigefSyncService);
+  public bulkSyncService   = inject(SigefBulkSyncService);
+  public sigefScheduler    = inject(SigefSchedulerService);
 
   private readonly FIX_VERSION = 'v2-ne-only-queries';
 

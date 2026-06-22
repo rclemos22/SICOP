@@ -12,5 +12,6 @@ export const routes: Routes = [
   { path: 'atas', loadComponent: () => import('./features/atas/pages/atas/atas-page.component').then(m => m.AtasPageComponent) },
   { path: 'nota-empenho', loadComponent: () => import('./features/nota-empenho/pages/nota-empenho/nota-empenho-page.component').then(m => m.NotaEmpenhoPageComponent) },
   { path: 'ordem-bancaria', loadComponent: () => import('./features/ordem-bancaria/pages/ordem-bancaria/ordem-bancaria-page.component').then(m => m.OrdemBancariaPageComponent) },
+  { path: 'sincronizar-sigef', loadComponent: () => import('./features/sigef-sync/pages/sigef-sync/sigef-sync-page.component').then(m => m.SigefSyncPageComponent) },
   { path: '**', redirectTo: '' },
 ];
