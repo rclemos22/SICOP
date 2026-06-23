@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { DashboardService } from '../../services/dashboard.service';
 import { AppContextService } from '../../../../core/services/app-context.service';
 import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { DashboardRefreshSchedulerService } from '../../../../core/services/dashboard-refresh-scheduler.service';
 import { AtaService } from '../../../atas/services/ata.service';
 import { SaldoAtaService } from '../../../atas/services/saldo-ata.service';
 import { OverdueAlertsCardComponent } from '../../components/overdue-alerts-card.component';
@@ -27,6 +28,7 @@ export class DashboardPageComponent implements OnInit {
   readonly dashboardService = inject(DashboardService);
   readonly appContext = inject(AppContextService);
   readonly sigefSync = inject(SigefSyncService);
+  readonly dashboardRefreshScheduler = inject(DashboardRefreshSchedulerService);
   private ataService = inject(AtaService);
   private saldoAtaService = inject(SaldoAtaService);
 

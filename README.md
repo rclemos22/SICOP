@@ -31,6 +31,12 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 - **Nota de Empenho**: Consulta de notas por número e unidade gestora
 - **Ordem Bancária**: Consulta de OBs por número e unidade gestora
 - **Sincronização SIGEF**: Persiste transações do SIGEF no banco local para preservar vínculos de parcelas
+  - Página dedicada de sincronização (`/sigef-sync`) com fila de tasks e progresso
+  - `SyncHistoryService`: log persistente em localStorage de todas as operações de sync
+  - `DashboardRefreshSchedulerService`: atualização silenciosa dos cards a cada 20min
+  - Três níveis: navegação (5 dias), auto-refresh (15 dias), "Atualizar Lançamentos" (30 dias), "Sincronização Completa" (full scan)
+  - Circuit-breaker com cooldown exponencial (30s-5min) contra timeouts da API
+  - Busca incremental com `_isPeriodRecentlyComplete` (janela de 1 hora)
 
 ## Campos do Contrato
 
@@ -106,6 +112,16 @@ O Angular proxy redireciona `/sigef-api/*` para `https://api.seplan.ma.gov.br/ap
 ```
 src/
 ├── core/services/       # Serviços (SIGEF, Supabase, Context)
+│   ├── sigef.service.ts          # API SIGEF (chamadas, retry, backoff, fila serial)
+│   ├── sigef-cache.service.ts    # Cache local (sigef_ne_movimentos, sigef_ordens_bancarias)
+│   ├── sigef-mirror.service.ts   # Espelho bruto da API (import_sigef_*)
+│   ├── sigef-bulk-sync.service.ts # Download bulk com anti-flood e cooldown
+│   ├── sigef-sync.service.ts     # Orquestração mirror → cache → signals
+│   ├── sigef-scheduler.service.ts # Ciclos automáticos (rápido, médio, manual)
+│   ├── sync-history.service.ts   # Log persistente de sincronização (localStorage)
+│   ├── dashboard-refresh-scheduler.service.ts # Refresh silencioso dos cards
+│   ├── app-context.service.ts    
+│   └── supabase.service.ts
 ├── features/            # Páginas e componentes por módulo
 │   ├── atas/            # Gestão de atas de licitação
 │   │   ├── pages/       # atas

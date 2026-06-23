@@ -57,7 +57,6 @@ export class SigefSchedulerService implements OnDestroy {
   }
 
   private async _runCacheCycle(): Promise<void> {
-    if (this._isRunning()) return;
     console.log('[Scheduler] Ciclo rápido (cache) — mirror → cache');
     await this.syncService.runAutomaticSyncCycle();
   }

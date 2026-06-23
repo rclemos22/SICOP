@@ -263,6 +263,14 @@ E no `_isPeriodComplete`, considerar o período como "completo" apenas se `fim >
 | `budget-page.component.html/ts` | Cards de dotação agrupados por UG, layout compacto, ordenação |
 | `ata-saldo-panel.component.html/ts` | Correção de erro de template: `@let` com arrow function → método `getSaldoItem()` |
 | `financial-page.component.ts` | `syncGlobal()` envolvido em `withApiLock()` para evitar concorrência |
+| `sync-history.service.ts` | **NOVO** — Log persistente de sync em localStorage (max 1000 entradas) |
+| `dashboard-refresh-scheduler.service.ts` | **NOVO** — Refresh silencioso dos cards do dashboard a cada 20min |
+| `sigef-sync-page.component.ts` | **NOVO** — Página dedicada de sincronização com fila de tasks e histórico |
+| `financial.service.ts` | Dedup key `ne\|type\|amount` → `ne\|type\|docNum\|amount`; delete guardado por `hasLiquidations`; dotacoes update condicional |
+| `sigef-bulk-sync.service.ts` | `_isPeriodComplete` substituído por `_isPeriodRecentlyComplete` (janela 1h); delays 300→2000ms; cooldown exponencial 30s-5min; NE/movimentos independentes |
+| `sigef-sync.service.ts` | `recentOnly` → `daysBack` (5/15/30/0); delays 300→2000ms; integração com `SyncHistoryService` |
+| `sigef.service.ts` | `getNotaEmpenhoByNumber` páginas 2-3 com catch (retorna null em vez de throw) |
+| `contract-details-page.component.ts` | `loadNesPagamentos` pós-sync; `refreshSigefData(daysBack)` substitui `fullScan` |
 
 ---
 
@@ -273,3 +281,5 @@ E no `_isPeriodComplete`, considerar o período como "completo" apenas se `fim >
 - O lock do `SigefSchedulerService` deve ser o primeiro a verificar, antes de qualquer chamada
 - `downloadLastDays(7)` reduz drasticamente o volume vs `downloadLast60Days()` — ajustar se necessário
 - Após a refatoração, o `_checkBulkReady()` precisa considerar períodos parciais, não apenas completos
+- **Anti-flood:** `_setCooldown()` com backoff exponencial (30s, 60s, 120s, 240s, 300s max) após ETIMEDOUT; reset apenas se operação completa sem erros de rede
+- **dotacoes nunca zerado:** `syncSigefTransactions` só altera campos com dados no upsert; delete `cache-ob-%` só roda se novos LIQUIDATIONs foram criados

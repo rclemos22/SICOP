@@ -118,7 +118,7 @@ export class FinancialService {
       transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       // 3. Complementar com cache SIGEF (garante dados do mês atual mesmo se transacoes estiver desatualizada)
-      const existingKeys = new Set(transactions.map(t => `${t.commitment_id}|${t.type}|${t.amount}`));
+      const existingKeys = new Set(transactions.map(t => `${t.commitment_id}|${t.type}|${t.document_number || ''}|${t.amount}`));
       await this._loadTransactionsFromCache(transactions, neLookup, undefined, existingKeys);
 
       // 4. Enriquecer transações com contrato/dotação
@@ -222,7 +222,7 @@ export class FinancialService {
         const obDate = o.dtpagamento || o.dtlancamento || '';
         const ne = o.nunotaempenho || '';
         const amount = Math.abs(Number(o.vltotal) || 0);
-        const dedupKey = `${ne}|${TransactionType.LIQUIDATION}|${amount}`;
+        const dedupKey = `${ne}|${TransactionType.LIQUIDATION}|${docNum}|${amount}`;
         if (existingKeys?.has(dedupKey)) return;
         existingKeys?.add(dedupKey);
         const enriched = enrichByNe(ne);
@@ -632,11 +632,11 @@ export class FinancialService {
         }
 
         // ═══════════════════════════════════════════
-        // D. Upsert + Limpeza de registros antigos
+        // D. Upsert + Limpeza de registros legados
         // ═══════════════════════════════════════════
 
         // Upsert primeiro, depois limpa registros legados — evita perda de dados
-        // se o upsert falhar (ex: falta UNIQUE constraint em sigef_id)
+        // se o upsert falhar
         if (transactionsToUpsert.length > 0) {
           const { error } = await this.supabaseService.client
             .from('transacoes')
@@ -644,14 +644,19 @@ export class FinancialService {
           if (error) throw error;
           this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-          await this.supabaseService.client
-            .from('transacoes')
-            .delete()
-            .eq('contract_id', contractId)
-            .eq('commitment_id', neValue)
-            .like('sigef_id', 'cache-%');
+          // Só limpa registros legados (cache-ob-*) se novos LIQUIDATIONs foram upsertados
+          const hasLiquidations = transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION);
+          if (hasLiquidations) {
+            await this.supabaseService.client
+              .from('transacoes')
+              .delete()
+              .eq('contract_id', contractId)
+              .eq('commitment_id', neValue)
+              .like('sigef_id', 'cache-ob-%');
+          }
 
-          // Atualiza a dotação com totais calculados (alimenta vw_saldo_dotacoes e o SQL trigger)
+          // Atualiza dotação com totais — só altera campos com dados no upsert
+          // para não zerar valores de sincronizações anteriores
           const totalCom = transactionsToUpsert
             .filter(t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT)
             .reduce((s: number, t: any) => s + (t.amount || 0), 0);
@@ -662,15 +667,18 @@ export class FinancialService {
             .filter(t => t.type === TransactionType.LIQUIDATION)
             .reduce((s: number, t: any) => s + (t.amount || 0), 0);
 
-          await this.supabaseService.client
-            .from('dotacoes')
-            .update({
-              total_empenhado: totalCom,
-              total_cancelado: totalCan,
-              total_pago: totalPag,
-              saldo_disponivel: Math.max(0, (budget.valor_dotacao || 0) - totalCom + totalCan)
-            })
-            .eq('id', budget.id);
+          const updateData: Record<string, number> = {};
+          if (totalCom > 0) updateData.total_empenhado = totalCom;
+          if (totalCan > 0) updateData.total_cancelado = totalCan;
+          if (totalPag > 0) updateData.total_pago = totalPag;
+
+          if (Object.keys(updateData).length > 0) {
+            updateData.saldo_disponivel = Math.max(0, (budget.valor_dotacao || 0) - totalCom + totalCan);
+            await this.supabaseService.client
+              .from('dotacoes')
+              .update(updateData)
+              .eq('id', budget.id);
+          }
         }
       } catch (err: any) {
         const msg = `NE ${neValue}: ${err.message || 'Erro desconhecido'}`;

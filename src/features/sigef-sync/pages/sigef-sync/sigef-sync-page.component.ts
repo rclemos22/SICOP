@@ -1,8 +1,9 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SigefSchedulerService } from '../../../../core/services/sigef-scheduler.service';
-import { SigefBulkSyncService, BulkSyncProgress } from '../../../../core/services/sigef-bulk-sync.service';
-import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { SigefBulkSyncService } from '../../../../core/services/sigef-bulk-sync.service';
+import { SigefSyncService, SyncTask } from '../../../../core/services/sigef-sync.service';
+import { SyncHistoryService, SyncLogEntry } from '../../../../core/services/sync-history.service';
 
 @Component({
   selector: 'app-sigef-sync-page',
@@ -18,6 +19,9 @@ import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Gerencie a sincronização dos dados com a API oficial do SIGEF.
           </p>
+        </div>
+        <div class="text-xs text-slate-400">
+          Atualizado: {{ refreshTime() }}
         </div>
       </div>
 
@@ -50,7 +54,7 @@ import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
         </div>
       </div>
 
-      <!-- Progress Bar -->
+      <!-- Progress Bar (bulk download) -->
       @if (isRunning()) {
         <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm mb-6">
           <div class="flex items-center justify-between mb-3">
@@ -78,6 +82,53 @@ import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
               }
             </div>
           }
+        </div>
+      }
+
+      <!-- Task Queue (current sync NEs) -->
+      @if (syncQueue().length > 0) {
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm mb-6">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-3">
+            Fila de Sincronização
+            @if (syncStatus()) {
+              <span class="text-xs font-normal text-slate-500 ml-2">
+                ({{ syncStatus()!.current }} / {{ syncStatus()!.total }})
+              </span>
+            }
+          </h3>
+          <div class="max-h-[250px] overflow-y-auto space-y-1.5">
+            @for (task of syncQueue(); track task.ne + (task.timestamp ?? 0)) {
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs"
+                [class.bg-slate-50]="task.status === 'pending'"
+                [class.bg-blue-50]="task.status === 'processing'"
+                [class.bg-green-50]="task.status === 'completed'"
+                [class.bg-red-50]="task.status === 'error'"
+              >
+                <span class="shrink-0 w-2 h-2 rounded-full"
+                  [class.bg-slate-300]="task.status === 'pending'"
+                  [class.bg-blue-500]="task.status === 'processing'"
+                  [class.bg-green-500]="task.status === 'completed'"
+                  [class.bg-red-500]="task.status === 'error'"
+                ></span>
+                <span class="font-mono text-slate-600">{{ task.ne }}</span>
+                <span class="text-slate-400">(UG:{{ task.ug }})</span>
+                <span class="ml-auto font-medium"
+                  [class.text-slate-500]="task.status === 'pending'"
+                  [class.text-blue-600]="task.status === 'processing'"
+                  [class.text-green-600]="task.status === 'completed'"
+                  [class.text-red-600]="task.status === 'error'"
+                >
+                  @if (task.status === 'pending') { pendente }
+                  @else if (task.status === 'processing') { processando }
+                  @else if (task.status === 'completed') { concluído }
+                  @else { erro }
+                </span>
+                @if (task.message) {
+                  <span class="text-red-500 ml-1">— {{ task.message }}</span>
+                }
+              </div>
+            }
+          </div>
         </div>
       }
 
@@ -122,7 +173,7 @@ import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
 
       <!-- Message -->
       @if (message()) {
-        <div class="p-4 rounded-xl text-sm font-medium border"
+        <div class="p-4 rounded-xl text-sm font-medium border mb-6"
           [class]="message()!.includes('sucesso') || message()!.includes('Concluído') ?
             'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800' :
             'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'"
@@ -131,32 +182,122 @@ import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
         </div>
       }
 
+      <!-- History Log -->
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">
+            Histórico de Sincronização
+            <span class="text-xs font-normal text-slate-500 ml-2">({{ logEntries().length }} registro(s))</span>
+          </h3>
+          @if (logEntries().length > 0) {
+            <button (click)="limparHistorico()"
+              class="text-xs text-red-500 hover:text-red-700 font-medium">
+              Limpar
+            </button>
+          }
+        </div>
+
+        @if (logEntries().length === 0) {
+          <p class="text-sm text-slate-400 text-center py-6">
+            Nenhuma operação registrada ainda. Clique em "Sincronização Completa" ou "Atualização Rápida" para iniciar.
+          </p>
+        } @else {
+          <div class="max-h-[400px] overflow-y-auto space-y-1">
+            @for (entry of logEntries(); track entry.id) {
+              <div class="flex items-start gap-2 px-3 py-2 rounded-lg text-xs"
+                [class.bg-blue-50]="entry.type === 'start'"
+                [class.bg-green-50]="entry.type === 'success'"
+                [class.bg-red-50]="entry.type === 'error'"
+                [class.bg-slate-50]="entry.type === 'info'"
+              >
+                <span class="shrink-0 mt-0.5 w-2 h-2 rounded-full"
+                  [class.bg-blue-500]="entry.type === 'start'"
+                  [class.bg-green-500]="entry.type === 'success'"
+                  [class.bg-red-500]="entry.type === 'error'"
+                  [class.bg-slate-400]="entry.type === 'info'"
+                ></span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-slate-400 shrink-0">{{ formatTime(entry.timestamp) }}</span>
+                    <span class="font-medium"
+                      [class.text-blue-600]="entry.type === 'start'"
+                      [class.text-green-600]="entry.type === 'success'"
+                      [class.text-red-600]="entry.type === 'error'"
+                      [class.text-slate-600]="entry.type === 'info'"
+                    >
+                      {{ entry.action }}
+                    </span>
+                    <span class="text-slate-500">{{ entry.source }}</span>
+                  </div>
+                  <p class="text-slate-600 mt-0.5">{{ entry.message }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
     </div>
   `
 })
-export class SigefSyncPageComponent {
+export class SigefSyncPageComponent implements OnInit, OnDestroy {
   private scheduler = inject(SigefSchedulerService);
   protected bulkSyncService = inject(SigefBulkSyncService);
   protected syncService = inject(SigefSyncService);
+  private syncHistory = inject(SyncHistoryService);
 
   protected message = signal<string | null>(null);
-
   protected bulkProgress = this.bulkSyncService.progress;
 
   protected isRunning = signal(false);
   protected lastSyncMessage = signal<string | null>(null);
+  protected refreshTime = signal<string>(new Date().toLocaleTimeString('pt-BR'));
+
+  protected syncQueue = this.syncService.syncQueue;
+  protected syncStatus = this.syncService.syncStatus;
+  protected logEntries = this.syncHistory.entries;
+
+  private _timer: any;
+
+  ngOnInit() {
+    this._timer = setInterval(() => {
+      this.refreshTime.set(new Date().toLocaleTimeString('pt-BR'));
+    }, 10_000);
+  }
+
+  ngOnDestroy() {
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
+    }
+  }
+
+  formatTime(iso: string): string {
+    try {
+      return new Date(iso).toLocaleTimeString('pt-BR');
+    } catch {
+      return iso;
+    }
+  }
+
+  limparHistorico(): void {
+    this.syncHistory.clear();
+  }
 
   async sincronizarTotal() {
     this.isRunning.set(true);
     this.message.set(null);
     this.lastSyncMessage.set('Sincronização completa iniciada...');
+    this.syncHistory.addEntry('start', 'sync_full', 'manual', 'Sincronização completa iniciada');
     try {
       await this.scheduler.runManualSync();
       this.message.set('Sincronização completa concluída com sucesso!');
       this.lastSyncMessage.set('Concluído em ' + new Date().toLocaleTimeString('pt-BR'));
+      this.syncHistory.addEntry('success', 'sync_full', 'manual', 'Sincronização completa concluída');
       setTimeout(() => this.message.set(null), 5000);
     } catch (err: any) {
       this.message.set('Erro: ' + (err.message || 'Erro desconhecido'));
+      this.syncHistory.addEntry('error', 'sync_full', 'manual', 'Erro na sincronização completa: ' + (err.message || 'Erro desconhecido'));
       setTimeout(() => this.message.set(null), 8000);
     } finally {
       this.isRunning.set(false);
@@ -167,14 +308,17 @@ export class SigefSyncPageComponent {
     this.isRunning.set(true);
     this.message.set(null);
     this.lastSyncMessage.set('Atualização rápida iniciada...');
+    this.syncHistory.addEntry('start', 'sync_quick', 'manual', 'Atualização rápida iniciada (últimos 60 dias)');
     try {
       await this.bulkSyncService.downloadLast60Days();
       await this.syncService.syncAllContractsFinance(true);
       this.message.set('Atualização rápida concluída com sucesso!');
       this.lastSyncMessage.set('Concluído em ' + new Date().toLocaleTimeString('pt-BR'));
+      this.syncHistory.addEntry('success', 'sync_quick', 'manual', 'Atualização rápida concluída');
       setTimeout(() => this.message.set(null), 5000);
     } catch (err: any) {
       this.message.set('Erro: ' + (err.message || 'Erro desconhecido'));
+      this.syncHistory.addEntry('error', 'sync_quick', 'manual', 'Erro na atualização rápida: ' + (err.message || 'Erro desconhecido'));
       setTimeout(() => this.message.set(null), 8000);
     } finally {
       this.isRunning.set(false);

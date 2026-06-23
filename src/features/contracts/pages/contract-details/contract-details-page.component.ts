@@ -488,19 +488,23 @@ export class ContractDetailsPageComponent {
           this.financialService.syncSigefTransactions(c.id).then(() => {
             this.loadBudgets(c.id);
             this.loadTransactions(c.id);
+            this.loadNesPagamentos(c.id);
           });
 
-          // Busca dados atualizados do SIGEF via API para alimentar o cache local,
-          // garantindo que empenhos recém-cadastrados apareçam sem esperar 15min.
-          this.atualizarLancamentos();
+          // Busca dados recentes do SIGEF via API (últimos 5 dias) para alimentar
+          // o cache local sem consumir a API com varreduras longas.
+          this.refreshSigefData(5);
         }
       }
     });
 
-    // Auto-refresh a cada 5 minutos: busca atualizações do cache local
+    // Auto-refresh a cada 5 minutos: busca apenas atualizações dos últimos 15 dias
+    // para não consumir a API oficial com varreduras desnecessárias.
+    // Ignora se houver qualquer sincronização em andamento (navegação, botão manual).
     this.autoRefreshInterval = setInterval(() => {
-      this.atualizarLancamentos();
-    }, 5 * 60 * 1000); // 5 minutos
+      if (this.sigefSyncService.isSyncing()) return;
+      this.refreshSigefData(15);
+    }, 5 * 60 * 1000);
   }
 
   /**
@@ -739,10 +743,10 @@ export class ContractDetailsPageComponent {
   }
   
   /**
-   * Atualiza os dados SIGEF (empenhos e OBs) de todas as dotações do contrato
-   * Usa queryId para permitir cancelamento.
+   * Sincroniza dados SIGEF das dotações do contrato com um período configurável.
+   * @param daysBack Número de dias para trás a partir de hoje. 0 = varredura histórica completa.
    */
-  async refreshSigefData(fullScan: boolean = true) {
+  async refreshSigefData(daysBack: number = 5) {
     const budgets = this.budgets();
     const budgetsComNE = budgets.filter(b => b.nunotaempenho);
     if (budgetsComNE.length === 0) return;
@@ -760,7 +764,7 @@ export class ContractDetailsPageComponent {
 
     try {
       this.sigefSyncService.setLocked(true);
-      await this.sigefSyncService.syncBatch(tasks, contractId, false, !fullScan);
+      await this.sigefSyncService.syncBatch(tasks, contractId, false, daysBack);
 
       if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) return;
 
@@ -783,14 +787,14 @@ export class ContractDetailsPageComponent {
   }
 
   /**
-   * Atualiza os lançamentos financeiros buscando OBs e NEs diretamente da API oficial do SIGEF.
-   * Ignora o cache local para garantir dados atualizados.
+   * Busca lançamentos dos últimos 30 dias via API oficial do SIGEF.
+   * Usado pelo botão "Atualizar Lançamentos" no contrato.
    */
   async atualizarLancamentos() {
     if (this.isUpdatingLancamentos()) return;
     this.isUpdatingLancamentos.set(true);
     try {
-      await this.refreshSigefData(true);
+      await this.refreshSigefData(30);
       this.lastSyncDate.set(new Date());
     } catch (err: any) {
       if (err.message === 'Query cancelled') return;
@@ -1171,7 +1175,7 @@ export class ContractDetailsPageComponent {
   
   /**
    * Força a sincronização SIGEF para todas as notas de empenho do contrato
-   * @param quickSync Se true, busca apenas OBs dos últimos 60 dias (padrão: false = varredura completa)
+   * @param quickSync Se true, busca apenas OBs dos últimos 15 dias (padrão: false = varredura completa)
    */
   async forceSyncSigef(quickSync: boolean = false) {
     const budgetsData = this.budgets();
@@ -1198,10 +1202,11 @@ export class ContractDetailsPageComponent {
     }
 
     try {
-      const scanType = quickSync ? 'RÁPIDA (60 dias)' : 'COMPLETA (todos os anos)';
+      const daysBack = quickSync ? 15 : 0;
+      const scanType = quickSync ? 'RÁPIDA (15 dias)' : 'COMPLETA (todos os anos)';
       console.log(`[ForceSync] Iniciando sincronização ${scanType} de ${tasks.length} NEs para contrato ${this.contractId()}`);
       
-      await this.sigefSyncService.syncBatch(tasks, this.contractId(), false, !quickSync);
+      await this.sigefSyncService.syncBatch(tasks, this.contractId(), false, daysBack);
       
       // Recarregar os dados locais para refletir a persistência
       await this.loadBudgets(this.contractId());

@@ -709,14 +709,20 @@ export class SigefService implements OnDestroy {
         
         console.log(`[SIGEF] Scan pag.${page} para NE ${numeroNE}...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
-        const pResult = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora, bypassMirror, queryId);
-        
-        found = pResult.data.find(ne => 
-          ne.nunotaempenho === numeroNE && 
-          (!cdunidadegestora || ne.cdunidadegestora === cdunidadegestora)
-        );
-        if (found) return found;
-        if (!pResult.next) break;
+        try {
+          const pResult = await this.getNotaEmpenho(ano, numeroNE, page, cdunidadegestora, bypassMirror, queryId);
+          
+          found = pResult.data.find(ne => 
+            ne.nunotaempenho === numeroNE && 
+            (!cdunidadegestora || ne.cdunidadegestora === cdunidadegestora)
+          );
+          if (found) return found;
+          if (!pResult.next) break;
+        } catch (err: any) {
+          if (err.message === 'Query cancelled') throw err;
+          console.warn(`[SIGEF] Scan pag.${page} falhou para NE ${numeroNE}: ${err.message}. Retornando null.`);
+          return null;
+        }
         page++;
       }
     }

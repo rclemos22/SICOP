@@ -8,6 +8,7 @@ import { BudgetService } from '../../features/budget/services/budget.service';
 import { AppContextService } from './app-context.service';
 import { SupabaseService } from './supabase.service';
 import { DebugService } from './debug.service';
+import { SyncHistoryService } from './sync-history.service';
 
 export interface SyncTask {
   ne: string;
@@ -45,6 +46,7 @@ export class SigefSyncService {
   private appContext       = inject(AppContextService);
   private supabase         = inject(SupabaseService);
   private debug            = inject(DebugService);
+  private syncHistory      = inject(SyncHistoryService);
 
   /** Armazena o queryId atual para permitir cancelamento */
   private currentQueryId: string | null = null;
@@ -137,7 +139,7 @@ export class SigefSyncService {
     ug: string,
     forceSync: boolean = false,
     contractId?: string,
-    recentOnly: boolean = true
+    daysBack: number = 15
   ): Promise<NeResumo | null> {
     const ugStr = ug.toString();
 
@@ -153,7 +155,7 @@ export class SigefSyncService {
       if (forceSync) {
         const ugNum = parseInt(ugStr, 10);
         const obRaws = await this.mirrorService.getObsRawByNe(neNumber, ugStr);
-        this.debug.sync(`NE ${neNumber}: ${obRaws.length} OB(s) no espelho. Buscando novas da API (recentOnly=${recentOnly})...`);
+        this.debug.sync(`NE ${neNumber}: ${obRaws.length} OB(s) no espelho. Buscando novas da API (daysBack=${daysBack})...`);
 
         // NEs vinculadas: a NE original + todas as NEs dos movimentos (reforços)
         const allNes = [...new Set([
@@ -163,7 +165,7 @@ export class SigefSyncService {
 
         for (const targetNe of allNes) {
           if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) break;
-          await this._syncObsForNe(ano, targetNe, ugStr, ugNum, forceSync, recentOnly, this.currentQueryId || undefined);
+          await this._syncObsForNe(ano, targetNe, ugStr, ugNum, forceSync, daysBack, this.currentQueryId || undefined);
         }
 
         if (contractId) {
@@ -199,8 +201,8 @@ export class SigefSyncService {
     }
 
     // ── Fase 3: Fallback pontual à API (Apenas Ação Manual) ────
-    console.log(`[SIGEF SYNC] NE ${neNumber} não encontrada no espelho. Executando busca manual via API (recentOnly=${recentOnly})...`);
-    await this._syncNeFromApi(ano, neNumber, ugStr, forceSync, recentOnly);
+    console.log(`[SIGEF SYNC] NE ${neNumber} não encontrada no espelho. Executando busca manual via API (daysBack=${daysBack})...`);
+    await this._syncNeFromApi(ano, neNumber, ugStr, forceSync, daysBack);
     await this._persistFromMirrorToCache(neNumber, ugStr);
 
     if (contractId) {
@@ -221,7 +223,7 @@ export class SigefSyncService {
     tasks: { ne: string; ug: string; ano: string }[],
     contractId?: string,
     lockUI: boolean = false,
-    recentOnly: boolean = true
+    daysBack: number = 15
   ): Promise<void> {
     if (this.isSyncing()) {
       console.warn('[SIGEF SYNC] Sincronização já em andamento.');
@@ -239,6 +241,7 @@ export class SigefSyncService {
     this._currentIdx.set(0);
     this._isLocked.set(lockUI);
     this.debug.sync(`Iniciando syncBatch: ${queue.length} NE(s)`);
+    this.syncHistory.addEntry('start', 'sync_batch', 'sync', `Iniciando syncBatch: ${queue.length} NE(s)`, `contrato=${contractId ?? 'todos'}, daysBack=${daysBack}`);
 
     try {
       for (let i = 0; i < queue.length; i++) {
@@ -253,7 +256,7 @@ export class SigefSyncService {
         this.debug.sync(`[${i + 1}/${queue.length}] NE: ${task.ne} (UG:${task.ug})`);
 
         try {
-          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId, recentOnly);
+          await this.getNotaEmpenhoWithCache(task.ano, task.ne, task.ug, true, contractId, daysBack);
           this._updateTaskStatus(i, 'completed');
         } catch (err: any) {
           if (err.message === 'Query cancelled') {
@@ -270,7 +273,7 @@ export class SigefSyncService {
             console.log(`[SIGEF SYNC] syncBatch cancelado após NE ${task.ne}.`);
             break;
           }
-          await this._delay(300);
+          await this._delay(2000);
         }
       }
 
@@ -279,6 +282,8 @@ export class SigefSyncService {
           console.error('[SIGEF SYNC] Erro ao persistir contrato:', err)
         );
       }
+
+      this.syncHistory.addEntry('success', 'sync_batch', 'sync', `syncBatch concluído: ${queue.length} NE(s) processadas`);
     } finally {
       this._isLocked.set(false);
       setTimeout(() => { if (!this.isSyncing()) this._currentIdx.set(-1); }, 5000);
@@ -336,6 +341,7 @@ export class SigefSyncService {
     }
 
     console.log(`[SIGEF SYNC] ${allTasks.length} NEs para ${contracts.length} contratos.`);
+    this.syncHistory.addEntry('start', 'sync_all_contracts', 'sync', `syncAllContractsFinance: ${allTasks.length} NEs, ${contracts.length} contratos`);
 
     const queue: SyncTask[] = allTasks.map(t => ({ ne: t.ne, ug: t.ug, ano: t.ano, status: 'pending' }));
     this._syncQueue.set(queue);
@@ -356,7 +362,7 @@ export class SigefSyncService {
           this._updateTaskStatus(i, 'error', err.message || 'Falha');
         }
 
-        if (i < queue.length - 1) await this._delay(300);
+        if (i < queue.length - 1) await this._delay(2000);
       }
 
       // Persistir tabelas financeiras
@@ -374,6 +380,7 @@ export class SigefSyncService {
       ]);
 
       console.log('[SIGEF SYNC] Carregamento concluído e interface atualizada.');
+      this.syncHistory.addEntry('success', 'sync_all_contracts', 'sync', 'syncAllContractsFinance concluído: carga de mirror → signals atualizada');
     } finally {
       this._isLocked.set(false);
       setTimeout(() => { this._currentIdx.set(-1); }, 5000);
@@ -412,7 +419,7 @@ export class SigefSyncService {
     neNumber: string, 
     ugStr: string, 
     forceSync: boolean,
-    recentOnly: boolean = true
+    daysBack: number = 15
   ): Promise<void> {
     // Guard: em modo automático (navegação/auto), nunca chama API se o bulk
     // ainda não foi concluído (evita ETIMEDOUT em cascata).
@@ -482,7 +489,7 @@ export class SigefSyncService {
             console.log(`[SIGEF SYNC] _syncNeFromApi cancelado antes de OBs da NE ${targetNE}.`);
             return;
           }
-          await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync, recentOnly);
+          await this._syncObsForNe(ano, targetNE, ugStr, ugNum, forceSync, daysBack);
         }
       } else {
         console.log(`[SIGEF SYNC] NE ${neNumber}: Pulando busca reativa de OBs (Modo Espelho Ativo).`);
@@ -502,7 +509,7 @@ export class SigefSyncService {
     ugStr: string,
     ugNum: number,
     forceSync: boolean,
-    recentOnly: boolean = true,
+    daysBack: number = 15,
     queryId?: string
   ): Promise<void> {
     // Guard: em modo automático, não busca OBs se o bulk não concluiu.
@@ -527,24 +534,28 @@ export class SigefSyncService {
       ? new Set<string>()
       : await this.mirrorService.getExistingObNumbers(targetNE, ugStr);
 
-    if (recentOnly) {
+    if (daysBack > 0) {
       const today = new Date();
-      const sixtyDaysAgo = new Date();
-      sixtyDaysAgo.setDate(today.getDate() - 60);
-      const di = sixtyDaysAgo.toISOString().split('T')[0];
+      const startDate = new Date();
+      startDate.setDate(today.getDate() - daysBack);
+      const di = startDate.toISOString().split('T')[0];
       const df = today.toISOString().split('T')[0];
-      this.debug.sync(`OBs: busca rápida (${di} a ${df}) NE ${targetNE}`);
+      this.debug.sync(`OBs: busca ${daysBack} dias (${di} a ${df}) NE ${targetNE}`);
       await this._fetchObsForPeriod(di, df, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
     } else {
+      // daysBack === 0 → varredura histórica completa (todos os anos até a data atual)
       const anoNE = parseInt(ano, 10);
       const anoAtual = new Date().getFullYear();
+      const todayStr = new Date().toISOString().split('T')[0];
       for (let a = anoNE; a <= anoAtual; a++) {
         if (queryId && !this.sigefService.hasPendingQuery(queryId)) {
           this.debug.warn(`OBs cancelado NE ${targetNE} ano ${a}`);
           return;
         }
-        this.debug.sync(`OBs: varredura ano ${a} NE ${targetNE}`);
-        await this._fetchObsForPeriod(`${a}-01-01`, `${a}-12-31`, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
+        const di = `${a}-01-01`;
+        const df = a === anoAtual ? todayStr : `${a}-12-31`;
+        this.debug.sync(`OBs: varredura ${di} a ${df} NE ${targetNE}`);
+        await this._fetchObsForPeriod(di, df, targetNE, ugStr, ugNum, forceSync, existingObs, queryId);
       }
     }
   }
@@ -624,7 +635,7 @@ export class SigefSyncService {
           this.debug.warn(`fetchObs cancelado NE ${targetNE}`);
           return;
         }
-        if (hasNext) await this._delay(300);
+        if (hasNext) await this._delay(2000);
       }
     }
   }
@@ -702,6 +713,15 @@ export class SigefSyncService {
       }
       return newQueue;
     });
+    const task = this._syncQueue()[index];
+    if (!task) return;
+    const logType = status === 'error' ? 'error' : status === 'completed' ? 'success' : 'info';
+    this.syncHistory.addEntry(
+      logType,
+      'task',
+      'sync',
+      `NE ${task.ne}: ${status}${message ? ' — ' + message : ''}`,
+    );
   }
 
   // ─── Mappers: API → CacheService (legado) ────────────────────

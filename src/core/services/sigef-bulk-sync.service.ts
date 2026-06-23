@@ -61,8 +61,44 @@ export class SigefBulkSyncService {
 
   // Constantes
   private readonly UG = '080901';
-  private readonly PAGE_DELAY_MS = 300;
-  private readonly MONTH_DELAY_MS = 500;
+  private readonly PAGE_DELAY_MS = 2000;
+  private readonly MONTH_DELAY_MS = 3000;
+  private _apiCooldownUntil = 0;
+  private _consecutiveTimeouts = 0;
+
+  private async _respectCooldown(): Promise<void> {
+    const remaining = this._apiCooldownUntil - Date.now();
+    if (remaining > 0) {
+      console.warn(`[BulkSync] Cooldown ativo. Aguardando ${Math.round(remaining / 1000)}s...`);
+      await new Promise(r => setTimeout(r, remaining));
+    }
+  }
+
+  private _setCooldown(): void {
+    this._consecutiveTimeouts++;
+    const delay = Math.min(30_000 * Math.pow(2, this._consecutiveTimeouts - 1), 300_000);
+    this._apiCooldownUntil = Date.now() + delay;
+    console.warn(`[BulkSync] Timeout #${this._consecutiveTimeouts} — cooldown de ${Math.round(delay / 1000)}s`);
+  }
+
+  private _resetCooldown(): void {
+    this._consecutiveTimeouts = 0;
+    this._apiCooldownUntil = 0;
+  }
+
+  private async _isPeriodRecentlyComplete(inicio: string, fim: string, tipo: 'NE' | 'OB'): Promise<boolean> {
+    const { data } = await this.client
+      .from('sigef_sync_periods')
+      .select('finished_at')
+      .eq('periodo_inicio', inicio)
+      .eq('tipo', tipo)
+      .eq('status', 'completed')
+      .gte('periodo_fim', fim)
+      .maybeSingle();
+    if (!data?.finished_at) return false;
+    const oneHour = 60 * 60 * 1000;
+    return (Date.now() - new Date(data.finished_at).getTime()) < oneHour;
+  }
 
   // Métodos auxiliares para progresso
   private _resetProgress(): void {
@@ -150,11 +186,13 @@ export class SigefBulkSyncService {
         const inicioNE = `${neYear}-01-01`;
         const fimNE = neYear === new Date().getFullYear() ? hoje : `${neYear}-12-31`;
 
-        if (await this._isPeriodComplete(inicioNE, fimNE, 'NE')) {
-          console.log(`[BulkSync] ${label} já sincronizado. Pulando.`);
+        if (await this._isPeriodRecentlyComplete(inicioNE, fimNE, 'NE')) {
+          console.log(`[BulkSync] ${label} já sincronizado há <1h. Pulando.`);
           totalNe++;
           continue;
         }
+
+        await this._respectCooldown();
 
         try {
           const count = await this._downloadSpecificNE(nunotaempenho, ug, ano);
@@ -183,11 +221,13 @@ export class SigefBulkSyncService {
         const inicioNE = `${neYear}-01-01`;
         const fimNE = neYear === new Date().getFullYear() ? hoje : `${neYear}-12-31`;
 
-        if (await this._isPeriodComplete(inicioNE, fimNE, 'OB')) {
-          console.log(`[BulkSync] OBs de ${label} já sincronizados. Pulando.`);
+        if (await this._isPeriodRecentlyComplete(inicioNE, fimNE, 'OB')) {
+          console.log(`[BulkSync] OBs de ${label} já sincronizadas há <1h. Pulando.`);
           totalOb++;
           continue;
         }
+
+        await this._respectCooldown();
 
         try {
           const count = await this._downloadObsForNE(nunotaempenho, ug, ano);
@@ -359,8 +399,11 @@ export class SigefBulkSyncService {
     console.log(`[BulkSync] Baixando NE específica: ${nunotaempenho} (${ano})...`);
 
     let totalSaved = 0;
+    let hasNetworkError = false;
 
+    // NE header — falha não bloqueia movimentos
     try {
+      await this._respectCooldown();
       const ne = await this._withRetry(() =>
         this.sigefService.getNotaEmpenhoByNumber(ano.toString(), nunotaempenho, ug, true)
       );
@@ -374,7 +417,15 @@ export class SigefBulkSyncService {
         totalSaved = 1;
         console.log(`[BulkSync] NE ${nunotaempenho} baixada com sucesso.`);
       }
+    } catch (err: any) {
+      const errMsg = err?.message || 'Erro desconhecido';
+      console.warn(`[BulkSync] Falha ao baixar NE ${nunotaempenho}: ${errMsg}. Continuando com movimentos.`);
+      if (this._isNetworkError(err)) { this._setCooldown(); hasNetworkError = true; }
+    }
 
+    // Movimentos — falha não anula NE já salva
+    try {
+      await this._respectCooldown();
       const movements = await this._withRetry(() =>
         this.sigefService.getNotaEmpenhoMovements(ano.toString(), nunotaempenho, ug, true)
       );
@@ -388,12 +439,18 @@ export class SigefBulkSyncService {
         totalSaved += movements.length;
         console.log(`[BulkSync] +${movements.length} movimentos para NE ${nunotaempenho}.`);
       }
-
     } catch (err: any) {
-      console.error(`[BulkSync] Erro ao baixar NE ${nunotaempenho}:`, err?.message);
-      throw err;
+      console.warn(`[BulkSync] Falha ao baixar movimentos da NE ${nunotaempenho}: ${err?.message || 'Erro'}.`);
+      if (this._isNetworkError(err)) { this._setCooldown(); hasNetworkError = true; }
     }
 
+    // Se nada foi salvo e ambos falharam, reporta erro
+    if (totalSaved === 0) {
+      throw new Error(`NE ${nunotaempenho}: não foi possível baixar dados (NE nem movimentos).`);
+    }
+
+    // Só reseta cooldown se não houve erro de rede nesta NE
+    if (!hasNetworkError) this._resetCooldown();
     return totalSaved;
   }
 
@@ -417,6 +474,8 @@ export class SigefBulkSyncService {
       let hasNext = true;
 
       while (hasNext) {
+        await this._respectCooldown();
+
         try {
           const result = await this._withRetry(() =>
             this.sigefService.getOrdemBancaria(
@@ -447,9 +506,14 @@ export class SigefBulkSyncService {
           }
         } catch (err: any) {
           const isNet = this._isNetworkError(err);
-          if (isNet && totalSaved > 0) {
-            console.warn(`[BulkSync] Encerrando OBs ${nunotaempenho} após erro de rede. Salvos: ${totalSaved}`);
-            hasNext = false;
+          if (isNet) {
+            this._setCooldown();
+            if (totalSaved > 0) {
+              console.warn(`[BulkSync] Encerrando OBs ${nunotaempenho} após erro de rede. Salvos: ${totalSaved}`);
+              hasNext = false;
+            } else {
+              throw err;
+            }
           } else {
             throw err;
           }
@@ -458,18 +522,6 @@ export class SigefBulkSyncService {
     }
 
     return totalSaved;
-  }
-
-  private async _isPeriodComplete(inicio: string, fim: string, tipo: 'NE' | 'OB'): Promise<boolean> {
-    const { data } = await this.client
-      .from('sigef_sync_periods')
-      .select('periodo_fim')
-      .eq('periodo_inicio', inicio)
-      .eq('tipo', tipo)
-      .eq('status', 'completed')
-      .gte('periodo_fim', fim)
-      .maybeSingle();
-    return !!data;
   }
 
   private async _upsertPeriodRunning(inicio: string, fim: string, tipo: 'NE' | 'OB'): Promise<void> {
