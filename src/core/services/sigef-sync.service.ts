@@ -454,7 +454,9 @@ export class SigefSyncService {
 
       if (ne) {
         await this.mirrorService.saveNesBulk([ne as Record<string, any>], ugStr);
-        await this.cacheService.saveNotaEmpenho(this._mapApiNeToCache(ne, ugNum));
+        // Usa a UG real retornada pela API, não a do parâmetro
+        const neUg = ne.cdunidadegestora ? parseInt(ne.cdunidadegestora, 10) : ugNum;
+        await this.cacheService.saveNotaEmpenho(this._mapApiNeToCache(ne, neUg));
       }
 
       const movements = await this._withRetry(() =>
@@ -470,7 +472,10 @@ export class SigefSyncService {
       if (movements.length > 0) {
         await this.mirrorService.saveNesBulk(movements as Record<string, any>[], ugStr);
         await this.cacheService.saveNeMovimentos(
-          movements.map(m => this._mapApiMovementToCache(m as any, ugNum))
+          movements.map(m => {
+            const movUg = m.cdunidadegestora ? parseInt(String(m.cdunidadegestora), 10) : ugNum;
+            return this._mapApiMovementToCache(m as any, movUg);
+          })
         );
       }
 
@@ -606,7 +611,10 @@ export class SigefSyncService {
             this.debug.sync(`OBs: ${newObs.length} nova(s) NE ${targetNE} pág ${page}`);
             await this.mirrorService.saveObsBulk(newObs as Record<string, any>[], ugStr);
             await this.cacheService.saveOrdensBancarias(
-              newObs.map(ob => this._mapApiObToCache(ob, ugNum))
+              newObs.map(ob => {
+                const obUg = ob.cdunidadegestora ? parseInt(String(ob.cdunidadegestora), 10) : ugNum;
+                return this._mapApiObToCache(ob, obUg);
+              })
             );
             newObs.forEach(ob => existingObs.add((ob.nuordembancaria || '').trim().toUpperCase()));
           }
@@ -645,10 +653,11 @@ export class SigefSyncService {
 
     const neRaws = await this.mirrorService.getNeMovementsRaw(neNumber, ugStr);
     for (const raw of neRaws) {
+      const rawUg = raw['cdunidadegestora'] ? parseInt(raw['cdunidadegestora'], 10) : ugNum;
       if (raw.nunotaempenho === neNumber || !raw.nuneoriginal) {
-        await this.cacheService.saveNotaEmpenho(this._mapRawNeToCache(raw, ugNum));
+        await this.cacheService.saveNotaEmpenho(this._mapRawNeToCache(raw, rawUg));
       } else {
-        await this.cacheService.saveNeMovimentos([this._mapRawMovementToCache(raw, ugNum)]);
+        await this.cacheService.saveNeMovimentos([this._mapRawMovementToCache(raw, rawUg)]);
       }
     }
 

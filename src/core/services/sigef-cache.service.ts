@@ -256,6 +256,24 @@ export class SigefCacheService {
     }
   }
 
+  async getNeMovimentosGlobal(neNumber: string): Promise<SigefNeMovimento[]> {
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('sigef_ne_movimentos')
+        .select('*')
+        .or(`nunotaempenho.eq.${neNumber},nuneoriginal.eq.${neNumber}`)
+        .order('dtlancamento', { ascending: true });
+
+      if (error || !data) {
+        return [];
+      }
+
+      return data.map(this.mapToNeMovimento);
+    } catch (err) {
+      return [];
+    }
+  }
+
   async saveNeMovimentos(movimentos: SigefNeMovimento[]): Promise<void> {
     if (!movimentos.length) return;
     const ne = movimentos[0].nunotaempenho;

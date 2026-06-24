@@ -522,7 +522,11 @@ export class FinancialService {
       this.debug.sync(`[${neValue}] dotação ${budget.dotacao}...`);
 
       try {
-        const movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
+        let movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
+        if (movimentosCache.length === 0) {
+          this.debug.sync(`[${neValue}] sem movimentos para UG ${ugNum}; tentando global...`);
+          movimentosCache = await this.sigefCacheService.getNeMovimentosGlobal(neValue);
+        }
 
         const { data: existingDbLiq } = await this.supabaseService.client
           .from('transacoes')
@@ -732,7 +736,10 @@ export class FinancialService {
       const ne = budget.nunotaempenho.trim();
       if (!neMovimentosMap.has(ne)) {
         const ugNum = parseInt(budget.unid_gestora || '080101', 10);
-        const movs = await this.sigefCacheService.getNeMovimentos(ugNum, ne);
+        let movs = await this.sigefCacheService.getNeMovimentos(ugNum, ne);
+        if (movs.length === 0) {
+          movs = await this.sigefCacheService.getNeMovimentosGlobal(ne);
+        }
         neMovimentosMap.set(ne, movs);
       }
     }
