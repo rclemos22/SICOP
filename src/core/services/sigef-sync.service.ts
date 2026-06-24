@@ -727,10 +727,22 @@ export class SigefSyncService {
     const neRaws = await this.mirrorService.getNeMovementsRaw(neNumber, ugStr);
     for (const raw of neRaws) {
       const rawUg = raw['cdunidadegestora'] ? parseInt(raw['cdunidadegestora'], 10) : ugNum;
-      if (raw.nunotaempenho === neNumber || !raw.nuneoriginal) {
+
+      // Determina o cdevento correto:
+      //   - Se o raw_data da API já tem cdevento, usa-o (movements retornam 400010/400011/400012).
+      //   - Se é o registro principal da NE (sem nuneoriginal), a API não retorna cdevento,
+      //     mas o evento é 400010 (empenho original).
+      const ehOriginal = raw.nunotaempenho === neNumber || !raw.nuneoriginal;
+      const cdevento = raw['cdevento'] ? parseInt(String(raw['cdevento']), 10) : (ehOriginal ? 400010 : 0);
+
+      // Salva como movimento em sigef_ne_movimentos (usa cdevento correto).
+      const mov = this._mapRawMovementToCache(raw, rawUg);
+      if (cdevento > 0) mov.cdevento = cdevento;
+      await this.cacheService.saveNeMovimentos([mov]);
+
+      // Se for o registro principal da NE, salva também a nota (metadados em sigef_notas_empenho).
+      if (ehOriginal) {
         await this.cacheService.saveNotaEmpenho(this._mapRawNeToCache(raw, rawUg));
-      } else {
-        await this.cacheService.saveNeMovimentos([this._mapRawMovementToCache(raw, rawUg)]);
       }
     }
 
