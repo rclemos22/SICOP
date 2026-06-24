@@ -654,9 +654,11 @@ export class SigefSyncService {
 
     const obRaws = await this.mirrorService.getObsRawByNeGlobal(neNumber);
     if (obRaws.length > 0) {
-      await this.cacheService.saveOrdensBancarias(
-        obRaws.map(raw => this._mapRawObToCache(raw, ugNum))
-      );
+      const obsToCache = obRaws.map(raw => {
+        const rawUg = raw['cdunidadegestora'] ? parseInt(raw['cdunidadegestora'], 10) : ugNum;
+        return this._mapRawObToCache(raw, rawUg);
+      });
+      await this.cacheService.saveOrdensBancarias(obsToCache);
     }
   }
 

@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { SupabaseService } from './supabase.service';
 import { DebugService } from './debug.service';
 import { ErrorHandlerService } from './error-handler.service';
+import { SigefMirrorService } from './sigef-mirror.service';
 
 export interface SigefNotaEmpenho {
   id?: string;
@@ -133,6 +134,7 @@ export class SigefCacheService {
   private supabaseService = inject(SupabaseService);
   private errorHandler = inject(ErrorHandlerService);
   private debug = inject(DebugService);
+  private mirrorService = inject(SigefMirrorService);
 
   private _loading = signal<boolean>(false);
   readonly loading = this._loading.asReadonly();
@@ -141,6 +143,32 @@ export class SigefCacheService {
   readonly error = this._error.asReadonly();
 
   private CACHE_TIMEOUT_HOURS = 24; // Cache válido por 24 horas
+
+  // Lock granular por NE para evitar corridas no _persistFromMirrorToCache
+  private _neLocks = new Set<string>();
+
+  private withNeLock<T>(neKey: string, fn: () => Promise<T>): Promise<T> {
+    if (this._neLocks.has(neKey)) {
+      console.warn(`[SigefCache] NE lock já ativo para ${neKey}, aguardando...`);
+      return this._retryWithDelay(() => {
+        if (this._neLocks.has(neKey)) throw new Error('LOCK_ACTIVE');
+        return this.withNeLock(neKey, fn);
+      }, 10, 200);
+    }
+    this._neLocks.add(neKey);
+    return fn().finally(() => this._neLocks.delete(neKey));
+  }
+
+  private async _retryWithDelay<T>(fn: () => Promise<T>, maxRetries: number, delayMs: number): Promise<T> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch {
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+    return fn();
+  }
 
   // ============================================
   // Notas de Empenho
@@ -166,7 +194,9 @@ export class SigefCacheService {
   }
 
   async saveNotaEmpenho(ne: SigefNotaEmpenho): Promise<void> {
-    const payload = {
+    const lockKey = `NE:${ne.cdunidadegestora}:${ne.nunotaempenho}`;
+    return this.withNeLock(lockKey, async () => {
+      const payload = {
       cdunidadegestora: ne.cdunidadegestora,
       nunotaempenho: ne.nunotaempenho,
       cdgestao: ne.cdgestao,
@@ -200,6 +230,7 @@ export class SigefCacheService {
     await this.supabaseService.client
       .from('sigef_notas_empenho')
       .upsert(payload, { onConflict: 'cdunidadegestora,nunotaempenho' });
+    });
   }
 
   // ============================================
@@ -226,7 +257,12 @@ export class SigefCacheService {
   }
 
   async saveNeMovimentos(movimentos: SigefNeMovimento[]): Promise<void> {
-    const payload = movimentos.map(m => ({
+    if (!movimentos.length) return;
+    const ne = movimentos[0].nunotaempenho;
+    const ug = movimentos[0].cdunidadegestora;
+    const lockKey = `NE:${ug}:${ne}:mov`;
+    return this.withNeLock(lockKey, async () => {
+      const payload = movimentos.map(m => ({
       cdunidadegestora: m.cdunidadegestora,
       nunotaempenho: m.nunotaempenho,
       cdevento: m.cdevento,
@@ -252,6 +288,7 @@ export class SigefCacheService {
         .from('sigef_ne_movimentos')
         .upsert(payload, { onConflict: 'cdunidadegestora,nunotaempenho,cdevento,dtlancamento' });
     }
+    });
   }
 
   // ============================================
@@ -447,140 +484,90 @@ export class SigefCacheService {
   }
 
   // ============================================
-  // Espelho de Dados Brutos (import_sigef)
+  // Espelho de Dados Brutos — delegado ao SigefMirrorService
+  // (import_sigef legado substituído por import_sigef_ne / import_sigef_ob)
   // ============================================
 
-  /**
-   * Salva dados brutos da API no espelho (import_sigef).
-   */
-  async saveRawMirror(identifier: string, type: string, rawData: any, year?: number): Promise<void> {
-    try {
-      console.log(`[SigefCache] Salvando espelho bruto: ${type} - ${identifier}`);
-      const payload = {
-        identifier: identifier.trim().toUpperCase(),
-        type,
-        raw_data: rawData,
-        year,
-        last_sync: new Date().toISOString()
-      };
-
-      const { error } = await this.supabaseService.client
-        .from('import_sigef')
-        .upsert(payload, { onConflict: 'identifier,type' });
-
-      if (error) {
-        console.error('[SigefCache] Erro ao salvar import_sigef:', error);
-      }
-    } catch (err) {
-      console.error('[SigefCache] Erro crítico ao salvar espelho bruto:', err);
+  async saveRawMirror(identifier: string, type: string, rawData: any, _year?: number): Promise<void> {
+    const ug = rawData?.cdunidadegestora?.toString();
+    if (!ug) return;
+    if (type === 'NE') {
+      await this.mirrorService.saveNesBulk([rawData], ug);
+    } else if (type === 'OB') {
+      await this.mirrorService.saveObsBulk([rawData], ug);
     }
   }
 
-  /**
-   * Recupera dados brutos do espelho.
-   */
   async getRawMirror(identifier: string, type: string): Promise<any | null> {
     try {
-      const { data, error } = await this.supabaseService.client
-        .from('import_sigef')
-        .select('raw_data')
-        .eq('identifier', identifier.trim().toUpperCase())
-        .eq('type', type)
+      const table = type === 'NE' ? 'import_sigef_ne' : 'import_sigef_ob';
+      const field = type === 'NE' ? 'nunotaempenho' : 'nuordembancaria';
+      const { data } = await this.supabaseService.client
+        .from(table)
+        .select('raw_data, last_sync')
+        .eq(field, identifier.trim().toUpperCase())
         .maybeSingle();
-
-      if (error) {
-        console.warn('[SigefCache] Erro ao buscar no espelho:', error);
-        return null;
+      if (!data?.raw_data) return null;
+      if (data.last_sync) {
+        const age = Date.now() - new Date(data.last_sync).getTime();
+        if (age > this.CACHE_TIMEOUT_HOURS * 60 * 60 * 1000) return null;
       }
-
-      return data?.raw_data || null;
-    } catch (err) {
+      return data.raw_data;
+    } catch {
       return null;
     }
   }
 
-  /**
-   * Recupera uma lista de registros do espelho baseada em um campo do JSON.
-   * Útil para buscar todas as OBs de uma NE, por exemplo.
-   */
   async getRawMirrorList(type: string, fieldName: string, value: string, cdunidadegestora?: string): Promise<any[]> {
-    try {
-      let query = this.supabaseService.client
-        .from('import_sigef')
-        .select('raw_data')
-        .eq('type', type)
-        .eq(`raw_data->>${fieldName}`, value.trim().toUpperCase());
-
+    if (type === 'OB' && fieldName === 'nunotaempenho') {
       if (cdunidadegestora) {
-        query = query.eq('raw_data->>cdunidadegestora', cdunidadegestora.toString());
+        return this.mirrorService.getObsRawByNe(value, cdunidadegestora);
       }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.warn(`[SigefCache] Erro ao buscar lista no espelho (${type}.${fieldName}):`, error);
-        return [];
-      }
-
-      return data?.map(d => d.raw_data) || [];
-    } catch (err) {
-      console.error('[SigefCache] Erro crítico ao buscar lista no espelho:', err);
-      return [];
+      return this.mirrorService.getObsRawByNeGlobal(value);
     }
-  }
-
-  /**
-   * Recupera todas as movimentações de uma NE (original + reforços/anulações) do espelho.
-   */
-  async getNotaEmpenhoMovementsFromMirror(neNumber: string): Promise<any[]> {
-    try {
-      const cleanNE = neNumber.trim().toUpperCase();
-      const { data, error } = await this.supabaseService.client
-        .from('import_sigef')
+    if (type === 'OB' && fieldName === 'nuordembancaria') {
+      const { data } = await this.supabaseService.client
+        .from('import_sigef_ob')
         .select('raw_data')
-        .eq('type', 'NE')
-        .or(`identifier.eq.${cleanNE},raw_data->>nuneoriginal.eq.${cleanNE}`);
-
-      if (error) {
-        console.warn(`[SigefCache] Erro ao buscar movimentos no espelho para ${neNumber}:`, error);
-        return [];
-      }
-
-      return data?.map(d => d.raw_data) || [];
-    } catch (err) {
-      console.error('[SigefCache] Erro crítico ao buscar movimentos no espelho:', err);
-      return [];
+        .eq('nuordembancaria', value.trim().toUpperCase())
+        .order('dtlancamento', { ascending: true, nullsFirst: false });
+      return (data || []).map(r => r.raw_data);
     }
+    return [];
   }
 
-  /**
-   * Salva múltiplos registros no espelho bruto de uma vez.
-   */
-  async saveRawMirrorBulk(items: any[], type: string, idField: string, yearField?: string): Promise<void> {
+  async getNotaEmpenhoMovementsFromMirror(neNumber: string): Promise<any[]> {
+    const { data } = await this.supabaseService.client
+      .from('import_sigef_ne')
+      .select('raw_data')
+      .or(`nunotaempenho.eq.${neNumber.trim().toUpperCase()},nuneoriginal.eq.${neNumber.trim().toUpperCase()}`);
+    return (data || []).map(r => r.raw_data);
+  }
+
+  async saveRawMirrorBulk(items: any[], type: string, _idField: string, _yearField?: string): Promise<void> {
     if (!items || items.length === 0) return;
-
-    try {
-      const payload = items.map(item => ({
-        identifier: (item[idField] || '').toString().trim().toUpperCase(),
-        type,
-        raw_data: item,
-        year: yearField ? item[yearField] : undefined,
-        last_sync: new Date().toISOString()
-      })).filter(p => p.identifier);
-
-      if (payload.length === 0) return;
-
-      console.log(`[SigefCache] Salvando ${payload.length} itens no espelho: ${type}`);
-      
-      const { error } = await this.supabaseService.client
-        .from('import_sigef')
-        .upsert(payload, { onConflict: 'identifier,type' });
-
-      if (error) {
-        console.error('[SigefCache] Erro ao salvar bulk import_sigef:', error);
+    if (type === 'NE') {
+      const grouped = new Map<string, any[]>();
+      for (const item of items) {
+        const ug = item.cdunidadegestora?.toString() || '080101';
+        const list = grouped.get(ug) || [];
+        list.push(item);
+        grouped.set(ug, list);
       }
-    } catch (err) {
-      console.error('[SigefCache] Erro crítico ao salvar espelho bruto (bulk):', err);
+      for (const [ug, ugItems] of grouped) {
+        await this.mirrorService.saveNesBulk(ugItems, ug);
+      }
+    } else if (type === 'OB') {
+      const grouped = new Map<string, any[]>();
+      for (const item of items) {
+        const ug = item.cdunidadegestora?.toString() || '080101';
+        const list = grouped.get(ug) || [];
+        list.push(item);
+        grouped.set(ug, list);
+      }
+      for (const [ug, ugItems] of grouped) {
+        await this.mirrorService.saveObsBulk(ugItems, ug);
+      }
     }
   }
 

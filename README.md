@@ -33,10 +33,11 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
 - **Sincronização SIGEF**: Persiste transações do SIGEF no banco local para preservar vínculos de parcelas
   - Página dedicada de sincronização (`/sigef-sync`) com fila de tasks e progresso
   - `SyncHistoryService`: log persistente em localStorage de todas as operações de sync
-  - `DashboardRefreshSchedulerService`: atualização silenciosa dos cards a cada 20min
-  - Três níveis: navegação (5 dias), auto-refresh (15 dias), "Atualizar Lançamentos" (30 dias), "Sincronização Completa" (full scan)
+  - `DashboardRefreshSchedulerService`: atualização silenciosa dos cards a cada 20min (apenas cache local, sem API)
+  - **Sincronização manual**: API oficial consumida apenas sob demanda via botão "Sincronizar SIGEF"
+  - Ciclos automáticos desativados — nenhuma chamada à API oficial é feita em segundo plano
   - Circuit-breaker com cooldown exponencial (30s-5min) contra timeouts da API
-  - Busca incremental com `_isPeriodRecentlyComplete` (janela de 1 hora)
+  - Botão "Reconectar" no cabeçalho para renovar token de acesso
 
 ## Campos do Contrato
 
@@ -117,7 +118,7 @@ src/
 │   ├── sigef-mirror.service.ts   # Espelho bruto da API (import_sigef_*)
 │   ├── sigef-bulk-sync.service.ts # Download bulk com anti-flood e cooldown
 │   ├── sigef-sync.service.ts     # Orquestração mirror → cache → signals
-│   ├── sigef-scheduler.service.ts # Ciclos automáticos (rápido, médio, manual)
+│   ├── sigef-scheduler.service.ts # Sincronização manual (ciclos automáticos desativados)
 │   ├── sync-history.service.ts   # Log persistente de sincronização (localStorage)
 │   ├── dashboard-refresh-scheduler.service.ts # Refresh silencioso dos cards
 │   ├── app-context.service.ts    

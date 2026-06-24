@@ -162,13 +162,15 @@ export class FinancialService {
       const targetYear = year ?? new Date().getFullYear();
       const [movData, obData] = await Promise.all([
         this.supabaseService.client
-          .from('sigef_ne_movimentos')
-          .select('nunotaempenho, cdevento, vlnotaempenho, dtlancamento')
+          .from('import_sigef_ne')
+          .select('nunotaempenho, dtlancamento, raw_data')
+          .not('raw_data', 'is', null)
           .gte('dtlancamento', `${targetYear}-01-01`)
           .lte('dtlancamento', `${targetYear}-12-31`),
         this.supabaseService.client
-          .from('sigef_ordens_bancarias')
+          .from('import_sigef_ob')
           .select('nunotaempenho, nuordembancaria, nudocumento, vltotal, dtpagamento, dtlancamento, cdsituacaoordembancaria')
+          .not('vltotal', 'is', null)
           .gte('dtpagamento', `${targetYear}-01-01`)
           .lte('dtpagamento', `${targetYear}-12-31`),
       ]);
@@ -192,18 +194,20 @@ export class FinancialService {
       };
 
       (movData.data || []).forEach((m: any) => {
-        if (!m.vlnotaempenho) return;
+        const rd = m.raw_data || {};
+        const vl = rd.vlnotaempenho;
+        if (!vl) return;
         let type = TransactionType.COMMITMENT;
-        if (m.cdevento === 400012) type = TransactionType.CANCELLATION;
-        else if (m.cdevento === 400011) type = TransactionType.REINFORCEMENT;
+        if (rd.cdevento === 400012) type = TransactionType.CANCELLATION;
+        else if (rd.cdevento === 400011) type = TransactionType.REINFORCEMENT;
         const ne = m.nunotaempenho || '';
-        const amount = Math.abs(Number(m.vlnotaempenho) || 0);
+        const amount = Math.abs(Number(vl) || 0);
         const dedupKey = `${ne}|${type}|${amount}`;
         if (existingKeys?.has(dedupKey)) return;
         existingKeys?.add(dedupKey);
         const enriched = enrichByNe(ne);
         transactions.push({
-          id: `cache-mov-${ne}-${m.cdevento}`,
+          id: `cache-mov-${ne}-${rd.cdevento}`,
           contract_id: enriched.contract_id,
           description: `Movimento NE ${ne}`,
           commitment_id: ne,
@@ -379,31 +383,33 @@ export class FinancialService {
       for (const ne of allNes) {
         const [movimentos, obs] = await Promise.all([
           this.supabaseService.client
-            .from('sigef_ne_movimentos')
-            .select('*')
+            .from('import_sigef_ne')
+            .select('nunotaempenho, nuneoriginal, dtlancamento, raw_data')
             .eq('nunotaempenho', ne)
-            .order('dtlancamento', { ascending: true }),
+            .order('dtlancamento', { ascending: true, nullsFirst: false }),
           this.supabaseService.client
-            .from('sigef_ordens_bancarias')
+            .from('import_sigef_ob')
             .select('*')
             .eq('nunotaempenho', ne)
-            .order('dtlancamento', { ascending: true }),
+            .order('dtlancamento', { ascending: true, nullsFirst: false }),
         ]);
 
         const budgetInfo = neBudgetMap.get(ne);
 
         (movimentos.data || []).forEach((m: any, idx: number) => {
-          if (!m.vlnotaempenho) return;
+          const rd = m.raw_data || {};
+          const vl = rd.vlnotaempenho;
+          if (!vl) return;
           let type = TransactionType.COMMITMENT;
-          if (m.cdevento === 400012) type = TransactionType.CANCELLATION;
-          else if (m.cdevento === 400011) type = TransactionType.REINFORCEMENT;
+          if (rd.cdevento === 400012) type = TransactionType.CANCELLATION;
+          else if (rd.cdevento === 400011) type = TransactionType.REINFORCEMENT;
           transactions.push({
-            id: `cache-mov-${m.nunotaempenho}-${m.cdevento}-${idx}`,
+            id: `cache-mov-${m.nunotaempenho}-${(rd.cdevento || '')}-${idx}`,
             contract_id: contractId,
             description: `Movimento NE ${m.nunotaempenho}`,
             commitment_id: m.nunotaempenho || '',
             date: m.dtlancamento ? new Date(m.dtlancamento) : new Date(),
-            type, amount: Math.abs(Number(m.vlnotaempenho) || 0),
+            type, amount: Math.abs(Number(vl) || 0),
             department: budgetInfo?.dotacao || '',
             budget_description: budgetInfo?.dotacao || '',
             contract_number: budgetInfo?.numero_contrato || 'N/A',
@@ -667,13 +673,16 @@ export class FinancialService {
             .filter(t => t.type === TransactionType.LIQUIDATION)
             .reduce((s: number, t: any) => s + (t.amount || 0), 0);
 
+          // total_empenhado = COMMITMENT + REINFORCEMENT - CANCELLATION (valor líquido)
+          const totalEmpenhadoLiquido = Math.max(0, totalCom - totalCan);
+
           const updateData: Record<string, number> = {};
-          if (totalCom > 0) updateData.total_empenhado = totalCom;
+          if (totalCom > 0 || totalCan > 0) updateData.total_empenhado = totalEmpenhadoLiquido;
           if (totalCan > 0) updateData.total_cancelado = totalCan;
           if (totalPag > 0) updateData.total_pago = totalPag;
 
           if (Object.keys(updateData).length > 0) {
-            updateData.saldo_disponivel = Math.max(0, (budget.valor_dotacao || 0) - totalCom + totalCan);
+            updateData.saldo_disponivel = Math.max(0, (budget.valor_dotacao || 0) - totalEmpenhadoLiquido);
             await this.supabaseService.client
               .from('dotacoes')
               .update(updateData)

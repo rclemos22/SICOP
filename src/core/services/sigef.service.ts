@@ -4,7 +4,7 @@ import { SigefCacheService, SIGEF_PAID_STATUSES } from './sigef-cache.service';
 import { SigefMirrorService } from './sigef-mirror.service';
 import { DebugService } from './debug.service';
 
-export type ApiStatus = 'connected' | 'disconnected' | 'refreshing' | 'error';
+export type ApiStatus = 'connected' | 'disconnected' | 'refreshing' | 'error' | 'suspended';
 
 export interface NotaEmpenho {
   ano: number | null;
@@ -121,6 +121,32 @@ export class SigefService implements OnDestroy {
   private mirrorService = inject(SigefMirrorService);
   private debug = inject(DebugService);
   private authPromise: Promise<void> | null = null;
+  private _apiSuspended = signal(false);
+  readonly apiSuspended = this._apiSuspended.asReadonly();
+
+  suspendApi(): void {
+    if (this._apiSuspended()) return;
+    console.warn('[SIGEF] ⛔ Consumo da API oficial SUSPENSO.');
+    this._apiSuspended.set(true);
+    this._apiStatus.set('suspended');
+    this._authenticated.set(false);
+    this.bearerToken = null;
+    this.refreshToken = null;
+    this.tokenExpiry = null;
+    localStorage.removeItem(this.ACCESS_TOKEN_KEY);
+    localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+    localStorage.removeItem(this.EXIRY_KEY);
+    this.stopTokenMonitor();
+  }
+
+  resumeApi(): void {
+    if (!this._apiSuspended()) return;
+    console.log('[SIGEF] ✅ Consumo da API REATIVADO.');
+    this._apiSuspended.set(false);
+    this._apiStatus.set('disconnected');
+    this.startTokenMonitor();
+    this.ensureAuthenticated().catch(err => console.error('[SIGEF] Falha na reautenticação:', err.message));
+  }
 
   // ─── Fila Global de Consultas ────────────────────────────────
   // Controla concorrência: apenas 1 requisição por vez na API do SIGEF
@@ -132,6 +158,16 @@ export class SigefService implements OnDestroy {
   // Impede que ciclos automáticos e manuais concorram simultaneamente
   private _apiLocked = signal<boolean>(false);
   readonly apiLocked = this._apiLocked.asReadonly();
+
+  // ─── Circuit Breaker ─────────────────────────────────────────
+  private _circuitState = signal<'closed' | 'open' | 'half-open'>('closed');
+  readonly circuitState = this._circuitState.asReadonly();
+
+  private _circuitFailures = 0;
+  private _circuitOpenedAt = 0;
+  private readonly CIRCUIT_THRESHOLD = 3;
+  private readonly CIRCUIT_OPEN_MS = 300_000;
+  private readonly CIRCUIT_HALF_OPEN_MS = 60_000;
 
   async withApiLock<T>(fn: () => Promise<T>): Promise<T> {
     if (this._apiLocked()) {
@@ -145,14 +181,51 @@ export class SigefService implements OnDestroy {
     }
   }
 
+  // ─── Circuit Breaker ──────────────────────────────────────────
+  private _circuitCheck(): boolean {
+    const state = this._circuitState();
+    if (state === 'closed') return true;
+
+    if (state === 'half-open') {
+      return true;
+    }
+
+    if (Date.now() >= this._circuitOpenedAt + this.CIRCUIT_OPEN_MS) {
+      this._circuitState.set('half-open');
+      console.log('[SIGEF] Circuit breaker: open → half-open');
+      return true;
+    }
+
+    return false;
+  }
+
+  private _circuitSuccess(): void {
+    if (this._circuitState() !== 'closed') {
+      console.log('[SIGEF] Circuit breaker fechado.');
+    }
+    this._circuitFailures = 0;
+    this._circuitState.set('closed');
+    this._circuitOpenedAt = 0;
+  }
+
+  private _circuitFailure(): void {
+    this._circuitFailures++;
+    if (this._circuitFailures >= this.CIRCUIT_THRESHOLD) {
+      this._circuitState.set('open');
+      this._circuitOpenedAt = Date.now();
+      console.warn(`[SIGEF] Circuit breaker ABERTO (${this._circuitFailures} falhas).`);
+    }
+  }
+
   private readonly ACCESS_TOKEN_KEY = 'sigef_access_token';
   private readonly REFRESH_TOKEN_KEY = 'sigef_refresh_token';
   private readonly EXIRY_KEY = 'sigef_token_expiry';
 
   constructor() {
     this.loadPersistedTokens();
-    this.ensureAuthenticated().catch(err => console.error('[SIGEF] Falha inicial:', err));
-    this.startTokenMonitor();
+    if (this.bearerToken && !this.isTokenExpired()) {
+      this._apiStatus.set('connected');
+    }
   }
 
   private loadPersistedTokens(): void {
@@ -264,6 +337,10 @@ export class SigefService implements OnDestroy {
     if (!this.refreshToken) {
       throw new Error('Refresh token não disponível');
     }
+
+    if (!this._circuitCheck()) {
+      throw new Error('API SIGEF temporariamente indisponível (circuito aberto).');
+    }
     
     this._apiStatus.set('refreshing');
     const url = `${this.apiUrl}/token/refresh/`;
@@ -298,15 +375,21 @@ export class SigefService implements OnDestroy {
       this._authenticated.set(true);
       this._apiStatus.set('connected');
       this.updateExpiresAt();
+      this._circuitSuccess();
     } catch (err: any) {
       clearTimeout(timeoutId);
       const errLower = (err.message || err.name || '').toLowerCase();
       const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout') || errLower.includes('aborted');
       
       if (retries > 0 && isTimeout) {
+        this._circuitFailure();
         console.warn(`[SIGEF] Timeout no refresh. Backoff ${backoff}ms, retries: ${retries}`);
         await new Promise(r => setTimeout(r, backoff));
         return this.refreshAccessToken(retries - 1, Math.min(backoff * 2, 60000));
+      }
+
+      if (isTimeout) {
+        this._circuitFailure();
       }
       
       this._authenticated.set(false);
@@ -337,8 +420,16 @@ export class SigefService implements OnDestroy {
    * Usa um bloqueio de promessa para evitar múltiplas chamadas simultâneas.
    */
   async ensureAuthenticated(force: boolean = false): Promise<void> {
+    if (this._apiSuspended()) {
+      throw new Error('API SIGEF suspensa. Operação cancelada.');
+    }
+
     if (!force && this.bearerToken && !this.isTokenExpired()) {
       return;
+    }
+
+    if (!force && !this._circuitCheck()) {
+      throw new Error('API SIGEF temporariamente indisponível (circuito aberto). Tente novamente em alguns minutos.');
     }
 
     if (this.authPromise) {
@@ -379,6 +470,12 @@ export class SigefService implements OnDestroy {
    * entre tentativas e crescimento da fila.
    */
   async callApi(url: string, options: RequestInit = {}, retries: number = 5, backoff: number = 5000, queryId?: string): Promise<Response> {
+    if (this._apiSuspended()) {
+      throw new Error('API SIGEF suspensa. Nenhuma requisição será enviada à API oficial.');
+    }
+    if (!this._circuitCheck()) {
+      throw new Error('API SIGEF temporariamente indisponível (circuito aberto). Tente novamente em alguns minutos.');
+    }
     if (queryId && !this.pendingQueries.has(queryId)) {
       return new Response(null, { status: 499, statusText: 'Query cancelled' });
     }
@@ -425,6 +522,7 @@ export class SigefService implements OnDestroy {
           }
 
           this.debug.api(`${response.status} ${url.substring(0, 100)}`);
+          this._circuitSuccess();
           return response;
         } catch (err: any) {
           clearTimeout(id);
@@ -441,6 +539,9 @@ export class SigefService implements OnDestroy {
             continue;
           }
 
+          if (this._isRetryableError(err)) {
+            this._circuitFailure();
+          }
           this._cleanupQuery(queryId);
           throw err;
         }
@@ -544,8 +645,6 @@ export class SigefService implements OnDestroy {
     this._error.set(null);
 
     try {
-      await this.ensureAuthenticated();
-      
       if (!bypassMirror && search && search.length >= 10 && page === 1) {
         const cached = await this.cacheService.getRawMirror(search, 'NE');
         if (cached) {
@@ -559,6 +658,12 @@ export class SigefService implements OnDestroy {
         }
       }
 
+      if (this._apiSuspended()) {
+        console.warn(`[SIGEF] NE ${search} não está no espelho e a API está suspensa.`);
+        return { data: [], count: 0, next: null, previous: null };
+      }
+
+      await this.ensureAuthenticated();
       const url = `${this.apiUrl}/sigef/notaempenho/`;
       let queryParams = `ano=${ano}&page=${page}`;
       if (search) {
@@ -824,6 +929,11 @@ export class SigefService implements OnDestroy {
           return { data: cachedList, count: cachedList.length, next: null, previous: null };
         }
       }
+    }
+
+    if (this._apiSuspended()) {
+      console.warn('[SIGEF] OBs não encontradas no espelho e API está suspensa.');
+      return { data: [], count: 0, next: null, previous: null };
     }
 
     try {
@@ -1237,6 +1347,12 @@ export class SigefService implements OnDestroy {
   }
 
   async authenticate(username: string, password: string, retries: number = 5, backoff: number = 3000): Promise<string> {
+    if (this._apiSuspended()) {
+      throw new Error('API SIGEF suspensa. Autenticação cancelada.');
+    }
+    if (!this._circuitCheck()) {
+      throw new Error('API SIGEF temporariamente indisponível (circuito aberto). Tente novamente em alguns minutos.');
+    }
     this._loading.set(true);
     this._error.set(null);
     this._apiStatus.set('refreshing');
@@ -1276,6 +1392,7 @@ export class SigefService implements OnDestroy {
       this._authenticated.set(true);
       this._apiStatus.set('connected');
       this.updateExpiresAt();
+      this._circuitSuccess();
       return data.access;
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -1283,9 +1400,14 @@ export class SigefService implements OnDestroy {
       const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout') || errLower.includes('aborted');
       
       if (retries > 0 && isTimeout) {
+        this._circuitFailure();
         console.warn(`[SIGEF] Timeout no login (${err.message}). Backoff ${backoff}ms, retries: ${retries}`);
         await new Promise(r => setTimeout(r, backoff));
         return this.authenticate(username, password, retries - 1, Math.min(backoff * 2, 60000));
+      }
+
+      if (isTimeout) {
+        this._circuitFailure();
       }
       
       console.error('[SIGEF AUTH] Erro capturado:', err);

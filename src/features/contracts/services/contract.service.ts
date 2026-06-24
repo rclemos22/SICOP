@@ -311,6 +311,7 @@ export class ContractService {
     if (raw.dotacoes && Array.isArray(raw.dotacoes)) {
       raw.dotacoes.forEach((d: any) => {
         // SOMA SEM FILTRO DE ANO - estes são totais acumulados históricos
+        // total_empenhado já vem com cancelamentos deduzidos (escrito por syncSigefTransactions)
         totalEmpenhado += Number(d.total_empenhado) || 0;
         totalCancelado += Number(d.total_cancelado) || 0;
         totalPago += Number(d.total_pago) || 0;
@@ -323,8 +324,6 @@ export class ContractService {
           }
         }
       });
-      // Subtrai anulações do total empenhado para refletir o valor líquido
-      totalEmpenhado = Math.max(0, totalEmpenhado - totalCancelado);
     }
 
     // Fallback: se não houver dotações agregadas, usar os totais calculados da tabela contratos
