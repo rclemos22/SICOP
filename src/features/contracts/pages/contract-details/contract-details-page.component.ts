@@ -350,9 +350,12 @@ export class ContractDetailsPageComponent {
     const c = this.contract();
     const rows = this.nesPagamentos();
     if (!c || c.tipo !== 'serviço') return rows;
+    if (rows.length === 0) return rows;
     const selectedYear = this.appContext.anoExercicio();
     return rows.filter(r => {
+      if (!r.date) return true;
       const year = parseInt(r.date.substring(0, 4), 10);
+      if (isNaN(year)) return true;
       return year === selectedYear;
     });
   });
@@ -787,8 +790,8 @@ export class ContractDetailsPageComponent {
   }
 
   /**
-   * Atualiza lançamentos do contrato lendo APENAS do espelho (mirror),
-   * sem chamar a API do SIGEF. Rápido e offline.
+   * Atualiza lançamentos do contrato lendo do espelho (mirror).
+   * Se o espelho estiver vazio, tenta fallback via API.
    */
   async atualizarLancamentos() {
     if (this.isUpdatingLancamentos()) return;
@@ -803,7 +806,26 @@ export class ContractDetailsPageComponent {
       }));
       if (tasks.length === 0) return;
 
+      console.log(`[AtualizarLançamentos] ${tasks.length} NE(s) para contrato ${contractId}`, tasks);
+
+      // 1. Tenta mirror-only (rápido, offline)
       await this.sigefSyncService.syncFromMirrorOnly(tasks, contractId);
+
+      // 2. Verifica se dados foram encontrados no espelho
+      const nesComMirror = new Set<string>();
+      for (const t of tasks) {
+        const movs = await this.sigefCacheService.getNeMovimentosGlobal(t.ne);
+        if (movs.length > 0) nesComMirror.add(t.ne);
+        console.log(`[AtualizarLançamentos] NE ${t.ne}: ${movs.length} movimento(s) no cache`);
+      }
+      const obs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(tasks[0]?.ne || '');
+      console.log(`[AtualizarLançamentos] OBs no cache: ${obs.length}`);
+
+      // 3. Se mirror vazio, tenta fallback via API (syncBatch)
+      if (nesComMirror.size === 0 && tasks.length > 0) {
+        console.log('[AtualizarLançamentos] Espelho vazio. Tentando fallback via API...');
+        await this.sigefSyncService.syncBatch(tasks, contractId, false, 30);
+      }
 
       const lastSyncMap = new Map(this.sigefLastSync());
       budgetsData.forEach(b => lastSyncMap.set(b.id, new Date()));
@@ -814,6 +836,9 @@ export class ContractDetailsPageComponent {
       await this.loadBudgets(contractId);
       await this.loadNesPagamentos(contractId);
       this.lastSyncDate.set(new Date());
+
+      const finalRows = this.nesPagamentos().length;
+      console.log(`[AtualizarLançamentos] Concluído. ${finalRows} linha(s) em nesPagamentos`);
     } catch (err: any) {
       if (err.message === 'Query cancelled') return;
       console.error('[ContractDetails] Erro ao atualizar lançamentos:', err);
