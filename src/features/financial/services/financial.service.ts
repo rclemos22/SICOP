@@ -655,15 +655,16 @@ export class FinancialService {
           if (error) throw error;
           this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-          // Limpa registros legados que usavam sigef_id antigo.
-          // Migração: cache-mov-{ne}-{cdevento}-{idx} → cache-mov-com/ can-{ne} (agregado).
-          // Sem esta limpeza, transações antigas e novas coexistem, inflando totais.
+          // Limpa registros legados que usavam sigef_id antigo ('cache-mov-{ne}-{cdevento}-{idx}').
+          // Exclui o formato novo ('cache-mov-com-*' / 'cache-mov-can-*') para não deletar recém-upsertados.
           await this.supabaseService.client
             .from('transacoes')
             .delete()
             .eq('contract_id', contractId)
             .eq('commitment_id', neValue)
-            .like('sigef_id', 'cache-mov-%');
+            .like('sigef_id', 'cache-mov-%')
+            .not('sigef_id', 'like', 'cache-mov-com-%')
+            .not('sigef_id', 'like', 'cache-mov-can-%');
           if (transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION)) {
             await this.supabaseService.client
               .from('transacoes')
