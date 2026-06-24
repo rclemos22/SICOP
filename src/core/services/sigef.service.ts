@@ -438,7 +438,7 @@ export class SigefService implements OnDestroy {
 
     this.authPromise = (async () => {
       try {
-        if (this.refreshToken && !force) {
+        if (this.refreshToken) {
           try {
             await this.refreshAccessToken();
             return;

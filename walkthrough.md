@@ -201,9 +201,25 @@ Requisições para `/sigef-api/*` são redirecionadas para `https://api.seplan.m
 - `tipo_aditivo` - Tipos de aditivo disponíveis
 - `dotacoes` - Dotações orçamentárias (com campo `nunotaempenho` para vinculação de NE)
 - `fornecedores` - Cadastro de fornecedores
-- `transacoes` - Transações financeiras
-- `vw_saldo_dotacoes` - View com saldos das dotações
-- `vw_contratos_vigencia` - View com contratos e vigência efetiva
+- `transacoes` - Transações financeiras (COMMITMENT, REINFORCEMENT, CANCELLATION, LIQUIDATION)
+- `metas` - Metas orçamentárias
+- `atas`, `ata_itens`, `ata_consumo_interno`, `ata_adesoes` - Gestão de atas de licitação
+- `sigef_notas_empenho` - Cache de Notas de Empenho
+- `sigef_ne_movimentos` - Cache de movimentos de NE (eventos: empenho, reforço, anulação)
+- `sigef_ordens_bancarias` - Cache de Ordens Bancárias
+- `import_sigef_ne` - Espelho bruto de NEs da API SIGEF
+- `import_sigef_ob` - Espelho bruto de OBs da API SIGEF
+- `sigef_sync_periods` - Controle de períodos sincronizados
+
+### Views do Supabase
+- `vw_saldo_dotacoes` - Saldos das dotações com dados do contrato
+- `vw_recent_payments` - Últimos pagamentos com unidade gestora
+- `vw_atas_resumo` - Resumo de atas com contagem de itens
+- `vw_ata_saldo_item` - Saldo por item com limites legais (50% individual, 200% coletivo)
+- `vw_ata_saldo_resumo` - Resumo geral de saldo por ata
+- `vw_ob_por_contrato` - Ordens bancárias por contrato
+- `vw_obs_nao_sincronizadas` - OBs ainda não sincronizadas como transações
+- `vw_transacoes_vs_obs` - Comparativo entre transações e OBs
 
 ### Integração com SIGEF
 A API retorna Notas de Empenho com os campos:

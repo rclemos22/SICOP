@@ -381,3 +381,45 @@ Novo card no dashboard que alerta quando o saldo de empenho (total_empenhado) é
 ### Melhoria: Gráfico comparativo sem limite de contratos
 
 O `paymentComparisonByContract` no dashboard não possui mais o `.slice(0, 10)`, exibindo agora **todos os contratos ativos** com valores empenhados ou pagos maiores que zero no gráfico "Comparativo Financeiro por Contrato".
+
+### Fix: Reconectar API SIGEF (Token Refresh)
+
+**Problema:** `revalidateToken()` chamava `ensureAuthenticated(true)`. Com `force=true`, o inner block pulava o refresh (`if (this.refreshToken && !force)` era `false`), indo direto para `autoAuthenticate()` — login completo com credenciais, ignorando o refresh token existente.
+
+**Solução:** Removeu `&& !force` da condicional em `sigef.service.ts:441`:
+```typescript
+// Antes: if (this.refreshToken && !force)
+// Depois: if (this.refreshToken)
+```
+
+**Fluxo do "Reconectar" agora:**
+1. `revalidateToken()` → `ensureAuthenticated(true)` (force=true bypassa verificação de expiração e circuit-breaker)
+2. Tenta `refreshAccessToken()` — POST `/token/refresh/` com `refresh_token`
+3. Se refresh bem-sucedido → tokens renovados, retorna
+4. Se refresh falhar (token inválido/expirado) → `autoAuthenticate()` → login completo com `environment.sigefUsername`/`sigefPassword`
+5. Se login completo falhar → exibe erro na UI
+
+### Fix: RLS Bloqueando Consultas (Erro 500)
+
+**Problema:** Script `03_LIMPEZA_OBJETOS_NAO_UTILIZADOS.sql` removeu as policies "Allow all" das tabelas `sigef_notas_empenho`, `sigef_ne_movimentos`, `sigef_ordens_bancarias` mas **não desabilitou o RLS**. Com RLS ativo e zero policies, todas as consultas do Supabase (anon key) retornavam permissão negada → erro 500.
+
+**Solução (script `07_FIX_RLS_E_VIEWS.sql`):**
+```sql
+ALTER TABLE public.sigef_notas_empenho DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sigef_ne_movimentos DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sigef_ordens_bancarias DISABLE ROW LEVEL SECURITY;
+```
+
+### Scripts SQL de Manutenção
+
+Os scripts em `sql/` devem ser executados no SQL Editor do Supabase na ordem:
+
+| # | Script | O que faz |
+|---|--------|-----------|
+| 01 | `01_OTIMIZACAO_INDICES.sql` | Cria índices para otimização (idempotente) |
+| 02 | `02_CORRECAO_DADOS_FINANCEIROS.sql` | Recalcula totais de dotações e contratos |
+| 03 | `03_LIMPEZA_OBJETOS_NAO_UTILIZADOS.sql` | Remove views, funções e tabelas legadas |
+| 04 | `04_DEFINIR_VIEWS_FALTANTES.sql` | Cria views faltantes |
+| 05 | `05_LIMPEZA_CACHE_E_TABELAS.sql` | Remove `backup_2025_*`, `import_sigef` (singular), cache antigo `cache-mov/aggr/ob`, recalcula totais |
+| 06 | `06_VACUUM_ANALYZE.sql` | VACUUM ANALYZE (executar via psql, fora de transação) |
+| 07 | `07_FIX_RLS_E_VIEWS.sql` | Desabilita RLS nas tabelas de cache, recria views com definições das migrations 999/036 |
