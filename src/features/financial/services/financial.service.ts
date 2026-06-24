@@ -665,14 +665,29 @@ export class FinancialService {
           if (error) throw error;
           this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-          // Limpa TODOS os formatos legados — os novos usam prefixes diferentes
-          // (cache-com-, cache-ref-, cache-can-, cache-liq-) que não colidem.
-          await this.supabaseService.client
-            .from('transacoes')
-            .delete()
-            .eq('contract_id', contractId)
-            .eq('commitment_id', neValue)
-            .or('sigef_id.like.cache-mov-%,sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%');
+          // Limpa formatos legados APENAS se houver registros NOVOS do mesmo tipo
+          // para substituí-los. Caso contrário, preserva os existentes.
+          const hasNewComRef = transactionsToUpsert.some(
+            t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT
+          );
+          const hasNewLiq = transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION);
+
+          if (hasNewComRef) {
+            await this.supabaseService.client
+              .from('transacoes')
+              .delete()
+              .eq('contract_id', contractId)
+              .eq('commitment_id', neValue)
+              .like('sigef_id', 'cache-mov-%');
+          }
+          if (hasNewLiq) {
+            await this.supabaseService.client
+              .from('transacoes')
+              .delete()
+              .eq('contract_id', contractId)
+              .eq('commitment_id', neValue)
+              .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%');
+          }
 
           // Atualiza dotação com totais — só altera campos com dados no upsert
           // para não zerar valores de sincronizações anteriores

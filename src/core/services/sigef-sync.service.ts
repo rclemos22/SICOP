@@ -331,12 +331,20 @@ export class SigefSyncService {
 
         try {
           const movements = await this.mirrorService.getNeMovementsRaw(task.ne, task.ug);
+          // Tenta persistir mesmo sem movimentos NE, pois pode haver OBs no espelho
+          // que _persistFromMirrorToCache também salva em cache (sigef_ordens_bancarias).
           if (movements.length > 0) {
             await this._persistFromMirrorToCache(task.ne, task.ug);
             this._updateTaskStatus(i, 'completed');
           } else {
-            this.debug.warn(`NE ${task.ne} não encontrada no espelho (UG ${task.ug}). Pulando.`);
-            this._updateTaskStatus(i, 'completed', 'Sem dados no espelho');
+            this.debug.warn(`NE ${task.ne} sem movimentos no espelho (UG ${task.ug}). Verificando OBs...`);
+            const obCount = (await this.mirrorService.getObsRawByNeGlobal(task.ne)).length;
+            if (obCount > 0) {
+              await this._persistFromMirrorToCache(task.ne, task.ug);
+              this._updateTaskStatus(i, 'completed', `${obCount} OB(s) do espelho`);
+            } else {
+              this._updateTaskStatus(i, 'completed', 'Sem dados no espelho');
+            }
           }
         } catch (err: any) {
           if (err.message === 'Query cancelled') break;
