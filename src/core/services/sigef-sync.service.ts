@@ -291,6 +291,79 @@ export class SigefSyncService {
   }
 
   /**
+   * Sincroniza dados do contrato lendo APENAS do espelho (mirror), sem chamar a API do SIGEF.
+   * Lê as tabelas import_sigef_ne/ob → popula cache estruturado → persiste transacoes.
+   * Ideal para o botão "Atualizar Lançamentos" — rápido, local, sem dependência de VPN.
+   */
+  async syncFromMirrorOnly(
+    tasks: { ne: string; ug: string; ano: string }[],
+    contractId?: string,
+    lockUI: boolean = false
+  ): Promise<void> {
+    if (this.isSyncing()) {
+      console.warn('[SIGEF SYNC] syncFromMirrorOnly: sincronização já em andamento.');
+      return;
+    }
+
+    if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+      console.log('[SIGEF SYNC] syncFromMirrorOnly cancelado antes de iniciar.');
+      return;
+    }
+
+    const queue: SyncTask[] = tasks.map(t => ({ ...t, status: 'pending' }));
+    this._syncQueue.set(queue);
+    this._currentIdx.set(0);
+    this._isLocked.set(lockUI);
+    this.debug.sync(`syncFromMirrorOnly: ${queue.length} NE(s) (apenas espelho)`);
+    this.syncHistory.addEntry('start', 'sync_mirror', 'sync', `syncFromMirrorOnly: ${queue.length} NE(s)`, `contrato=${contractId ?? 'todos'}`);
+
+    try {
+      for (let i = 0; i < queue.length; i++) {
+        if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) {
+          this.debug.warn(`syncFromMirrorOnly cancelado na NE ${queue[i].ne}`);
+          break;
+        }
+
+        this._currentIdx.set(i);
+        const task = queue[i];
+        this._updateTaskStatus(i, 'processing');
+        this.debug.sync(`[${i + 1}/${queue.length}] NE: ${task.ne} (UG:${task.ug})`);
+
+        try {
+          const movements = await this.mirrorService.getNeMovementsRaw(task.ne, task.ug);
+          if (movements.length > 0) {
+            await this._persistFromMirrorToCache(task.ne, task.ug);
+            this._updateTaskStatus(i, 'completed');
+          } else {
+            this.debug.warn(`NE ${task.ne} não encontrada no espelho (UG ${task.ug}). Pulando.`);
+            this._updateTaskStatus(i, 'completed', 'Sem dados no espelho');
+          }
+        } catch (err: any) {
+          if (err.message === 'Query cancelled') break;
+          console.error(`[SIGEF SYNC] Erro ao ler espelho NE ${task.ne}:`, err);
+          this._updateTaskStatus(i, 'error', err.message || 'Falha na leitura do espelho');
+        }
+
+        if (i < queue.length - 1) {
+          if (this.currentQueryId && !this.sigefService.hasPendingQuery(this.currentQueryId)) break;
+          await this._delay(500);
+        }
+      }
+
+      if (contractId) {
+        await this.financialService.syncSigefTransactions(contractId).catch(err =>
+          console.error('[SIGEF SYNC] Erro ao persistir transações após syncFromMirrorOnly:', err)
+        );
+      }
+
+      this.syncHistory.addEntry('success', 'sync_mirror', 'sync', `syncFromMirrorOnly concluído: ${queue.length} NE(s) processadas`);
+    } finally {
+      this._isLocked.set(false);
+      setTimeout(() => { if (!this.isSyncing()) this._currentIdx.set(-1); }, 5000);
+    }
+  }
+
+  /**
    * Carrega dados financeiros de todos os contratos a partir do espelho.
    * NÃO faz download — apenas lê do espelho e popula os caches.
    */

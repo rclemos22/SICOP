@@ -787,14 +787,32 @@ export class ContractDetailsPageComponent {
   }
 
   /**
-   * Busca lançamentos dos últimos 30 dias via API oficial do SIGEF.
-   * Usado pelo botão "Atualizar Lançamentos" no contrato.
+   * Atualiza lançamentos do contrato lendo APENAS do espelho (mirror),
+   * sem chamar a API do SIGEF. Rápido e offline.
    */
   async atualizarLancamentos() {
     if (this.isUpdatingLancamentos()) return;
     this.isUpdatingLancamentos.set(true);
+    const contractId = this.contractId();
     try {
-      await this.refreshSigefData(30);
+      const budgetsData = this.budgets().filter(b => b.nunotaempenho);
+      const tasks = budgetsData.map(b => ({
+        ne: b.nunotaempenho!.trim(),
+        ug: b.unid_gestora || '080901',
+        ano: b.nunotaempenho!.substring(0, 4)
+      }));
+      if (tasks.length === 0) return;
+
+      await this.sigefSyncService.syncFromMirrorOnly(tasks, contractId);
+
+      const lastSyncMap = new Map(this.sigefLastSync());
+      budgetsData.forEach(b => lastSyncMap.set(b.id, new Date()));
+      this.sigefLastSync.set(lastSyncMap);
+
+      await this.contractService.loadContracts(undefined, true);
+      await this.loadTransactions(contractId);
+      await this.loadBudgets(contractId);
+      await this.loadNesPagamentos(contractId);
       this.lastSyncDate.set(new Date());
     } catch (err: any) {
       if (err.message === 'Query cancelled') return;
