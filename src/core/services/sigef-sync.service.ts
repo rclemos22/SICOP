@@ -286,7 +286,7 @@ export class SigefSyncService {
       this.syncHistory.addEntry('success', 'sync_batch', 'sync', `syncBatch concluído: ${queue.length} NE(s) processadas`);
     } finally {
       this._isLocked.set(false);
-      setTimeout(() => { if (!this.isSyncing()) this._currentIdx.set(-1); }, 5000);
+      this._currentIdx.set(-1);
     }
   }
 
@@ -359,7 +359,7 @@ export class SigefSyncService {
       this.syncHistory.addEntry('success', 'sync_mirror', 'sync', `syncFromMirrorOnly concluído: ${queue.length} NE(s) processadas`);
     } finally {
       this._isLocked.set(false);
-      setTimeout(() => { if (!this.isSyncing()) this._currentIdx.set(-1); }, 5000);
+      this._currentIdx.set(-1);
     }
   }
 

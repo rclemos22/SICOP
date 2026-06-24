@@ -440,6 +440,7 @@ export class ContractDetailsPageComponent {
   getTipoBadge(tipo: string): string {
     switch (tipo) {
       case 'EMPENHO': return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400';
+      case 'REFORCO': return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400';
       case 'ANULACAO': return 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400';
       case 'PAGAMENTO': return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400';
       default: return 'bg-gray-50 text-gray-600 border-gray-200';

@@ -6,7 +6,7 @@ import { SigefCacheService, SigefNeMovimento, SigefOrdemBancaria, SIGEF_PAID_STA
 import { Transaction, TransactionType } from '../../../shared/models/transaction.model';
 
 export interface NesPagamentoRow {
-  tipo: 'EMPENHO' | 'ANULACAO' | 'PAGAMENTO';
+  tipo: 'EMPENHO' | 'REFORCO' | 'ANULACAO' | 'PAGAMENTO';
   ne: string;
   ug: string;
   ugLabel: string;
@@ -542,53 +542,80 @@ export class FinancialService {
         const transactionsToUpsert: any[] = [];
 
         // ═══════════════════════════════════════════
-        // A. COMMITMENT (Empenho) — dos movimentos do cache
+        // A1. COMMITMENT (Empenho Original 400010)
         // ═══════════════════════════════════════════
-        const empenhoMovs = movimentosCache.filter(m => m.cdevento === 400010 || m.cdevento === 400011);
-        const totalEmpenhadoMov = empenhoMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
-        if (totalEmpenhadoMov > 0) {
-          const primaryMov = empenhoMovs.find(m => m.cdevento === 400010) || empenhoMovs[0];
-          transactionsToUpsert.push({
-            contract_id: contractId,
-            sigef_id: `cache-mov-com-${neValue}`,
-            description: `Empenho - NE Ref ${neValue}`,
-            commitment_id: neValue,
-            date: fmtDate(primaryMov?.dtlancamento || budget.data_disponibilidade),
-            type: TransactionType.COMMITMENT,
-            amount: totalEmpenhadoMov,
-            department: budget.dotacao,
-            budget_description: budget.dotacao,
-            unidade_gestora_label: getUnidadeLabel(ug),
-            document_number: neValue,
-            ob_number: 'N/A'
-          });
+        const originalMovs = movimentosCache.filter(m => m.cdevento === 400010);
+        for (const mov of originalMovs) {
+          const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
+          if (vl > 0) {
+            transactionsToUpsert.push({
+              contract_id: contractId,
+              sigef_id: `cache-com-${neValue}`,
+              description: `EMPENHO ORIGINAL - NE ${neValue}`,
+              commitment_id: neValue,
+              date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+              type: TransactionType.COMMITMENT,
+              amount: vl,
+              department: budget.dotacao,
+              budget_description: budget.dotacao,
+              unidade_gestora_label: getUnidadeLabel(ug),
+              document_number: neValue,
+              ob_number: 'N/A'
+            });
+          }
         }
 
         // ═══════════════════════════════════════════
-        // B. CANCELLATION (Anulação) — dos movimentos do cache
+        // A2. REINFORCEMENT (Reforço 400011)
+        // ═══════════════════════════════════════════
+        const reforcoMovs = movimentosCache.filter(m => m.cdevento === 400011);
+        for (let ri = 0; ri < reforcoMovs.length; ri++) {
+          const mov = reforcoMovs[ri];
+          const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
+          if (vl > 0) {
+            transactionsToUpsert.push({
+              contract_id: contractId,
+              sigef_id: `cache-ref-${neValue}-${ri}`,
+              description: `REFORÇO - NE ${neValue}`,
+              commitment_id: neValue,
+              date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+              type: TransactionType.REINFORCEMENT,
+              amount: vl,
+              department: budget.dotacao,
+              budget_description: budget.dotacao,
+              unidade_gestora_label: getUnidadeLabel(ug),
+              document_number: neValue,
+              ob_number: 'N/A'
+            });
+          }
+        }
+
+        // ═══════════════════════════════════════════
+        // B. CANCELLATION (Anulação 400012)
         // ═══════════════════════════════════════════
         const cancelMovs = movimentosCache.filter(m => m.cdevento === 400012);
-        const totalCanceladoMov = cancelMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
-        if (totalCanceladoMov > 0) {
-          const cancelMov = cancelMovs[0];
-          transactionsToUpsert.push({
-            contract_id: contractId,
-            sigef_id: `cache-mov-can-${neValue}`,
-            description: `Anulação de Empenho - NE Ref ${neValue}`,
-            commitment_id: neValue,
-            date: fmtDate(cancelMov?.dtlancamento || budget.data_disponibilidade),
-            type: TransactionType.CANCELLATION,
-            amount: totalCanceladoMov,
-            department: budget.dotacao,
-            budget_description: budget.dotacao,
-            unidade_gestora_label: getUnidadeLabel(ug),
-            document_number: neValue,
-            ob_number: 'N/A'
-          });
+        for (const mov of cancelMovs) {
+          const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
+          if (vl > 0) {
+            transactionsToUpsert.push({
+              contract_id: contractId,
+              sigef_id: `cache-can-${neValue}`,
+              description: `ANULAÇÃO - NE ${neValue}`,
+              commitment_id: neValue,
+              date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+              type: TransactionType.CANCELLATION,
+              amount: vl,
+              department: budget.dotacao,
+              budget_description: budget.dotacao,
+              unidade_gestora_label: getUnidadeLabel(ug),
+              document_number: neValue,
+              ob_number: 'N/A'
+            });
+          }
         }
 
         // ═══════════════════════════════════════════
-        // C. LIQUIDATION(s) (Pagamento) — das OBs do cache
+        // C. LIQUIDATION (Pagamento) — uma por OB
         // ═══════════════════════════════════════════
         const budgetPaidObs = allObs.filter(ob => {
           const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
@@ -596,58 +623,41 @@ export class FinancialService {
           return obNe === neValue && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
         });
 
-        if (budgetPaidObs.length > 0) {
-          const groupedObs = new Map<string, SigefOrdemBancaria[]>();
-          budgetPaidObs.forEach(ob => {
-            const docKey = ob.nudocumento || ob.nuordembancaria || `unknown_${ob.id}`;
-            const key = `${neValue}-${docKey}`;
-            const list = groupedObs.get(key) || [];
-            list.push(ob);
-            groupedObs.set(key, list);
-          });
+        for (const ob of budgetPaidObs) {
+          const vl = Math.abs(Number(ob.vltotal) || 0);
+          if (vl === 0) continue;
+          const obNum = ob.nuordembancaria || `unknown_${ob.id}`;
+          const ppDoc = ob.nudocumento || '';
+          const pagDate = ob.dtpagamento || ob.dtlancamento || '';
 
-          for (const [, group] of groupedObs) {
-            const totalAmount = group.reduce((s, o) => s + Math.abs(Number(o.vltotal) || 0), 0);
-
-            const validDates = group.map(o => o.dtpagamento || o.dtlancamento).filter(Boolean).sort().reverse();
-            const maxDate = validDates[0] || '';
-
-            const allDocs = [...new Set(group.map(o => o.nudocumento).filter(Boolean))].join(', ');
-            const allObsStr = [...new Set(group.map(o => o.nuordembancaria).filter(Boolean))].join(', ');
-            const ppDoc = group[0].nudocumento || group[0].nuordembancaria || 'UNKNOWN';
-            const sigefId = `cache-aggr-${neValue}-${ppDoc}`;
-
-            let linkedParcela: string | null = null;
-            if (group[0].nudocumento && docToParcelaMap.has(group[0].nudocumento)) {
-              linkedParcela = docToParcelaMap.get(group[0].nudocumento)!;
-            }
-
-            transactionsToUpsert.push({
-              contract_id: contractId,
-              sigef_id: sigefId,
-              description: `PAGAMENTO (PP ${ppDoc}) - OBs: ${allObsStr}`.toUpperCase(),
-              commitment_id: neValue,
-              date: maxDate || fmtDate(budget.data_disponibilidade),
-              type: TransactionType.LIQUIDATION,
-              amount: totalAmount,
-              department: budget.dotacao,
-              budget_description: budget.dotacao,
-              unidade_gestora_label: getUnidadeLabel(ug),
-              document_number: allDocs,
-              ob_number: allObsStr,
-              payment_month: maxDate ? maxDate.substring(0, 7) : undefined,
-              parcela_pago_em: group[0].dtpagamento || null,
-              ...(linkedParcela ? { parcela_referencia: linkedParcela } : {})
-            });
+          let linkedParcela: string | null = null;
+          if (ob.nudocumento && docToParcelaMap.has(ob.nudocumento)) {
+            linkedParcela = docToParcelaMap.get(ob.nudocumento)!;
           }
+
+          transactionsToUpsert.push({
+            contract_id: contractId,
+            sigef_id: `cache-liq-${obNum}`,
+            description: `PAGAMENTO OB ${obNum}${ppDoc ? ` (PP ${ppDoc})` : ''}`.toUpperCase(),
+            commitment_id: neValue,
+            date: pagDate || fmtDate(budget.data_disponibilidade),
+            type: TransactionType.LIQUIDATION,
+            amount: vl,
+            department: budget.dotacao,
+            budget_description: budget.dotacao,
+            unidade_gestora_label: getUnidadeLabel(ug),
+            document_number: ppDoc,
+            ob_number: obNum,
+            payment_month: pagDate ? pagDate.substring(0, 7) : undefined,
+            parcela_pago_em: ob.dtpagamento || null,
+            ...(linkedParcela ? { parcela_referencia: linkedParcela } : {})
+          });
         }
 
         // ═══════════════════════════════════════════
         // D. Upsert + Limpeza de registros legados
         // ═══════════════════════════════════════════
 
-        // Upsert primeiro, depois limpa registros legados — evita perda de dados
-        // se o upsert falhar
         if (transactionsToUpsert.length > 0) {
           const { error } = await this.supabaseService.client
             .from('transacoes')
@@ -655,24 +665,14 @@ export class FinancialService {
           if (error) throw error;
           this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-          // Limpa registros legados que usavam sigef_id antigo ('cache-mov-{ne}-{cdevento}-{idx}').
-          // Exclui o formato novo ('cache-mov-com-*' / 'cache-mov-can-*') para não deletar recém-upsertados.
+          // Limpa TODOS os formatos legados — os novos usam prefixes diferentes
+          // (cache-com-, cache-ref-, cache-can-, cache-liq-) que não colidem.
           await this.supabaseService.client
             .from('transacoes')
             .delete()
             .eq('contract_id', contractId)
             .eq('commitment_id', neValue)
-            .like('sigef_id', 'cache-mov-%')
-            .not('sigef_id', 'like', 'cache-mov-com-%')
-            .not('sigef_id', 'like', 'cache-mov-can-%');
-          if (transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION)) {
-            await this.supabaseService.client
-              .from('transacoes')
-              .delete()
-              .eq('contract_id', contractId)
-              .eq('commitment_id', neValue)
-              .like('sigef_id', 'cache-ob-%');
-          }
+            .or('sigef_id.like.cache-mov-%,sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%');
 
           // Atualiza dotação com totais — só altera campos com dados no upsert
           // para não zerar valores de sincronizações anteriores
@@ -759,58 +759,74 @@ export class FinancialService {
       const ugLabel = getUnidadeLabel(ug);
       const movimentos = neMovimentosMap.get(ne) || [];
 
-      // EMPENHO — dos movimentos (400010=inicial, 400011=reforço)
-      const empenhoMovs = movimentos.filter(m => m.cdevento === 400010 || m.cdevento === 400011);
-      const totalEmpenhado = empenhoMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
-      if (totalEmpenhado > 0) {
-        const primaryMov = empenhoMovs.find(m => m.cdevento === 400010) || empenhoMovs[0];
-        result.push({
-          tipo: 'EMPENHO', ne, ug, ugLabel,
-          dotacao: budget.dotacao,
-          amount: totalEmpenhado,
-          date: fmtDate(primaryMov?.dtlancamento || budget.data_disponibilidade),
-        });
+      // EMPENHO ORIGINAL — dos movimentos (400010)
+      const originalMovs = movimentos.filter(m => m.cdevento === 400010);
+      for (const mov of originalMovs) {
+        const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
+        if (vl > 0) {
+          result.push({
+            tipo: 'EMPENHO', ne, ug, ugLabel,
+            dotacao: budget.dotacao,
+            amount: vl,
+            date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+          });
+        }
+      }
+
+      // REFORÇO — dos movimentos (400011)
+      const reforcoMovs = movimentos.filter(m => m.cdevento === 400011);
+      for (const mov of reforcoMovs) {
+        const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
+        if (vl > 0) {
+          result.push({
+            tipo: 'REFORCO', ne, ug, ugLabel,
+            dotacao: budget.dotacao,
+            amount: vl,
+            date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+          });
+        }
       }
 
       // ANULAÇÃO — dos movimentos (400012)
       const cancelMovs = movimentos.filter(m => m.cdevento === 400012);
-      const totalCancelado = cancelMovs.reduce((s, m) => s + Math.abs(Number(m.vlnotaempenho) || 0), 0);
-      if (totalCancelado > 0) {
-        const cancelMov = cancelMovs[0];
-        result.push({
-          tipo: 'ANULACAO', ne, ug, ugLabel,
-          dotacao: budget.dotacao,
-          amount: totalCancelado,
-          date: fmtDate(cancelMov?.dtlancamento || budget.data_disponibilidade),
-        });
+      for (const mov of cancelMovs) {
+        const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
+        if (vl > 0) {
+          result.push({
+            tipo: 'ANULACAO', ne, ug, ugLabel,
+            dotacao: budget.dotacao,
+            amount: vl,
+            date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+          });
+        }
       }
 
-      // PAGAMENTOS — das OBs do cache
+      // PAGAMENTOS — das OBs do cache (uma linha por OB)
       const paidObs = allObs.filter(ob => {
         const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
         const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
         return obNe === ne && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
       });
 
-      if (paidObs.length > 0) {
-        for (const ob of paidObs) {
-          result.push({
-            tipo: 'PAGAMENTO', ne, ug, ugLabel,
-            dotacao: budget.dotacao,
-            pp: ob.nudocumento,
-            obNumber: ob.nuordembancaria,
-            obStatus: ob.cdsituacaoordembancaria,
-            amount: Math.abs(Number(ob.vltotal) || 0),
-            date: ob.dtpagamento || ob.dtlancamento || fmtDate(budget.data_disponibilidade),
-          });
-        }
+      for (const ob of paidObs) {
+        const vl = Math.abs(Number(ob.vltotal) || 0);
+        if (vl === 0) continue;
+        result.push({
+          tipo: 'PAGAMENTO', ne, ug, ugLabel,
+          dotacao: budget.dotacao,
+          pp: ob.nudocumento,
+          obNumber: ob.nuordembancaria,
+          obStatus: ob.cdsituacaoordembancaria,
+          amount: vl,
+          date: ob.dtpagamento || ob.dtlancamento || fmtDate(budget.data_disponibilidade),
+        });
       }
     }
 
     return result.sort((a, b) => {
       const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
       if (dateDiff !== 0) return dateDiff;
-      const tipoOrder: Record<string, number> = { 'EMPENHO': 0, 'PAGAMENTO': 1, 'ANULACAO': 2 };
+      const tipoOrder: Record<string, number> = { 'EMPENHO': 0, 'REFORCO': 1, 'PAGAMENTO': 2, 'ANULACAO': 3 };
       return (tipoOrder[a.tipo] ?? 0) - (tipoOrder[b.tipo] ?? 0);
     });
   }
