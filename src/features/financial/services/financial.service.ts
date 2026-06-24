@@ -202,7 +202,7 @@ export class FinancialService {
         else if (rd.cdevento === 400011) type = TransactionType.REINFORCEMENT;
         const ne = m.nunotaempenho || '';
         const amount = Math.abs(Number(vl) || 0);
-        const dedupKey = `${ne}|${type}|${amount}`;
+        const dedupKey = `${ne}|${type}|${ne}|${amount}`;
         if (existingKeys?.has(dedupKey)) return;
         existingKeys?.add(dedupKey);
         const enriched = enrichByNe(ne);
@@ -216,6 +216,7 @@ export class FinancialService {
           department: enriched.department,
           budget_description: enriched.budget_description,
           contract_number: enriched.contract_number,
+          document_number: ne,
         } as Transaction);
       });
 
@@ -650,9 +651,16 @@ export class FinancialService {
           if (error) throw error;
           this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-          // Só limpa registros legados (cache-ob-*) se novos LIQUIDATIONs foram upsertados
-          const hasLiquidations = transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION);
-          if (hasLiquidations) {
+          // Limpa registros legados que usavam sigef_id antigo.
+          // Migração: cache-mov-{ne}-{cdevento}-{idx} → cache-mov-com/ can-{ne} (agregado).
+          // Sem esta limpeza, transações antigas e novas coexistem, inflando totais.
+          await this.supabaseService.client
+            .from('transacoes')
+            .delete()
+            .eq('contract_id', contractId)
+            .eq('commitment_id', neValue)
+            .like('sigef_id', 'cache-mov-%');
+          if (transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION)) {
             await this.supabaseService.client
               .from('transacoes')
               .delete()

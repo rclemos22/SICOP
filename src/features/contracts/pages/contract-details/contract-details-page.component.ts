@@ -1211,6 +1211,7 @@ export class ContractDetailsPageComponent {
       // Recarregar os dados locais para refletir a persistência
       await this.loadBudgets(this.contractId());
       await this.loadTransactions(this.contractId());
+      await this.loadNesPagamentos(this.contractId());
       
       alert(`Sincronização ${scanType} concluída com sucesso!`);
     } catch (err: any) {

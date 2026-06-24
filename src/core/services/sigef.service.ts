@@ -795,9 +795,11 @@ export class SigefService implements OnDestroy {
     // Otimização: Usar search=numeroNE para evitar varredura de páginas
     const result = await this.getNotaEmpenho(ano, numeroNE, 1, cdunidadegestora, bypassMirror, queryId);
     
+    const ugFilter = cdunidadegestora ? parseInt(cdunidadegestora, 10) : null;
+
     let found = result.data.find(ne => 
       ne.nunotaempenho === numeroNE && 
-      (!cdunidadegestora || ne.cdunidadegestora === cdunidadegestora)
+      (ugFilter === null || parseInt(String(ne.cdunidadegestora), 10) === ugFilter)
     );
 
     if (found) return found;
@@ -819,7 +821,7 @@ export class SigefService implements OnDestroy {
           
           found = pResult.data.find(ne => 
             ne.nunotaempenho === numeroNE && 
-            (!cdunidadegestora || ne.cdunidadegestora === cdunidadegestora)
+            (ugFilter === null || parseInt(String(ne.cdunidadegestora), 10) === ugFilter)
           );
           if (found) return found;
           if (!pResult.next) break;
@@ -854,7 +856,8 @@ export class SigefService implements OnDestroy {
       if (cached && cached.length > 0) {
         console.log(`[SIGEF RAW MIRROR] Encontrados ${cached.length} movimentos no espelho para NE ${numeroNE}`);
         // Filtragem por UG apenas por segurança
-        return cached.filter(ne => ne.cdunidadegestora === cdunidadegestora) as NotaEmpenho[];
+        const ugFilterMov = parseInt(cdunidadegestora, 10);
+        return cached.filter(ne => parseInt(String(ne.cdunidadegestora), 10) === ugFilterMov) as NotaEmpenho[];
       }
     }
 
