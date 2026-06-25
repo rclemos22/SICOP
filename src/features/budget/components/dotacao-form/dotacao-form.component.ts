@@ -5,6 +5,7 @@ import { CurrencyUtils } from '../../../../app/shared/utils/currency-utils';
 import { BudgetService } from '../../services/budget.service';
 import { SigefService, NotaEmpenho } from '../../../../core/services/sigef.service';
 import { Dotacao } from '../../../../shared/models/budget.model';
+import { SupabaseService } from '../../../../core/services/supabase.service';
 
 @Component({
   selector: 'app-dotacao-form',
@@ -142,6 +143,7 @@ export class DotacaoFormComponent implements OnInit {
   private fb: FormBuilder = inject(FormBuilder);
   private budgetService = inject(BudgetService);
   private sigefService = inject(SigefService);
+  private supabaseService = inject(SupabaseService);
 
   contractId = input.required<string>();
   numeroContrato = input.required<string>();
@@ -261,6 +263,42 @@ export class DotacaoFormComponent implements OnInit {
       }
       
       try {
+        // Validação 1: Um contrato não pode ter UGs diferentes para dotações/empenhos
+        const existingBudgetsRes = await this.budgetService.getBudgetsByContractId(this.contractId());
+        const existingBudgets = existingBudgetsRes.data || [];
+        const otherBudgets = this.isEditing 
+          ? existingBudgets.filter(b => b.id !== this.editingDotacao()!.id)
+          : existingBudgets;
+          
+        if (otherBudgets.length > 0) {
+          const firstUg = otherBudgets[0].unid_gestora;
+          if (firstUg && firstUg !== formData.unid_gestora) {
+            const ugLabel = firstUg === '080101' ? 'DPEMA' : (firstUg === '080901' ? 'FADEP' : firstUg);
+            const selectedUgLabel = formData.unid_gestora === '080101' ? 'DPEMA' : (formData.unid_gestora === '080901' ? 'FADEP' : formData.unid_gestora);
+            alert(`Erro de validação: Este contrato já possui dotações vinculadas à UG ${ugLabel}. Não é permitido vincular dotações com UG ${selectedUgLabel} ao mesmo contrato.`);
+            return;
+          }
+        }
+
+        // Validação 2: Uma nota de empenho deve ser vinculada a um único contrato
+        if (formData.nunotaempenho) {
+          const neVal = formData.nunotaempenho.trim().toUpperCase();
+          const { data: dups, error: dupErr } = await this.supabaseService.client
+            .from('dotacoes')
+            .select('id, contract_id, numero_contrato')
+            .eq('nunotaempenho', neVal);
+
+          if (dupErr) {
+            console.error('Erro ao verificar duplicidade de NE:', dupErr);
+          } else if (dups && dups.length > 0) {
+            const otherCont = dups.find(d => d.contract_id !== this.contractId());
+            if (otherCont) {
+              alert(`Erro de validação: A Nota de Empenho ${neVal} já está vinculada ao Contrato ${otherCont.numero_contrato}. Um empenho deve ser vinculado a um único contrato.`);
+              return;
+            }
+          }
+        }
+
         let result;
         if (this.isEditing) {
           result = await this.budgetService.updateDotacao(this.editingDotacao()!.id, dotacaoToSave);

@@ -52,17 +52,20 @@ export class FinancialService {
     }
 
     try {
-      // 0. Carregar dotações em paralelo para enriquecer transações
-      const [transacoesResult, dotacoesResult] = await Promise.all([
+      // 0. Carregar dotações e contratos em paralelo para enriquecer transações
+      const [transacoesResult, dotacoesResult, contratosResult] = await Promise.all([
         this.supabaseService.client
           .from('transacoes')
-          .select('*, contratos!contract_id!inner(id, contrato)')
+          .select('*, contratos!contract_id(id, contrato)')
           .not('commitment_id', 'is', null)
           .neq('commitment_id', '')
           .order('date', { ascending: false }),
         this.supabaseService.client
           .from('vw_saldo_dotacoes')
-          .select('contract_id, nunotaempenho, dotacao, numero_contrato')
+          .select('contract_id, nunotaempenho, dotacao, numero_contrato'),
+        this.supabaseService.client
+          .from('contratos')
+          .select('id, contrato, contratada, cnpj_contratada, processo_sei, unid_gestora')
       ]);
 
       const { data, error } = transacoesResult;
@@ -94,8 +97,6 @@ export class FinancialService {
       // 1. Mapear e filtrar dados inválidos
       const transactions = (data || [])
         .filter(raw => {
-          if (!raw.contract_id) return false;
-          if (!raw.contratos?.contrato) return false;
           if (!raw.date || isNaN(new Date(raw.date).getTime())) return false;
           if (isNaN(Number(raw.amount)) || Number(raw.amount) <= 0) return false;
           return true;
@@ -111,6 +112,16 @@ export class FinancialService {
               t.department = info.dotacao;
             }
           }
+          // Se ainda não tem contrato mas tem NE, buscar no neLookup
+          if ((!t.contract_number || t.contract_number === 'N/A') && raw.commitment_id) {
+            const neInfo = neLookup.get(raw.commitment_id);
+            if (neInfo) {
+              t.contract_number = neInfo.contrato;
+              t.budget_description = t.budget_description || neInfo.dotacao;
+              t.department = t.department || neInfo.dotacao;
+              t.contract_id = t.contract_id || neInfo.contract_id;
+            }
+          }
           return t;
         });
 
@@ -119,7 +130,7 @@ export class FinancialService {
 
       // 3. Complementar com cache SIGEF (garante dados do mês atual mesmo se transacoes estiver desatualizada)
       const existingKeys = new Set(transactions.map(t => `${t.commitment_id}|${t.type}|${t.document_number || ''}|${t.amount}`));
-      await this._loadTransactionsFromCache(transactions, neLookup, undefined, existingKeys);
+      await this._loadTransactionsFromCache(transactions, neLookup, undefined, existingKeys, contratosResult.data || []);
 
       // 4. Enriquecer transações com contrato/dotação
       for (const t of transactions) {
@@ -130,6 +141,13 @@ export class FinancialService {
             if (!t.budget_description) t.budget_description = neInfo.dotacao;
             if (!t.department || t.department === 'Não informado') t.department = neInfo.dotacao;
             if (!t.contract_id) t.contract_id = neInfo.contract_id;
+          }
+        }
+        // Fallback: tenta encontrar contrato via tabela contratos se ainda estiver sem número
+        if ((!t.contract_number || t.contract_number === 'N/A') && t.contract_id) {
+          const contratoInfo = contratosResult.data?.find((c: any) => c.id === t.contract_id);
+          if (contratoInfo) {
+            t.contract_number = contratoInfo.contrato;
           }
         }
       }
@@ -156,26 +174,81 @@ export class FinancialService {
     transactions: Transaction[],
     neLookup?: Map<string, { dotacao: string; contrato: string; contract_id: string }>,
     year?: number,
-    existingKeys?: Set<string>
+    existingKeys?: Set<string>,
+    contratosList?: any[]
   ): Promise<void> {
     try {
       const targetYear = year ?? new Date().getFullYear();
       const [movData, obData] = await Promise.all([
         this.supabaseService.client
           .from('import_sigef_ne')
-          .select('nunotaempenho, dtlancamento, raw_data')
+          .select('nunotaempenho, cdunidadegestora, dtlancamento, raw_data')
           .not('raw_data', 'is', null)
           .gte('dtlancamento', `${targetYear}-01-01`)
           .lte('dtlancamento', `${targetYear}-12-31`),
         this.supabaseService.client
           .from('import_sigef_ob')
-          .select('nunotaempenho, nuordembancaria, nudocumento, vltotal, dtpagamento, dtlancamento, cdsituacaoordembancaria')
+          .select('nunotaempenho, nuordembancaria, cdunidadegestora, nudocumento, vltotal, dtpagamento, dtlancamento, cdsituacaoordembancaria, raw_data')
           .not('vltotal', 'is', null)
           .gte('dtpagamento', `${targetYear}-01-01`)
           .lte('dtpagamento', `${targetYear}-12-31`),
       ]);
 
-      const enrichByNe = (ne: string): { contract_id: string; contract_number: string; department: string; budget_description: string } => {
+      const contracts = contratosList || [];
+      const cleanNumber = (val: string): string => val ? val.replace(/\D/g, '') : '';
+      const extractProcesso = (text: string): string => {
+        if (!text) return '';
+        const match = text.match(/\d{7}\.\d{7}\.\d\.\d{4}/) || text.match(/\d{7}\.\d{7}/);
+        return match ? match[0] : '';
+      };
+
+      const findContractFallback = (neNum: string, rawNe?: any, rawOb?: any): any => {
+        let processNum = '';
+        let credorNum = '';
+        
+        if (rawNe) {
+          processNum = rawNe.nuprocesso || extractProcesso(rawNe.dehistorico);
+          credorNum = rawNe.cdcredor || '';
+        }
+        if (rawOb) {
+          if (!processNum) processNum = extractProcesso(rawOb.deobservacao);
+          if (!credorNum) credorNum = rawOb.cdcredor || '';
+        }
+
+        const cleanProc = cleanNumber(processNum);
+        const cleanCred = cleanNumber(credorNum);
+
+        // 1. Tentar por processo
+        if (cleanProc) {
+          for (const c of contracts) {
+            const cleanCProc = cleanNumber(c.processo_sei);
+            if (cleanCProc && (cleanCProc.includes(cleanProc) || cleanProc.includes(cleanCProc))) {
+              return c;
+            }
+          }
+        }
+
+        // 2. Tentar por CNPJ do credor
+        if (cleanCred) {
+          const matches = contracts.filter((c: any) => cleanNumber(c.cnpj_contratada) === cleanCred);
+          if (matches.length === 1) {
+            return matches[0];
+          } else if (matches.length > 1) {
+            const rawUg = cleanNumber(rawNe?.cdunidadegestora || rawOb?.cdunidadegestora);
+            const ugMatch = matches.find((c: any) => cleanNumber(c.unid_gestora) === rawUg);
+            if (ugMatch) return ugMatch;
+            return matches[0];
+          }
+        }
+
+        return null;
+      };
+
+      const enrichByNe = (
+        ne: string,
+        rawNe?: any,
+        rawOb?: any
+      ): { contract_id: string; contract_number: string; department: string; budget_description: string } => {
         const info = neLookup?.get(ne);
         if (info) {
           return {
@@ -185,11 +258,34 @@ export class FinancialService {
             budget_description: info.dotacao,
           };
         }
+
+        // Fallback inteligente
+        const fallbackContract = findContractFallback(ne, rawNe, rawOb);
+        let fallbackDot = '';
+        const rd = rawNe || rawOb;
+        if (rd) {
+          if (rd.cdacao && rd.cdfonte) {
+            fallbackDot = `Ação ${rd.cdacao} / Fonte ${rd.cdfonte}`;
+          } else if (rd.cdnaturezadespesa) {
+            fallbackDot = `Nat. Desp. ${rd.cdnaturezadespesa}`;
+          }
+        }
+        if (!fallbackDot) fallbackDot = '---';
+
+        if (fallbackContract) {
+          return {
+            contract_id: fallbackContract.id,
+            contract_number: fallbackContract.contrato,
+            department: fallbackDot,
+            budget_description: fallbackDot,
+          };
+        }
+
         return {
           contract_id: '',
           contract_number: 'N/A',
-          department: '',
-          budget_description: '',
+          department: fallbackDot,
+          budget_description: fallbackDot,
         };
       };
 
@@ -205,7 +301,10 @@ export class FinancialService {
         const dedupKey = `${ne}|${type}|${ne}|${amount}`;
         if (existingKeys?.has(dedupKey)) return;
         existingKeys?.add(dedupKey);
-        const enriched = enrichByNe(ne);
+
+        const enriched = enrichByNe(ne, rd, null);
+        const ugCode = m.cdunidadegestora || rd.cdunidadegestora || '';
+
         transactions.push({
           id: `cache-mov-${ne}-${rd.cdevento}`,
           contract_id: enriched.contract_id,
@@ -217,6 +316,7 @@ export class FinancialService {
           budget_description: enriched.budget_description,
           contract_number: enriched.contract_number,
           document_number: ne,
+          unidade_gestora_label: ugCode ? getUnidadeLabel(String(ugCode)) : undefined
         } as Transaction);
       });
 
@@ -230,7 +330,11 @@ export class FinancialService {
         const dedupKey = `${ne}|${TransactionType.LIQUIDATION}|${docNum}|${amount}`;
         if (existingKeys?.has(dedupKey)) return;
         existingKeys?.add(dedupKey);
-        const enriched = enrichByNe(ne);
+
+        const rd = o.raw_data || {};
+        const enriched = enrichByNe(ne, null, rd);
+        const ugCode = o.cdunidadegestora || rd.cdunidadegestora || '';
+
         transactions.push({
           id: `cache-ob-${obNum}-${docNum}`,
           contract_id: enriched.contract_id,
@@ -244,6 +348,7 @@ export class FinancialService {
           contract_number: enriched.contract_number,
           ob_number: obNum, document_number: docNum,
           payment_month: obDate ? obDate.substring(0, 7) : undefined,
+          unidade_gestora_label: ugCode ? getUnidadeLabel(String(ugCode)) : undefined
         } as Transaction);
       });
 
@@ -452,6 +557,16 @@ export class FinancialService {
     const parsedDate = new Date(raw.date);
     const isValidDate = !isNaN(parsedDate.getTime());
 
+    // Extrair número do contrato do relacionamento (left join pode retornar objeto ou array)
+    let contractNumber = 'N/A';
+    if (raw.contratos) {
+      if (Array.isArray(raw.contratos)) {
+        contractNumber = raw.contratos[0]?.contrato || 'N/A';
+      } else if (typeof raw.contratos === 'object') {
+        contractNumber = raw.contratos.contrato || 'N/A';
+      }
+    }
+
     return {
       id: raw.id || '',
       contract_id: raw.contract_id || '',
@@ -464,7 +579,7 @@ export class FinancialService {
       budget_description: raw.budget_description || '',
       parcela_referencia: raw.parcela_referencia,
       sigef_id: raw.sigef_id,
-      contract_number: raw.contratos?.contrato || 'N/A',
+      contract_number: contractNumber,
       payment_month: raw.payment_month,
       unidade_gestora_label: raw.unidade_gestora_label,
       document_number: raw.document_number,
@@ -740,24 +855,33 @@ export class FinancialService {
       budgets.map(b => b.nunotaempenho?.trim()).filter(Boolean) as string[]
     )];
 
+    // Carrega transações permanentes para incluir NEs que não constam nas dotações oficiais
+    const { data: dbTrans } = await this.supabaseService.client
+      .from('transacoes')
+      .select('*')
+      .eq('contract_id', contractId);
+
+    const dbNes = [...new Set((dbTrans || []).map(t => t.commitment_id?.trim()).filter(Boolean))] as string[];
+    for (const ne of dbNes) {
+      if (!allNes.includes(ne)) {
+        allNes.push(ne);
+      }
+    }
+
     // Pré-carrega OBs e movimentos de todos os NEs
     const allObs: SigefOrdemBancaria[] = [];
     const neMovimentosMap = new Map<string, SigefNeMovimento[]>();
     for (const ne of allNes) {
       const obs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
       allObs.push(...obs);
-    }
-    for (const budget of budgets) {
-      if (!budget.nunotaempenho) continue;
-      const ne = budget.nunotaempenho.trim();
-      if (!neMovimentosMap.has(ne)) {
-        const ugNum = parseInt(budget.unid_gestora || '080101', 10);
-        let movs = await this.sigefCacheService.getNeMovimentos(ugNum, ne);
-        if (movs.length === 0) {
-          movs = await this.sigefCacheService.getNeMovimentosGlobal(ne);
-        }
-        neMovimentosMap.set(ne, movs);
+      
+      const budget = budgets.find(b => b.nunotaempenho?.trim() === ne);
+      const ugNum = parseInt(budget?.unid_gestora || '080101', 10);
+      let movs = await this.sigefCacheService.getNeMovimentos(ugNum, ne);
+      if (movs.length === 0) {
+        movs = await this.sigefCacheService.getNeMovimentosGlobal(ne);
       }
+      neMovimentosMap.set(ne, movs);
     }
 
     const fmtDate = (d: any): string => {
@@ -767,12 +891,50 @@ export class FinancialService {
       return String(d).substring(0, 10);
     };
 
-    for (const budget of budgets) {
-      if (!budget.nunotaempenho) continue;
-      const ne = budget.nunotaempenho.trim();
-      const ug = budget.unid_gestora || '080101';
-      const ugLabel = getUnidadeLabel(ug);
+    const neToBudgetMap = new Map<string, any>();
+    for (const b of budgets) {
+      if (b.nunotaempenho) {
+        neToBudgetMap.set(b.nunotaempenho.trim(), b);
+      }
+    }
+
+    for (const ne of allNes) {
+      const budget = neToBudgetMap.get(ne);
+      let ug = budget?.unid_gestora || '080101';
+      let dotacao = budget?.dotacao || '';
+      let defaultDate = budget?.data_disponibilidade || '';
+
+      // Tentar resolver via transações do banco se não tiver dotação
+      if (!budget && dbTrans) {
+        const matchingTrans = dbTrans.find(t => t.commitment_id === ne);
+        if (matchingTrans) {
+          ug = matchingTrans.unidade_gestora_label || ug;
+          dotacao = matchingTrans.budget_description || matchingTrans.department || '';
+          defaultDate = matchingTrans.date ? new Date(matchingTrans.date) : '';
+        }
+      }
+
       const movimentos = neMovimentosMap.get(ne) || [];
+
+      // Tentar resolver via movimentos do cache
+      if (!dotacao || !ug || ug === '080101') {
+        if (movimentos.length > 0) {
+          const rd = (movimentos[0] as any).raw_data || {};
+          if (rd.cdunidadegestora) {
+            ug = String(rd.cdunidadegestora);
+          }
+          if (!dotacao) {
+            if (rd.cdacao && rd.cdfonte) {
+              dotacao = `Ação ${rd.cdacao} / Fonte ${rd.cdfonte}`;
+            } else if (rd.cdnaturezadespesa) {
+              dotacao = `Nat. Desp. ${rd.cdnaturezadespesa}`;
+            }
+          }
+        }
+      }
+
+      if (!dotacao) dotacao = '---';
+      const ugLabel = getUnidadeLabel(ug);
 
       // EMPENHO ORIGINAL — dos movimentos (400010)
       const originalMovs = movimentos.filter(m => m.cdevento === 400010);
@@ -781,9 +943,9 @@ export class FinancialService {
         if (vl > 0) {
           result.push({
             tipo: 'EMPENHO', ne, ug, ugLabel,
-            dotacao: budget.dotacao,
+            dotacao: dotacao,
             amount: vl,
-            date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+            date: fmtDate(mov.dtlancamento || defaultDate),
           });
         }
       }
@@ -795,9 +957,9 @@ export class FinancialService {
         if (vl > 0) {
           result.push({
             tipo: 'REFORCO', ne, ug, ugLabel,
-            dotacao: budget.dotacao,
+            dotacao: dotacao,
             amount: vl,
-            date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+            date: fmtDate(mov.dtlancamento || defaultDate),
           });
         }
       }
@@ -809,9 +971,9 @@ export class FinancialService {
         if (vl > 0) {
           result.push({
             tipo: 'ANULACAO', ne, ug, ugLabel,
-            dotacao: budget.dotacao,
+            dotacao: dotacao,
             amount: vl,
-            date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
+            date: fmtDate(mov.dtlancamento || defaultDate),
           });
         }
       }
@@ -828,12 +990,12 @@ export class FinancialService {
         if (vl === 0) continue;
         result.push({
           tipo: 'PAGAMENTO', ne, ug, ugLabel,
-          dotacao: budget.dotacao,
+          dotacao: dotacao,
           pp: ob.nudocumento,
           obNumber: ob.nuordembancaria,
           obStatus: ob.cdsituacaoordembancaria,
           amount: vl,
-          date: ob.dtpagamento || ob.dtlancamento || fmtDate(budget.data_disponibilidade),
+          date: ob.dtpagamento || ob.dtlancamento || fmtDate(defaultDate),
         });
       }
     }

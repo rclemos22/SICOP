@@ -22,6 +22,12 @@ SELECT '--- 1. Desabilitando RLS nas tabelas de cache ---' AS etapa;
 ALTER TABLE public.sigef_notas_empenho DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sigef_ne_movimentos DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sigef_ordens_bancarias DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.import_sigef_ne DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.import_sigef_ob DISABLE ROW LEVEL SECURITY;
+
+-- Garante a constraint única necessária para o upsert de OBs no espelho (import_sigef_ob)
+ALTER TABLE public.import_sigef_ob DROP CONSTRAINT IF EXISTS uk_import_sigef_ob;
+ALTER TABLE public.import_sigef_ob ADD CONSTRAINT uk_import_sigef_ob UNIQUE (nuordembancaria, cdunidadegestora, nudocumento);
 
 -- =============================================================
 -- 2. GARANTIR VIEWS CORRETAS

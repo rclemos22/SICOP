@@ -42,7 +42,9 @@ export interface NotaEmpenhoVinculada {
  * Retorna label amigável para a unidade gestora
  */
 export function getUnidadeLabel(codigo: string): string {
-  switch (codigo) {
+  if (!codigo) return '';
+  const cleanCode = codigo.trim().padStart(6, '0');
+  switch (cleanCode) {
     case '080101':
       return 'DPEMA';
     case '080901':
@@ -63,7 +65,9 @@ export function calcularSaldoDotacao(dotacao: Dotacao): number {
  * Retorna classes CSS para badges de unidade orçamentária
  */
 export function getUnidadeBadgeClass(unidade: string): string {
-  switch (unidade) {
+  if (!unidade) return 'bg-gray-50 text-gray-600 border-gray-200';
+  const cleanCode = unidade.trim().padStart(6, '0');
+  switch (cleanCode) {
     case '080901':
       return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800';
     case '080101':

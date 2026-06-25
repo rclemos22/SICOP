@@ -486,18 +486,9 @@ export class ContractDetailsPageComponent {
           this.loadTransactions(c.id);
           this.loadNesPagamentos(c.id);
 
-          // Persiste dados do cache SIGEF nas tabelas de negócio (dotacoes/transacoes)
-          // para que os cards de dotação e totais do contrato reflitam os valores
-          // sem depender de ação manual ou ciclo automático de sincronização.
-          this.financialService.syncSigefTransactions(c.id).then(() => {
-            this.loadBudgets(c.id);
-            this.loadTransactions(c.id);
-            this.loadNesPagamentos(c.id);
-          });
-
-          // Busca dados recentes do SIGEF via API (últimos 5 dias) para alimentar
-          // o cache local sem consumir a API com varreduras longas.
-          this.refreshSigefData(5);
+          // Cadeia assíncrona: sync → reload → refresh (para garantir que budgets
+          // esteja populado antes do refreshSigefData buscar NEs)
+          this.runSyncChain(c.id);
         }
       }
     });
@@ -509,6 +500,30 @@ export class ContractDetailsPageComponent {
       if (this.sigefSyncService.isSyncing()) return;
       this.refreshSigefData(15);
     }, 5 * 60 * 1000);
+  }
+
+  /**
+   * Cadeia de sincronização pós-carregamento inicial:
+   * 1. Persiste dados do cache SIGEF nas tabelas de negócio (dotacoes/transacoes)
+   * 2. Recarrega os sinais locais
+   * 3. Busca dados recentes do SIGEF via API (popula o cache local)
+   * 
+   * Separada do effect() para garantir sequenciamento correto e evitar que
+   * refreshSigefData execute antes dos budgets estarem disponíveis.
+   */
+  private async runSyncChain(contractId: string): Promise<void> {
+    try {
+      await this.financialService.syncSigefTransactions(contractId);
+      await this.loadBudgets(contractId);
+      await this.loadTransactions(contractId);
+      await this.loadNesPagamentos(contractId);
+
+      // Busca dados recentes do SIGEF via API (últimos 5 dias) para alimentar
+      // o cache local sem consumir a API com varreduras longas.
+      await this.refreshSigefData(5);
+    } catch (err) {
+      console.error('[ContractDetails] Erro na cadeia de sincronização:', err);
+    }
   }
 
   /**
@@ -825,7 +840,7 @@ export class ContractDetailsPageComponent {
       // 3. Se mirror vazio, tenta fallback via API (syncBatch)
       if (nesComMirror.size === 0 && tasks.length > 0) {
         console.log('[AtualizarLançamentos] Espelho vazio. Tentando fallback via API...');
-        await this.sigefSyncService.syncBatch(tasks, contractId, false, 30);
+        await this.sigefSyncService.syncBatch(tasks, contractId, false, 365);
       }
 
       const lastSyncMap = new Map(this.sigefLastSync());
@@ -964,6 +979,36 @@ export class ContractDetailsPageComponent {
       return;
     }
 
+    // Validação de UG consistente
+    const contractObj = this.contract();
+    if (contractObj && contractObj.unid_gestora) {
+      const cleanContractUg = contractObj.unid_gestora.trim().padStart(6, '0');
+      const resolveToCode = (ugVal: string): string => {
+        if (!ugVal) return '';
+        const upper = ugVal.trim().toUpperCase();
+        if (upper === 'DPEMA') return '080101';
+        if (upper === 'FADEP') return '080901';
+        return upper.padStart(6, '0');
+      };
+      
+      for (const tx of selectedObs) {
+        let txUg = '';
+        if (tx.unidade_gestora_label) {
+          txUg = tx.unidade_gestora_label;
+        } else if (tx.commitment_id) {
+          const matchingBudget = this.budgets().find(b => b.nunotaempenho?.trim() === tx.commitment_id);
+          if (matchingBudget?.unid_gestora) txUg = matchingBudget.unid_gestora;
+        }
+        
+        if (txUg && resolveToCode(txUg) !== resolveToCode(cleanContractUg)) {
+          const contractUgLabel = cleanContractUg === '080101' ? 'DPEMA' : 'FADEP';
+          const txUgLabel = resolveToCode(txUg) === '080101' ? 'DPEMA' : 'FADEP';
+          alert(`Erro de validação: A Ordem Bancária pertence à UG ${txUgLabel}, mas o contrato está vinculado à UG ${contractUgLabel}. Não é permitido vincular lançamentos de UGs diferentes ao mesmo contrato.`);
+          return;
+        }
+      }
+    }
+
     try {
 
       for (const transaction of selectedObs) {
@@ -1033,6 +1078,34 @@ export class ContractDetailsPageComponent {
     // Achar a transação selecionada
     const transaction = this.transactions().find(t => t.id === transactionId);
     if (!transaction) return;
+
+    // Validação de UG consistente
+    const contractObj = this.contract();
+    if (contractObj && contractObj.unid_gestora) {
+      const cleanContractUg = contractObj.unid_gestora.trim().padStart(6, '0');
+      const resolveToCode = (ugVal: string): string => {
+        if (!ugVal) return '';
+        const upper = ugVal.trim().toUpperCase();
+        if (upper === 'DPEMA') return '080101';
+        if (upper === 'FADEP') return '080901';
+        return upper.padStart(6, '0');
+      };
+      
+      let txUg = '';
+      if (transaction.unidade_gestora_label) {
+        txUg = transaction.unidade_gestora_label;
+      } else if (transaction.commitment_id) {
+        const matchingBudget = this.budgets().find(b => b.nunotaempenho?.trim() === transaction.commitment_id);
+        if (matchingBudget?.unid_gestora) txUg = matchingBudget.unid_gestora;
+      }
+      
+      if (txUg && resolveToCode(txUg) !== resolveToCode(cleanContractUg)) {
+        const contractUgLabel = cleanContractUg === '080101' ? 'DPEMA' : 'FADEP';
+        const txUgLabel = resolveToCode(txUg) === '080101' ? 'DPEMA' : 'FADEP';
+        alert(`Erro de validação: A Ordem Bancária pertence à UG ${txUgLabel}, mas o contrato está vinculado à UG ${contractUgLabel}. Não é permitido vincular lançamentos de UGs diferentes ao mesmo contrato.`);
+        return;
+      }
+    }
 
     try {
 

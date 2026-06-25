@@ -36,7 +36,7 @@ export class FinancialPageComponent {
   });
 
   resolveUnidadeGestora(item: Transaction): string {
-    if (item.unidade_gestora_label) return item.unidade_gestora_label;
+    if (item.unidade_gestora_label) return getUnidadeLabel(item.unidade_gestora_label);
     const ugCode = this.neToUgMap().get(item.commitment_id);
     return ugCode ? getUnidadeLabel(ugCode) : '---';
   }

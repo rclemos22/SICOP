@@ -175,6 +175,9 @@ src/
 | 05 | `05_LIMPEZA_CACHE_E_TABELAS.sql` | Remove tabelas backup legadas, cache antigo (cache-mov/aggr/ob), recalcula totais |
 | 06 | `06_VACUUM_ANALYZE.sql` | Reclama espaço após limpeza (executar fora de transação via psql) |
 | 07 | `07_FIX_RLS_E_VIEWS.sql` | Corrige erro 500: desabilita RLS nas tabelas de cache do SIGEF, recria views com definições corretas |
+| 08 | `08_DIAGNOSTICO_VINCULACOES.sql` | Diagnostica e corrige vinculações entre contratos, dotações e transações |
+| 09 | `09_LIMPEZA_MIRROR_CACHE_ORFAOS.sql` | Remove do mirror/cache todas as NE/OB não vinculadas a contratos cadastrados; reseta sync_periods |
+| 10 | `10_CORRIGIR_PAGAMENTOS_CONTRATO_014_2026.sql` | Corrige pagamentos incorretos do contrato 014/2026: remove OBs órfãs, recalcula totais |
 
 ### Tabela `aditivos`
 

@@ -1361,7 +1361,7 @@ export class SigefService implements OnDestroy {
     this._apiStatus.set('refreshing');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const url = `${this.apiUrl}/token/`;
@@ -1383,14 +1383,22 @@ export class SigefService implements OnDestroy {
         const errorText = await response.text();
         console.error('[SIGEF AUTH] Error response:', errorText);
         this._apiStatus.set('error');
-        throw new Error('Credenciais inválidas: ' + response.status);
+
+        if (response.status === 401 || response.status === 403) {
+          this._authenticated.set(false);
+          localStorage.removeItem(this.ACCESS_TOKEN_KEY);
+          localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+          throw new Error(`Credenciais inválidas (${response.status}): verifique usuário e senha no SIGEF`);
+        }
+
+        throw new Error(`Servidor SIGEF indisponível (${response.status})`);
       }
 
       const data = await response.json();
       this.bearerToken = data.access;
       this.refreshToken = data.refresh || null;
       this.tokenExpiry = data.exp ? Date.now() + (data.exp * 1000) - 60000 : Date.now() + (3600 * 1000) - 60000;
-      
+
       this.persistTokens();
       this._authenticated.set(true);
       this._apiStatus.set('connected');
@@ -1401,24 +1409,38 @@ export class SigefService implements OnDestroy {
       clearTimeout(timeoutId);
       const errLower = (err.message || err.name || '').toLowerCase();
       const isTimeout = err.name === 'AbortError' || errLower.includes('timeout') || errLower.includes('etimedout') || errLower.includes('aborted');
-      
-      if (retries > 0 && isTimeout) {
+      const isServerError = err.message?.includes('Servidor SIGEF indisponível');
+
+      if (retries > 0 && (isTimeout || isServerError)) {
         this._circuitFailure();
-        console.warn(`[SIGEF] Timeout no login (${err.message}). Backoff ${backoff}ms, retries: ${retries}`);
+        console.warn(`[SIGEF] Falha no login (${err.message}). Backoff ${backoff}ms, retries: ${retries}`);
         await new Promise(r => setTimeout(r, backoff));
         return this.authenticate(username, password, retries - 1, Math.min(backoff * 2, 60000));
       }
 
-      if (isTimeout) {
+      if (isTimeout || isServerError) {
         this._circuitFailure();
       }
-      
+
       console.error('[SIGEF AUTH] Erro capturado:', err);
       this._error.set(err.message || 'Erro na autenticação');
-      this._authenticated.set(false);
-      this._apiStatus.set('disconnected');
-      localStorage.removeItem(this.ACCESS_TOKEN_KEY);
-      localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+
+      if (isTimeout) {
+        this._error.set('API não respondeu (timeout). Os tokens existentes foram preservados.');
+      } else if (isServerError) {
+        this._error.set('Servidor SIGEF com erro. Os tokens existentes foram preservados.');
+      }
+
+      // Só limpa tokens em erro de autenticação real (401/403), não em timeout/5xx
+      if (err.message?.includes('Credenciais inválidas')) {
+        this._authenticated.set(false);
+        this._apiStatus.set('disconnected');
+        localStorage.removeItem(this.ACCESS_TOKEN_KEY);
+        localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+      } else {
+        this._apiStatus.set('error');
+      }
+
       throw err;
     } finally {
       this._loading.set(false);

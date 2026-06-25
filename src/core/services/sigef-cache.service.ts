@@ -246,7 +246,13 @@ export class SigefCacheService {
         .or(`nunotaempenho.eq.${neNumber},nuneoriginal.eq.${neNumber}`)
         .order('dtlancamento', { ascending: true });
 
-      if (error || !data) {
+      if (error || !data || data.length === 0) {
+        const mirrorData = await this.getNotaEmpenhoMovementsFromMirror(neNumber);
+        if (mirrorData && mirrorData.length > 0) {
+          return mirrorData
+            .filter((m: any) => !m.cdunidadegestora || parseInt(String(m.cdunidadegestora), 10) === ug)
+            .map((m: any) => this.mapRawMovementToCacheFormat(m, ug));
+        }
         return [];
       }
 
@@ -264,7 +270,14 @@ export class SigefCacheService {
         .or(`nunotaempenho.eq.${neNumber},nuneoriginal.eq.${neNumber}`)
         .order('dtlancamento', { ascending: true });
 
-      if (error || !data) {
+      if (error || !data || data.length === 0) {
+        const mirrorData = await this.getNotaEmpenhoMovementsFromMirror(neNumber);
+        if (mirrorData && mirrorData.length > 0) {
+          return mirrorData.map((m: any) => {
+            const mUg = m.cdunidadegestora ? parseInt(String(m.cdunidadegestora), 10) : 80101;
+            return this.mapRawMovementToCacheFormat(m, mUg);
+          });
+        }
         return [];
       }
 
@@ -341,12 +354,12 @@ export class SigefCacheService {
         .eq('nunotaempenho', neNumber)
         .order('dtlancamento', { ascending: true });
 
-      if (error) {
-        this.debug.error(`getOrdensBancariasPorNe(${ug}, ${neNumber}): ${error.message}`);
-        return [];
-      }
-      if (!data || data.length === 0) {
-        this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${neNumber}): 0 resultados`);
+      if (error || !data || data.length === 0) {
+        const mirrorData = await this.mirrorService.getObsRawByNe(neNumber, ug.toString());
+        if (mirrorData && mirrorData.length > 0) {
+          this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${neNumber}) [MIRROR]: ${mirrorData.length} OB(s)`);
+          return mirrorData.map((ob: any) => this.mapRawObToCacheFormat(ob, ug));
+        }
         return [];
       }
 
@@ -366,12 +379,16 @@ export class SigefCacheService {
         .eq('nunotaempenho', neNumber)
         .order('dtlancamento', { ascending: true });
 
-      if (error) {
-        this.debug.error(`getOrdensBancariasPorNeGlobal(${neNumber}): ${error.message}`);
-        return [];
-      }
-      if (!data || data.length === 0) {
-        this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}): 0 resultados`);
+      if (error || !data || data.length === 0) {
+        const mirrorData = await this.mirrorService.getObsRawByNeGlobal(neNumber);
+        if (mirrorData && mirrorData.length > 0) {
+          const uniqueRaw = this.deduplicateObs(mirrorData);
+          this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}) [MIRROR]: ${uniqueRaw.length} OB(s) únicas`);
+          return uniqueRaw.map((ob: any) => {
+            const obUg = ob.cdunidadegestora ? parseInt(String(ob.cdunidadegestora), 10) : 80101;
+            return this.mapRawObToCacheFormat(ob, obUg);
+          });
+        }
         return [];
       }
 
@@ -774,5 +791,80 @@ export class SigefCacheService {
       this.supabaseService.client.from('sigef_ordens_bancarias').delete().neq('nunotaempenho', ''),
     ]);
     this.debug.cache('Cache de NE e OB totalmente limpo');
+  }
+
+  private mapRawMovementToCacheFormat(raw: any, ug: number): SigefNeMovimento {
+    const ehOriginal = raw.nunotaempenho === raw.nuneoriginal || !raw.nuneoriginal;
+    const cdevento = raw.cdevento ? parseInt(String(raw.cdevento), 10) : (ehOriginal ? 400010 : 0);
+    return {
+      cdunidadegestora: ug,
+      nunotaempenho: raw.nunotaempenho || '',
+      cdevento: cdevento,
+      nudocumento: raw.nudocumento || null,
+      cdcredor: raw.cdcredor || null,
+      cdorgao: raw.cdorgao || null,
+      cdsubacao: raw.cdsubacao || null,
+      cdfuncao: raw.cdfuncao || null,
+      cdsubfuncao: raw.cdsubfuncao || null,
+      cdprograma: raw.cdprograma || null,
+      cdacao: raw.cdacao || null,
+      cdnaturezadespesa: raw.cdnaturezadespesa || null,
+      cdfonte: raw.cdfonte || null,
+      cdmodalidade: raw.cdmodalidade || null,
+      vlnotaempenho: raw.vlnotaempenho || 0,
+      dtlancamento: raw.dtlancamento || null,
+      dehistorico: raw.dehistorico || null,
+      nuneoriginal: raw.nuneoriginal || null
+    };
+  }
+
+  private mapRawObToCacheFormat(raw: any, ug: number): SigefOrdemBancaria {
+    return {
+      nuordembancaria: raw.nuordembancaria || '',
+      cdunidadegestora: ug,
+      nunotaempenho: raw.nunotaempenho || null,
+      cdgestao: raw.cdgestao || null,
+      cdevento: raw.cdevento || null,
+      nudocumento: raw.nudocumento || null,
+      cdcredor: raw.cdcredor || null,
+      cdtipocredor: raw.cdtipocredor || null,
+      cdugfavorecida: raw.cdugfavorecida || null,
+      cdorgao: raw.cdorgao || null,
+      cdsubacao: raw.cdsubacao || null,
+      cdfuncao: raw.cdfuncao || null,
+      cdsubfuncao: raw.cdsubfuncao || null,
+      cdprograma: raw.cdprograma || null,
+      cdacao: raw.cdacao || null,
+      localizagasto: raw.localizagasto || null,
+      cdnaturezadespesa: raw.cdnaturezadespesa || null,
+      cdfonte: raw.cdfonte || null,
+      cdmodalidade: raw.cdmodalidade || null,
+      vltotal: raw.vltotal || 0,
+      dtlancamento: raw.dtlancamento || null,
+      dtpagamento: raw.dtpagamento || null,
+      cdsituacaoordembancaria: raw.cdsituacaoordembancaria || null,
+      situacaopreparacaopagamento: raw.situacaopreparacaopagamento || null,
+      tipoordembancaria: raw.tipoordembancaria || null,
+      tipopreparacaopagamento: raw.tipopreparacaopagamento || null,
+      deobservacao: raw.deobservacao || null,
+      definalidade: raw.definalidade || null,
+      usuario_responsavel: raw.usuario_responsavel || null,
+      nuguiarecebimento: raw.nuguiarecebimento || null,
+      vlguiarecebimento: raw.vlguiarecebimento ? Number(raw.vlguiarecebimento) : null,
+      nunotalancamento: raw.nunotalancamento || null,
+      numns: raw.numns || null,
+      domicilio_origem: raw.domicilio_origem || null,
+      domicilio_destino: raw.domicilio_destino || null
+    };
+  }
+
+  private deduplicateObs(obs: any[]): any[] {
+    const seen = new Set<string>();
+    return obs.filter(ob => {
+      const key = ob.nuordembancaria?.trim().toUpperCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 }
