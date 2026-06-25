@@ -73,8 +73,6 @@ SELECT '--- 3. Removendo todas as LIQUIDATION de transacoes ---' AS etapa;
 
 DELETE FROM public.transacoes WHERE type = 'LIQUIDATION';
 
-GET DIAGNOSTICS v_liq_removed = ROW_COUNT;
--- (Nota: v_liq_removed e' apenas informativo no log PL/pgSQL)
 SELECT 'Transacoes LIQUIDATION removidas' AS resultado;
 
 -- =============================================================

@@ -361,7 +361,8 @@ export class SigefBulkSyncService {
     const { data, error } = await this.client
       .from('dotacoes')
       .select('nunotaempenho, unid_gestora, data_disponibilidade')
-      .not('nunotaempenho', 'is', null);
+      .not('nunotaempenho', 'is', null)
+      .not('contract_id', 'is', null);
 
     if (error) {
       console.error('[BulkSync] Erro ao buscar NEs cadastradas:', error);
