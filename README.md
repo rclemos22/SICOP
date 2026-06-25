@@ -178,6 +178,7 @@ src/
 | 08 | `08_DIAGNOSTICO_VINCULACOES.sql` | Diagnostica e corrige vinculações entre contratos, dotações e transações |
 | 09 | `09_LIMPEZA_MIRROR_CACHE_ORFAOS.sql` | Remove do mirror/cache todas as NE/OB não vinculadas a contratos cadastrados; reseta sync_periods |
 | 10 | `10_CORRIGIR_PAGAMENTOS_CONTRATO_014_2026.sql` | Corrige pagamentos incorretos do contrato 014/2026: remove OBs órfãs, recalcula totais |
+| 11 | `11_LIMPEZA_TOTAL_PAGAMENTOS.sql` | Remove TODOS os pagamentos (OB/LIQUIDATION) de todos os contratos para recarga limpa via SIGEF |
 
 ### Tabela `aditivos`
 
