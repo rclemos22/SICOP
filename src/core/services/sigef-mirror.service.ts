@@ -69,11 +69,14 @@ export class SigefMirrorService {
    * Verifica se uma NE já existe no espelho.
    */
   async hasNe(nunotaempenho: string, cdunidadegestora: string): Promise<boolean> {
+    const numUg = parseInt(cdunidadegestora, 10).toString();
+    const ugPadded = numUg.padStart(6, '0');
+
     const { count } = await this.client
       .from('import_sigef_ne')
       .select('id', { count: 'exact', head: true })
       .eq('nunotaempenho', nunotaempenho.trim().toUpperCase())
-      .eq('cdunidadegestora', cdunidadegestora.toString());
+      .in('cdunidadegestora', [numUg, ugPadded]);
     return (count ?? 0) > 0;
   }
 
@@ -83,10 +86,13 @@ export class SigefMirrorService {
    */
   async getNesByNumber(nunotaempenho: string, cdunidadegestora: string): Promise<ImportSigefNe[]> {
     const ne = nunotaempenho.trim().toUpperCase();
+    const numUg = parseInt(cdunidadegestora, 10).toString();
+    const ugPadded = numUg.padStart(6, '0');
+
     const { data, error } = await this.client
       .from('import_sigef_ne')
       .select('*')
-      .eq('cdunidadegestora', cdunidadegestora.toString())
+      .in('cdunidadegestora', [numUg, ugPadded])
       .or(`nunotaempenho.eq.${ne},nuneoriginal.eq.${ne}`)
       .order('dtlancamento', { ascending: true, nullsFirst: false });
 
@@ -189,11 +195,14 @@ export class SigefMirrorService {
    * Busca tanto por nunotaempenho direto quanto no raw_data (fallback).
    */
   async getObsByNe(nunotaempenho: string, cdunidadegestora: string): Promise<ImportSigefOb[]> {
+    const numUg = parseInt(cdunidadegestora, 10).toString();
+    const ugPadded = numUg.padStart(6, '0');
+
     const { data, error } = await this.client
       .from('import_sigef_ob')
       .select('*')
       .eq('nunotaempenho', nunotaempenho.trim().toUpperCase())
-      .eq('cdunidadegestora', cdunidadegestora.toString())
+      .in('cdunidadegestora', [numUg, ugPadded])
       .order('dtlancamento', { ascending: true, nullsFirst: false });
 
     if (error) {
@@ -232,11 +241,14 @@ export class SigefMirrorService {
    * Retorna uma OB específica pelo número.
    */
   async getObByNumber(nuordembancaria: string, cdunidadegestora: string): Promise<ImportSigefOb | null> {
+    const numUg = parseInt(cdunidadegestora, 10).toString();
+    const ugPadded = numUg.padStart(6, '0');
+
     const { data, error } = await this.client
       .from('import_sigef_ob')
       .select('*')
       .eq('nuordembancaria', nuordembancaria.trim().toUpperCase())
-      .eq('cdunidadegestora', cdunidadegestora.toString())
+      .in('cdunidadegestora', [numUg, ugPadded])
       .maybeSingle();
 
     if (error || !data) return null;

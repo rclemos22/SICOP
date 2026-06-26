@@ -133,7 +133,7 @@ import { SyncHistoryService, SyncLogEntry } from '../../../../core/services/sync
       }
 
       <!-- Action Buttons -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <button
           (click)="sincronizarTotal()"
           [disabled]="isRunning()"
@@ -165,6 +165,24 @@ import { SyncHistoryService, SyncLogEntry } from '../../../../core/services/sync
               <h3 class="text-lg font-bold text-slate-900 dark:text-white">Atualização Rápida</h3>
               <p class="text-sm text-slate-500 dark:text-slate-400">
                 Baixa apenas os últimos 60 dias de dados. Mais rápido que a completa.
+              </p>
+            </div>
+          </div>
+        </button>
+
+        <button
+          (click)="limparCacheERepopular()"
+          [disabled]="isRunning()"
+          class="p-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+              <span class="material-symbols-outlined text-[28px] text-orange-600 dark:text-orange-400">cleaning_services</span>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white">Limpar Cache</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                Limpa o cache estruturado e repopula a partir do espelho (sem chamar API).
               </p>
             </div>
           </div>
@@ -298,6 +316,26 @@ export class SigefSyncPageComponent implements OnInit, OnDestroy {
     } catch (err: any) {
       this.message.set('Erro: ' + (err.message || 'Erro desconhecido'));
       this.syncHistory.addEntry('error', 'sync_full', 'manual', 'Erro na sincronização completa: ' + (err.message || 'Erro desconhecido'));
+      setTimeout(() => this.message.set(null), 8000);
+    } finally {
+      this.isRunning.set(false);
+    }
+  }
+
+  async limparCacheERepopular() {
+    this.isRunning.set(true);
+    this.message.set(null);
+    this.lastSyncMessage.set('Limpando cache e repopulando...');
+    this.syncHistory.addEntry('start', 'clear_cache', 'manual', 'Limpeza de cache iniciada');
+    try {
+      await this.syncService.applyFixToAllContracts();
+      this.message.set('Cache limpo e repovoado com sucesso!');
+      this.lastSyncMessage.set('Concluído em ' + new Date().toLocaleTimeString('pt-BR'));
+      this.syncHistory.addEntry('success', 'clear_cache', 'manual', 'Cache limpo e repovoado do espelho');
+      setTimeout(() => this.message.set(null), 5000);
+    } catch (err: any) {
+      this.message.set('Erro: ' + (err.message || 'Erro desconhecido'));
+      this.syncHistory.addEntry('error', 'clear_cache', 'manual', 'Erro na limpeza de cache: ' + (err.message || 'Erro desconhecido'));
       setTimeout(() => this.message.set(null), 8000);
     } finally {
       this.isRunning.set(false);

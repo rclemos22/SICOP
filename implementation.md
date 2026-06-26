@@ -410,6 +410,41 @@ ALTER TABLE public.sigef_ne_movimentos DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sigef_ordens_bancarias DISABLE ROW LEVEL SECURITY;
 ```
 
+### RAP (Restos a Pagar) no Detalhamento do Contrato
+
+O filtro de ano na aba Financeiro do contrato agora inclui **RAPs** — saldos de empenhos de exercícios anteriores que ainda não foram pagos. Estes são exibidos como linhas `EMPENHO` no início da lista, identificados pela UG label "Saldo Remanescente (RAP) do exercício anterior".
+
+### Dashboard: Cálculo por Transações
+
+Os totais de `totalCommittedValue` e `totalPaidValue` no Dashboard agora são calculados a partir da tabela `transacoes` (filtrada pelos contratos ativos), e não mais da soma direta de `contratos.total_empenhado`. Isso garante maior precisão ao considerar apenas contratos vigentes no ano selecionado, incluindo RAPs de anos anteriores.
+
+### Contract Details: Budget Summary via PaymentProgress
+
+O `budgetSummary` computado no `contract-details-page.component.ts` agora deriva seus valores do `paymentProgress` (que já inclui RAP), garantindo consistência entre os cards de total empenhado/pago e a tabela de lançamentos.
+
+### Sincronização Financeira: OBs por UG
+
+A partir de agora, `syncSigefTransactions` carrega OBs filtradas por **UG** (não mais global), evitando que OBs de outras unidades gestoras sejam erroneamente atribuídas a contratos. Cada NE é processada com a UG da dotação correspondente.
+
+### total_empenhado como Valor Bruto
+
+`total_empenhado` nas dotações agora armazena o valor **bruto** (COMMITMENT + REINFORCEMENT, sem deduzir cancelamentos). O valor líquido é calculado em tempo real nos componentes: `totalEmpenhado - totalCancelado`.
+
+### Detalhamento de NEs/Pagamentos via Transações
+
+`getContractNesPagamentosDetalhados` foi refatorado para ler exclusivamente da tabela `transacoes`, eliminando consultas redundantes ao cache SIGEF. A UG de cada NE é resolvida via mapeamento direto das dotações do contrato.
+
+### Correção de Unidade Gestora no Espelho (Mirror)
+
+As consultas ao mirror (`import_sigef_ne`, `import_sigef_ob`) agora buscam UG tanto no formato **numérico** quanto **zero-padded (6 dígitos)**, resolvendo inconsistências entre o formato usado pelo cache estruturado e o espelho.
+
+### Botão Limpar Cache
+
+A página `/sincronizar-sigef` agora possui um botão **"Limpar Cache"** que executa `applyFixToAllContracts()`:
+1. Limpa as tabelas de cache estruturado (`sigef_notas_empenho`, `sigef_ne_movimentos`, `sigef_ordens_bancarias`)
+2. Repopula a partir do espelho (`import_sigef_ne`, `import_sigef_ob`)
+3. Recalcula as transações financeiras para todos os contratos
+
 ### Scripts SQL de Manutenção
 
 Os scripts em `sql/` devem ser executados no SQL Editor do Supabase na ordem:

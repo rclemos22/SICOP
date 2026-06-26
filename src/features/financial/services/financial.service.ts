@@ -612,11 +612,20 @@ export class FinancialService {
     }
     this.debug.sync(`${allContractNes.size} NE(s) no contrato: ${[...allContractNes].join(', ')}`);
 
-    // ── 2. Pré-carrega OBs de TODOS os NEs (enriquecimento; não é fonte de verdade) ──
+    // ── 2. Pré-carrega OBs de TODOS os NEs filtrando por UG ──
     const allObs: SigefOrdemBancaria[] = [];
-    for (const ne of allContractNes) {
-      const obs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
-      this.debug.sync(`NE ${ne}: ${obs.length} OB(s) no cache`);
+    const loadedKeys = new Set<string>();
+    for (const budget of contractBudgets) {
+      if (!budget.nunotaempenho) continue;
+      const ne = budget.nunotaempenho.trim();
+      const ug = budget.unid_gestora || '080101';
+      const key = `${ug}|${ne}`;
+      if (loadedKeys.has(key)) continue;
+      loadedKeys.add(key);
+
+      const ugNum = parseInt(ug, 10);
+      const obs = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, ne);
+      this.debug.sync(`NE ${ne} (UG ${ugNum}): ${obs.length} OB(s) no cache`);
       allObs.push(...obs);
     }
 
@@ -639,8 +648,9 @@ export class FinancialService {
       try {
         let movimentosCache = await this.sigefCacheService.getNeMovimentos(ugNum, neValue);
         if (movimentosCache.length === 0) {
-          this.debug.sync(`[${neValue}] sem movimentos para UG ${ugNum}; tentando global...`);
-          movimentosCache = await this.sigefCacheService.getNeMovimentosGlobal(neValue);
+          this.debug.sync(`[${neValue}] sem movimentos para UG ${ugNum}; tentando global com filtro de UG...`);
+          const globalMovs = await this.sigefCacheService.getNeMovimentosGlobal(neValue);
+          movimentosCache = globalMovs.filter(m => parseInt(String(m.cdunidadegestora), 10) === ugNum);
         }
 
         const { data: existingDbLiq } = await this.supabaseService.client
@@ -709,12 +719,13 @@ export class FinancialService {
         // B. CANCELLATION (Anulação 400012)
         // ═══════════════════════════════════════════
         const cancelMovs = movimentosCache.filter(m => m.cdevento === 400012);
-        for (const mov of cancelMovs) {
+        for (let ci = 0; ci < cancelMovs.length; ci++) {
+          const mov = cancelMovs[ci];
           const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
           if (vl > 0) {
             transactionsToUpsert.push({
               contract_id: contractId,
-              sigef_id: `cache-can-${neValue}`,
+              sigef_id: `cache-can-${neValue}-${ci}`,
               description: `ANULAÇÃO - NE ${neValue}`,
               commitment_id: neValue,
               date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
@@ -735,7 +746,8 @@ export class FinancialService {
         const budgetPaidObs = allObs.filter(ob => {
           const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
           const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
-          return obNe === neValue && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
+          const obUg = ob.cdunidadegestora || 0;
+          return obNe === neValue && parseInt(String(obUg), 10) === ugNum && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
         });
 
         for (const ob of budgetPaidObs) {
@@ -804,23 +816,30 @@ export class FinancialService {
               .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%');
           }
 
+          // Remove duplicatas em memória antes de calcular os totais
+          const uniqueUpsertsMap = new Map();
+          for (const t of transactionsToUpsert) {
+            uniqueUpsertsMap.set(t.sigef_id, t);
+          }
+          const uniqueUpserts = Array.from(uniqueUpsertsMap.values());
+
           // Atualiza dotação com totais — só altera campos com dados no upsert
           // para não zerar valores de sincronizações anteriores
-          const totalCom = transactionsToUpsert
+          const totalCom = uniqueUpserts
             .filter(t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT)
             .reduce((s: number, t: any) => s + (t.amount || 0), 0);
-          const totalCan = transactionsToUpsert
+          const totalCan = uniqueUpserts
             .filter(t => t.type === TransactionType.CANCELLATION)
             .reduce((s: number, t: any) => s + (t.amount || 0), 0);
-          const totalPag = transactionsToUpsert
+          const totalPag = uniqueUpserts
             .filter(t => t.type === TransactionType.LIQUIDATION)
             .reduce((s: number, t: any) => s + (t.amount || 0), 0);
 
-          // total_empenhado = COMMITMENT + REINFORCEMENT - CANCELLATION (valor líquido)
+          // total_empenhado = COMMITMENT + REINFORCEMENT (valor bruto)
           const totalEmpenhadoLiquido = Math.max(0, totalCom - totalCan);
 
           const updateData: Record<string, number> = {};
-          if (totalCom > 0 || totalCan > 0) updateData.total_empenhado = totalEmpenhadoLiquido;
+          if (totalCom > 0) updateData.total_empenhado = totalCom;
           if (totalCan > 0) updateData.total_cancelado = totalCan;
           if (totalPag > 0) updateData.total_pago = totalPag;
 
@@ -849,39 +868,24 @@ export class FinancialService {
   async getContractNesPagamentosDetalhados(contractId: string): Promise<NesPagamentoRow[]> {
     const budgetResult = await this.budgetService.getBudgetsByContractId(contractId);
     const budgets = budgetResult.data || [];
-    const result: NesPagamentoRow[] = [];
-
-    const allNes = [...new Set(
-      budgets.map(b => b.nunotaempenho?.trim()).filter(Boolean) as string[]
-    )];
-
-    // Carrega transações permanentes para incluir NEs que não constam nas dotações oficiais
-    const { data: dbTrans } = await this.supabaseService.client
+    
+    // 1. Carregar transações do banco de dados (que já estão devidamente filtradas por UG)
+    const { data: dbTrans, error } = await this.supabaseService.client
       .from('transacoes')
       .select('*')
       .eq('contract_id', contractId);
 
-    const dbNes = [...new Set((dbTrans || []).map(t => t.commitment_id?.trim()).filter(Boolean))] as string[];
-    for (const ne of dbNes) {
-      if (!allNes.includes(ne)) {
-        allNes.push(ne);
-      }
+    if (error) {
+      console.error('[FinancialService] Erro ao carregar transacoes do banco:', error);
+      throw error;
     }
 
-    // Pré-carrega OBs e movimentos de todos os NEs
-    const allObs: SigefOrdemBancaria[] = [];
-    const neMovimentosMap = new Map<string, SigefNeMovimento[]>();
-    for (const ne of allNes) {
-      const obs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
-      allObs.push(...obs);
-      
-      const budget = budgets.find(b => b.nunotaempenho?.trim() === ne);
-      const ugNum = parseInt(budget?.unid_gestora || '080101', 10);
-      let movs = await this.sigefCacheService.getNeMovimentos(ugNum, ne);
-      if (movs.length === 0) {
-        movs = await this.sigefCacheService.getNeMovimentosGlobal(ne);
+    // 2. Mapeamento de NE para UG do contrato
+    const neToUgMap = new Map<string, string>();
+    for (const b of budgets) {
+      if (b.nunotaempenho && b.unid_gestora) {
+        neToUgMap.set(b.nunotaempenho.trim(), b.unid_gestora);
       }
-      neMovimentosMap.set(ne, movs);
     }
 
     const fmtDate = (d: any): string => {
@@ -891,115 +895,32 @@ export class FinancialService {
       return String(d).substring(0, 10);
     };
 
-    const neToBudgetMap = new Map<string, any>();
-    for (const b of budgets) {
-      if (b.nunotaempenho) {
-        neToBudgetMap.set(b.nunotaempenho.trim(), b);
-      }
-    }
+    // 3. Mapear as transações do banco para o formato de exibição NesPagamentoRow
+    const result: NesPagamentoRow[] = (dbTrans || []).map(t => {
+      let tipo: 'EMPENHO' | 'REFORCO' | 'ANULACAO' | 'PAGAMENTO' = 'EMPENHO';
+      if (t.type === 'COMMITMENT') tipo = 'EMPENHO';
+      else if (t.type === 'REINFORCEMENT') tipo = 'REFORCO';
+      else if (t.type === 'CANCELLATION') tipo = 'ANULACAO';
+      else if (t.type === 'LIQUIDATION') tipo = 'PAGAMENTO';
 
-    for (const ne of allNes) {
-      const budget = neToBudgetMap.get(ne);
-      let ug = budget?.unid_gestora || '080101';
-      let dotacao = budget?.dotacao || '';
-      let defaultDate = budget?.data_disponibilidade || '';
+      const neClean = (t.commitment_id || '').trim();
+      let ug = neToUgMap.get(neClean) || budgets[0]?.unid_gestora || '080101';
 
-      // Tentar resolver via transações do banco se não tiver dotação
-      if (!budget && dbTrans) {
-        const matchingTrans = dbTrans.find(t => t.commitment_id === ne);
-        if (matchingTrans) {
-          ug = matchingTrans.unidade_gestora_label || ug;
-          dotacao = matchingTrans.budget_description || matchingTrans.department || '';
-          defaultDate = matchingTrans.date ? new Date(matchingTrans.date) : '';
-        }
-      }
+      return {
+        tipo,
+        ne: t.commitment_id || '',
+        ug,
+        ugLabel: t.unidade_gestora_label || getUnidadeLabel(ug),
+        dotacao: t.budget_description || t.department || '---',
+        pp: t.document_number || undefined,
+        obNumber: t.ob_number || undefined,
+        obStatus: 'Paga', // Como já foi confirmada na tabela de transações, assumimos 'Paga'
+        amount: Math.abs(Number(t.amount) || 0),
+        date: fmtDate(t.date)
+      };
+    });
 
-      const movimentos = neMovimentosMap.get(ne) || [];
-
-      // Tentar resolver via movimentos do cache
-      if (!dotacao || !ug || ug === '080101') {
-        if (movimentos.length > 0) {
-          const rd = (movimentos[0] as any).raw_data || {};
-          if (rd.cdunidadegestora) {
-            ug = String(rd.cdunidadegestora);
-          }
-          if (!dotacao) {
-            if (rd.cdacao && rd.cdfonte) {
-              dotacao = `Ação ${rd.cdacao} / Fonte ${rd.cdfonte}`;
-            } else if (rd.cdnaturezadespesa) {
-              dotacao = `Nat. Desp. ${rd.cdnaturezadespesa}`;
-            }
-          }
-        }
-      }
-
-      if (!dotacao) dotacao = '---';
-      const ugLabel = getUnidadeLabel(ug);
-
-      // EMPENHO ORIGINAL — dos movimentos (400010)
-      const originalMovs = movimentos.filter(m => m.cdevento === 400010);
-      for (const mov of originalMovs) {
-        const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
-        if (vl > 0) {
-          result.push({
-            tipo: 'EMPENHO', ne, ug, ugLabel,
-            dotacao: dotacao,
-            amount: vl,
-            date: fmtDate(mov.dtlancamento || defaultDate),
-          });
-        }
-      }
-
-      // REFORÇO — dos movimentos (400011)
-      const reforcoMovs = movimentos.filter(m => m.cdevento === 400011);
-      for (const mov of reforcoMovs) {
-        const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
-        if (vl > 0) {
-          result.push({
-            tipo: 'REFORCO', ne, ug, ugLabel,
-            dotacao: dotacao,
-            amount: vl,
-            date: fmtDate(mov.dtlancamento || defaultDate),
-          });
-        }
-      }
-
-      // ANULAÇÃO — dos movimentos (400012)
-      const cancelMovs = movimentos.filter(m => m.cdevento === 400012);
-      for (const mov of cancelMovs) {
-        const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
-        if (vl > 0) {
-          result.push({
-            tipo: 'ANULACAO', ne, ug, ugLabel,
-            dotacao: dotacao,
-            amount: vl,
-            date: fmtDate(mov.dtlancamento || defaultDate),
-          });
-        }
-      }
-
-      // PAGAMENTOS — das OBs do cache (uma linha por OB)
-      const paidObs = allObs.filter(ob => {
-        const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
-        const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
-        return obNe === ne && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
-      });
-
-      for (const ob of paidObs) {
-        const vl = Math.abs(Number(ob.vltotal) || 0);
-        if (vl === 0) continue;
-        result.push({
-          tipo: 'PAGAMENTO', ne, ug, ugLabel,
-          dotacao: dotacao,
-          pp: ob.nudocumento,
-          obNumber: ob.nuordembancaria,
-          obStatus: ob.cdsituacaoordembancaria,
-          amount: vl,
-          date: ob.dtpagamento || ob.dtlancamento || fmtDate(defaultDate),
-        });
-      }
-    }
-
+    // 4. Ordenar por data decrescente e tipo
     return result.sort((a, b) => {
       const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
       if (dateDiff !== 0) return dateDiff;

@@ -118,6 +118,13 @@ export class DashboardService {
   // ── Helpers ────────────────────────────────────────────────────────────
 
   private isFromCurrentBudget(t: Transaction, year: number): boolean {
+    if (t.type === TransactionType.LIQUIDATION) {
+      return new Date(t.date).getFullYear() === year;
+    }
+    // Para empenhos/reforços/anulações, a transação pertence ao ano de exercício 
+    // se a data dela ocorreu no próprio ano, ou se o empenho foi do próprio ano.
+    // O RAP no Dashboard (Total Empenhado) atualmente é puxado de contract.total_empenhado 
+    // que soma tudo (acumulado). 
     return t.commitment_id
       ? t.commitment_id.startsWith(year.toString())
       : new Date(t.date).getFullYear() === year;
@@ -162,9 +169,16 @@ export class DashboardService {
     );
 
     return this.contractService.contracts().filter(c => {
-      const start = c.data_inicio;
-      const end = c.data_fim_efetiva || c.data_fim;
-      return (start <= fimAno && end >= inicioAno) || paidThisYear.has(c.id);
+      if (!c.data_inicio) return false;
+      const start = new Date(c.data_inicio);
+      const end = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
+      
+      const isActiveInYear = start <= fimAno && end >= inicioAno;
+      const hasPaymentsThisYear = paidThisYear.has(c.id);
+      
+      const hasGlobalRAP = (Number(c.total_empenhado) || 0) - (Number(c.total_pago) || 0) > 0.01;
+      
+      return isActiveInYear || hasPaymentsThisYear || (hasGlobalRAP && start <= fimAno);
     });
   });
 
@@ -269,16 +283,34 @@ export class DashboardService {
 
   readonly totalCommittedValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.contractService.contracts()
-      .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
-      .reduce((acc, c) => acc + (Number(c.total_empenhado) || 0), 0);
+    const activeContractIds = new Set(this.filteredContracts().map(c => c.id));
+    const trans = this.financialService.transactions().filter(t => activeContractIds.has(t.contract_id));
+    
+    let total = 0;
+    trans.forEach(t => {
+      const tYear = new Date(t.date).getFullYear();
+      if (tYear < year) {
+        if (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT) total += t.amount;
+        if (t.type === TransactionType.CANCELLATION || t.type === TransactionType.LIQUIDATION) total -= t.amount;
+      } else if (tYear === year) {
+        if (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT) total += t.amount;
+        if (t.type === TransactionType.CANCELLATION) total -= t.amount;
+      }
+    });
+    return Math.max(0, total);
   });
 
   readonly totalPaidValue = computed(() => {
     const year = this.appContext.anoExercicio();
-    return this.contractService.contracts()
-      .filter(c => c.data_inicio && new Date(c.data_inicio).getFullYear() <= year)
-      .reduce((acc, c) => acc + (Number(c.total_pago) || 0), 0);
+    const activeContractIds = new Set(this.filteredContracts().map(c => c.id));
+    const trans = this.financialService.transactions().filter(t => activeContractIds.has(t.contract_id));
+    
+    let total = 0;
+    trans.forEach(t => {
+      const tYear = new Date(t.date).getFullYear();
+      if (tYear === year && t.type === TransactionType.LIQUIDATION) total += t.amount;
+    });
+    return total;
   });
 
   readonly totalBalanceToPay = computed(() => Math.max(0, this.totalCommittedValue() - this.totalPaidValue()));

@@ -352,35 +352,66 @@ export class ContractDetailsPageComponent {
     if (!c || c.tipo !== 'serviço') return rows;
     if (rows.length === 0) return rows;
     const selectedYear = this.appContext.anoExercicio();
-    return rows.filter(r => {
-      if (!r.date) return true;
+    
+    const neBalancesAtStartOfYear = new Map<string, number>();
+    const currentYearRows: NesPagamentoRow[] = [];
+
+    rows.forEach(r => {
+      if (!r.date || !r.ne) return;
       const year = parseInt(r.date.substring(0, 4), 10);
-      if (isNaN(year)) return true;
-      return year === selectedYear;
+      if (isNaN(year)) return;
+
+      if (year < selectedYear) {
+        const current = neBalancesAtStartOfYear.get(r.ne) || 0;
+        if (r.tipo === 'EMPENHO' || r.tipo === 'REFORCO') {
+          neBalancesAtStartOfYear.set(r.ne, current + r.amount);
+        } else if (r.tipo === 'ANULACAO' || (r.tipo === 'PAGAMENTO' && r.obNumber)) {
+          neBalancesAtStartOfYear.set(r.ne, current - r.amount);
+        }
+      } else if (year === selectedYear) {
+        currentYearRows.push(r);
+      }
     });
+
+    const rapRows: NesPagamentoRow[] = [];
+    neBalancesAtStartOfYear.forEach((balance, ne) => {
+      if (balance > 0.01) { // Evita sobras de ponto flutuante
+        rapRows.push({
+          ne: ne,
+          date: `${selectedYear}-01-01T00:00:00Z`,
+          tipo: 'EMPENHO',
+          amount: balance,
+          ug: '',
+          ugLabel: 'Saldo Remanescente (RAP) do exercício anterior',
+          dotacao: 'RAP',
+          obNumber: ''
+        });
+      }
+    });
+
+    // Retorna os RAPs seguidos pelas movimentações do ano atual
+    return [...rapRows, ...currentYearRows];
   });
 
   lastSyncDate = signal<Date | null>(new Date());
   
   sigefLastSync = signal<Map<string, Date>>(new Map());
 
-  // Calcula total engajado das dotações do contrato filtrado pelo ano selecionado
+  // Calcula total engajado das dotações do contrato filtrado pelo ano selecionado (incluindo RAP)
   budgetSummary = computed(() => {
     const selectedYear = this.appContext.anoExercicio();
     const allBudgets = this.budgets();
     
-    const filteredBudgets = allBudgets.filter(b => {
-      const budgetDate = new Date(b.data_disponibilidade);
-      return budgetDate.getFullYear() === selectedYear;
-    });
+    // Para as dotações, o conceito de RAP é um pouco mais complexo se olharmos apenas a data_disponibilidade.
+    // Usaremos as transações consolidadas em nesPagamentos para ter o valor exato do ano atual + RAP.
+    // Assim, mantemos coerência com os cards de Total Empenhado e Saldo a Pagar.
+    const progress = this.paymentProgress();
     
-    const totalEmpenhado = filteredBudgets.reduce((sum, b) => sum + ((b.total_empenhado || 0) - (b.total_cancelado || 0)), 0);
-    const totalPago = filteredBudgets.reduce((sum, b) => sum + (b.total_pago || 0), 0);
-    const saldoDisponivel = filteredBudgets.reduce((sum, b) => sum + (b.saldo_disponivel || 0), 0);
-    
-    console.log('[DEBUG] budgetSummary - year:', selectedYear, 'Budgets:', filteredBudgets.length, 'totalEmpenhado:', totalEmpenhado);
-    
-    return { totalEmpenhado, totalPago, saldoDisponivel };
+    return { 
+      totalEmpenhado: progress.totalEmpenhado, 
+      totalPago: progress.totalPago, 
+      saldoDisponivel: progress.totalEmpenhado - progress.totalPago 
+    };
   });
 
   paymentProgress = computed(() => {
@@ -403,30 +434,11 @@ export class ContractDetailsPageComponent {
   });
 
   financialSummary = computed(() => {
-    const selectedYear = this.appContext.anoExercicio();
-    const trans = this.transactions();
-
-    const transFilteredByYear = trans.filter(t => {
-      const txDate = new Date(t.date);
-      return !isNaN(txDate.getTime()) && txDate.getFullYear() === selectedYear;
-    });
-
-    const totalPaid = transFilteredByYear
-      .filter(t => t.type === 'LIQUIDATION')
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const totalCommitted = transFilteredByYear
-      .reduce((sum, t) => {
-        if (t.type === 'COMMITMENT' || t.type === 'REINFORCEMENT') {
-          return sum + t.amount;
-        }
-        if (t.type === 'CANCELLATION') {
-          return sum - t.amount;
-        }
-        return sum;
-      }, 0);
-
-    return { totalPaid, totalCommitted };
+    const progress = this.paymentProgress();
+    return { 
+      totalPaid: progress.totalPago, 
+      totalCommitted: progress.totalEmpenhado 
+    };
   });
 
   // Helpers for Template

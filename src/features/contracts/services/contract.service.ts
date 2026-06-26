@@ -311,8 +311,8 @@ export class ContractService {
     if (raw.dotacoes && Array.isArray(raw.dotacoes)) {
       raw.dotacoes.forEach((d: any) => {
         // SOMA SEM FILTRO DE ANO - estes são totais acumulados históricos
-        // total_empenhado já vem com cancelamentos deduzidos (escrito por syncSigefTransactions)
-        totalEmpenhado += Number(d.total_empenhado) || 0;
+        // total_empenhado é bruto, então deduzimos total_cancelado para obter o valor líquido
+        totalEmpenhado += (Number(d.total_empenhado) || 0) - (Number(d.total_cancelado) || 0);
         totalCancelado += Number(d.total_cancelado) || 0;
         totalPago += Number(d.total_pago) || 0;
         

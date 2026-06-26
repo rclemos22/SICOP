@@ -266,7 +266,11 @@ E no `_isPeriodComplete`, considerar o período como "completo" apenas se `fim >
 | `sync-history.service.ts` | **NOVO** — Log persistente de sync em localStorage (max 1000 entradas) |
 | `dashboard-refresh-scheduler.service.ts` | **NOVO** — Refresh silencioso dos cards do dashboard a cada 20min |
 | `sigef-sync-page.component.ts` | **NOVO** — Página dedicada de sincronização com fila de tasks e histórico |
+| `sigef-sync-page.component.ts` | **Alterar** — Adicionado botão "Limpar Cache" que chama `applyFixToAllContracts()` (limpa cache + repopula do espelho) |
 | `financial.service.ts` | Dedup key `ne\|type\|amount` → `ne\|type\|docNum\|amount`; delete guardado por `hasLiquidations`; dotacoes update condicional |
+| `financial.service.ts` | **Alterar** — `syncSigefTransactions`: carrega OBs por UG (não mais global); `total_empenhado` passa a ser bruto (sem deduzir cancelamentos); `sigef_id` de cancelamentos inclui índice; dedup de upserts em memória |
+| `financial.service.ts` | **Alterar** — `getContractNesPagamentosDetalhados`: lê exclusivamente da tabela `transacoes` (não mais do cache) — dados mais rápidos e consistentes |
+| `sigef-mirror.service.ts` | **Alterar** — `hasNe`, `getNesByNumber`, `getObsByNe`, `getObByNumber`: busca UG com `in([raw, padded6])` para resolver inconsistência de zero-padding entre espelho e cache |
 | `sigef-bulk-sync.service.ts` | `_isPeriodComplete` substituído por `_isPeriodRecentlyComplete` (janela 1h); delays 300→2000ms; cooldown exponencial 30s-5min; NE/movimentos independentes |
 | `sigef-sync.service.ts` | `recentOnly` → `daysBack` (5/15/30/0); delays 300→2000ms; integração com `SyncHistoryService` |
 | `sigef.service.ts` | `getNotaEmpenhoByNumber` páginas 2-3 com catch (retorna null em vez de throw) |

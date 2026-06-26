@@ -38,6 +38,7 @@ Sistema web para gestão de contratos públicos com integração ao SIGEF (Siste
   - Ciclos automáticos desativados — nenhuma chamada à API oficial é feita em segundo plano
   - Circuit-breaker com cooldown exponencial (30s-5min) contra timeouts da API
   - Botão "Reconectar" no cabeçalho para renovar token de acesso
+  - **Limpar Cache**: Botão na página de sync que limpa o cache estruturado (`sigef_notas_empenho`, `sigef_ne_movimentos`, `sigef_ordens_bancarias`) e repopula a partir do espelho, sem chamar a API
 
 ## Campos do Contrato
 
@@ -121,7 +122,7 @@ src/
 ├── core/services/       # Serviços (SIGEF, Supabase, Context)
 │   ├── sigef.service.ts          # API SIGEF (chamadas, retry, backoff, fila serial)
 │   ├── sigef-cache.service.ts    # Cache local (sigef_ne_movimentos, sigef_ordens_bancarias)
-│   ├── sigef-mirror.service.ts   # Espelho bruto da API (import_sigef_*)
+│   ├── sigef-mirror.service.ts   # Espelho bruto da API (import_sigef_*) — busca UG com/sem zero-padding
 │   ├── sigef-bulk-sync.service.ts # Download bulk com anti-flood e cooldown
 │   ├── sigef-sync.service.ts     # Orquestração mirror → cache → signals
 │   ├── sigef-scheduler.service.ts # Sincronização manual (ciclos automáticos desativados)
@@ -179,7 +180,7 @@ src/
 | 09 | `09_LIMPEZA_MIRROR_CACHE_ORFAOS.sql` | Remove do mirror/cache todas as NE/OB não vinculadas a contratos cadastrados; reseta sync_periods |
 | 10 | `10_CORRIGIR_PAGAMENTOS_CONTRATO_014_2026.sql` | Corrige pagamentos incorretos do contrato 014/2026: remove OBs órfãs, recalcula totais |
 | 11 | `11_LIMPEZA_TOTAL_PAGAMENTOS.sql` | Remove TODOS os pagamentos (OB/LIQUIDATION) de todos os contratos para recarga limpa via SIGEF |
-| 12 | `12_SANITIZACAO_COMPLETA_SIGEF.sql` | Remove COMPLETAMENTE mirror, cache e transacoes do SIGEF; zera totais; diagnóstico de dotações orfãs |
+| 12 | `12_SANITIZACAO_COMPLETA_SIGEF.sql` | Remove COMPLETAMENTE mirror, cache e transacoes do SIGEF; zera totais (exceto `total_cancelado`); diagnóstico de dotações orfãs |
 
 ### Tabela `aditivos`
 

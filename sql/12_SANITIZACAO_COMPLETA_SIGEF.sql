@@ -154,7 +154,6 @@ SET
 UPDATE public.contratos
 SET
   total_empenhado = 0,
-  total_cancelado = 0,
   total_pago = 0,
   saldo_a_pagar = 0,
   data_ultimo_pagamento = NULL,
