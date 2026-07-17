@@ -117,12 +117,15 @@
       <!-- Key Metrics Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         
-        <!-- Total Value -->
+        <!-- Total Value (inclui aditivos de valor) -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Valor Global</span>
           <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-            {{ c.valor_anual | currency:'BRL':'symbol':'1.2-2' }}
+            {{ (c.valor_global_atualizado || c.valor_anual) | currency:'BRL':'symbol':'1.2-2' }}
           </div>
+          @if (c.valor_global_atualizado && c.valor_global_atualizado !== c.valor_anual) {
+            <p class="text-[10px] text-blue-500 mt-1">Original: {{ c.valor_anual | currency:'BRL':'symbol':'1.2-2' }} + {{ c.total_aditivos_valor | currency:'BRL':'symbol':'1.2-2' }} em aditivos</p>
+          }
           <div class="h-1 w-full bg-blue-100 dark:bg-blue-900/30 rounded-full mt-2">
             <div class="h-1 bg-sco-blue rounded-full w-full"></div>
           </div>

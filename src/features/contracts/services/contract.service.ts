@@ -3,7 +3,6 @@ import { AppContextService } from '../../../core/services/app-context.service';
 
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
-import { Dotacao } from '../../../shared/models/budget.model';
 import {
   Contract, ContractStatus, Aditivo
 } from '../../../shared/models/contract.model';
@@ -61,8 +60,7 @@ export class ContractService {
         .select(`
           *,
           fornecedores:fornecedor_id(razao_social),
-          setores:setor_id(nome),
-          dotacoes(*)
+          setores:setor_id(nome)
         `)
         .neq('status', 'EXCLUIDO');
 
@@ -301,37 +299,12 @@ export class ContractService {
   private mapRawToContract(raw: any, aditivos: Aditivo[] = [], selectedYear?: number): Contract {
     const dataFimOriginal = this.parseDate(raw.data_fim);
 
-    // Agregar valores das dotações (TODAS as dotações, sem filtro de ano)
-    // total_empenhado e total_pago são totais históricos ACUMULADOS, não filtrados por ano
-    let totalEmpenhado = 0;
-    let totalCancelado = 0;
-    let totalPago = 0;
-    let dataUltimoPagamento: Date | undefined = undefined;
-
-    if (raw.dotacoes && Array.isArray(raw.dotacoes)) {
-      raw.dotacoes.forEach((d: any) => {
-        // SOMA SEM FILTRO DE ANO - estes são totais acumulados históricos
-        // total_empenhado é bruto, então deduzimos total_cancelado para obter o valor líquido
-        totalEmpenhado += (Number(d.total_empenhado) || 0) - (Number(d.total_cancelado) || 0);
-        totalCancelado += Number(d.total_cancelado) || 0;
-        totalPago += Number(d.total_pago) || 0;
-        
-        const upDate = d.updated_at || d.data_ultimo_pagamento;
-        if (upDate) {
-          const up = new Date(upDate);
-          if (!dataUltimoPagamento || up > dataUltimoPagamento) {
-            dataUltimoPagamento = up;
-          }
-        }
-      });
-    }
-
-    // Fallback: se não houver dotações agregadas, usar os totais calculados da tabela contratos
-    if (!raw.dotacoes || !Array.isArray(raw.dotacoes) || raw.dotacoes.length === 0) {
-      totalEmpenhado = Number(raw.total_empenhado) || 0;
-      totalPago = Number(raw.total_pago) || 0;
-      totalCancelado = 0;
-    }
+    // Totais financeiros lidos exclusivamente da tabela contratos (fonte canônica)
+    // Populados pelo FinancialService.updateContractTotals() a partir das transações
+    const totalEmpenhado = Number(raw.total_empenhado) || 0;
+    const totalCancelado = Number(raw.total_cancelado) || 0;
+    const totalPago = Number(raw.total_pago) || 0;
+    const dataUltimoPagamento = raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined;
     
     // Filtrar aditivos que alteram vigência (Prorrogação/Prazo)
     const aditivosComVigencia = aditivos
@@ -437,7 +410,7 @@ export class ContractService {
       total_cancelado: totalCancelado,
       total_pago: totalPago,
       saldo_a_pagar: Math.max(0, totalEmpenhado - totalPago),
-      data_ultimo_pagamento: dataUltimoPagamento || (raw.data_ultimo_pagamento ? this.parseDate(raw.data_ultimo_pagamento) : undefined),
+      data_ultimo_pagamento: dataUltimoPagamento,
       valor_mensal: valorMensalEfetivo,
       valor_mensal_original: valorMensalOriginal,
       valor_global_atualizado: valorGlobalAtualizado,

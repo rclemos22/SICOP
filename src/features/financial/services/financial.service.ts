@@ -57,8 +57,6 @@ export class FinancialService {
         this.supabaseService.client
           .from('transacoes')
           .select('*, contratos!contract_id(id, contrato)')
-          .not('commitment_id', 'is', null)
-          .neq('commitment_id', '')
           .order('date', { ascending: false }),
         this.supabaseService.client
           .from('vw_saldo_dotacoes')
@@ -95,7 +93,7 @@ export class FinancialService {
       }
 
       // 1. Mapear e filtrar dados inválidos
-      const transactions = (data || [])
+      let transactions = (data || [])
         .filter(raw => {
           if (!raw.date || isNaN(new Date(raw.date).getTime())) return false;
           if (isNaN(Number(raw.amount)) || Number(raw.amount) <= 0) return false;
@@ -150,6 +148,14 @@ export class FinancialService {
             t.contract_number = contratoInfo.contrato;
           }
         }
+      }
+
+      // 5. Filtrar apenas transações vinculadas a contratos cadastrados
+      const validContractIds = new Set((contratosResult.data || []).map((c: any) => c.id));
+      const before = transactions.length;
+      transactions = transactions.filter(t => t.contract_id && validContractIds.has(t.contract_id));
+      if (before !== transactions.length) {
+        this.debug.sync(`[loadAllTransactions] Removidas ${before - transactions.length} transações sem vínculo contratual`);
       }
 
       this._transactions.set(transactions);
@@ -816,40 +822,6 @@ export class FinancialService {
               .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%');
           }
 
-          // Remove duplicatas em memória antes de calcular os totais
-          const uniqueUpsertsMap = new Map();
-          for (const t of transactionsToUpsert) {
-            uniqueUpsertsMap.set(t.sigef_id, t);
-          }
-          const uniqueUpserts = Array.from(uniqueUpsertsMap.values());
-
-          // Atualiza dotação com totais — só altera campos com dados no upsert
-          // para não zerar valores de sincronizações anteriores
-          const totalCom = uniqueUpserts
-            .filter(t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT)
-            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
-          const totalCan = uniqueUpserts
-            .filter(t => t.type === TransactionType.CANCELLATION)
-            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
-          const totalPag = uniqueUpserts
-            .filter(t => t.type === TransactionType.LIQUIDATION)
-            .reduce((s: number, t: any) => s + (t.amount || 0), 0);
-
-          // total_empenhado = COMMITMENT + REINFORCEMENT (valor bruto)
-          const totalEmpenhadoLiquido = Math.max(0, totalCom - totalCan);
-
-          const updateData: Record<string, number> = {};
-          if (totalCom > 0) updateData.total_empenhado = totalCom;
-          if (totalCan > 0) updateData.total_cancelado = totalCan;
-          if (totalPag > 0) updateData.total_pago = totalPag;
-
-          if (Object.keys(updateData).length > 0) {
-            updateData.saldo_disponivel = Math.max(0, (budget.valor_dotacao || 0) - totalEmpenhadoLiquido);
-            await this.supabaseService.client
-              .from('dotacoes')
-              .update(updateData)
-              .eq('id', budget.id);
-          }
         }
       } catch (err: any) {
         const msg = `NE ${neValue}: ${err.message || 'Erro desconhecido'}`;
@@ -863,6 +835,10 @@ export class FinancialService {
     }
 
     await this.updateContractTotals(contractId);
+
+    // Recarregar sinais para refletir totais atualizados
+    await this.contractService.loadContracts(undefined, true);
+    await this.loadAllTransactions(true);
   }
 
   async getContractNesPagamentosDetalhados(contractId: string): Promise<NesPagamentoRow[]> {
@@ -929,25 +905,49 @@ export class FinancialService {
     });
   }
 
-  private async updateContractTotals(contractId: string): Promise<void> {
+  async updateContractTotals(contractId: string): Promise<void> {
     try {
-      // Lê da tabela transacoes (fonte de verdade para os lançamentos)
       const { data: trans } = await this.supabaseService.client
         .from('transacoes')
-        .select('type, amount, date')
+        .select('type, amount, date, commitment_id')
         .eq('contract_id', contractId);
+
+      // Carregar dotações para mapear commitment_id (NE) -> dotacao_id
+      const budgetResult = await this.budgetService.getBudgetsByContractId(contractId);
+      const budgets = budgetResult.data || [];
+      const neToDotacaoId = new Map<string, string>();
+      for (const b of budgets) {
+        if (b.nunotaempenho) neToDotacaoId.set(b.nunotaempenho.trim(), b.id);
+      }
 
       let totalEmpenhado = 0;
       let totalPago = 0;
+      const dotacaoTotals = new Map<string, { empenhado: number; cancelado: number; pago: number }>();
 
       for (const t of trans || []) {
         const amt = Math.abs(Number(t.amount) || 0);
+        const dotacaoId = neToDotacaoId.get((t.commitment_id || '').trim()) || undefined;
         if (t.type === 'COMMITMENT' || t.type === 'REINFORCEMENT') {
           totalEmpenhado += amt;
+          if (dotacaoId) {
+            const curr = dotacaoTotals.get(dotacaoId) || { empenhado: 0, cancelado: 0, pago: 0 };
+            curr.empenhado += amt;
+            dotacaoTotals.set(dotacaoId, curr);
+          }
         } else if (t.type === 'CANCELLATION') {
           totalEmpenhado = Math.max(0, totalEmpenhado - amt);
+          if (dotacaoId) {
+            const curr = dotacaoTotals.get(dotacaoId) || { empenhado: 0, cancelado: 0, pago: 0 };
+            curr.cancelado += amt;
+            dotacaoTotals.set(dotacaoId, curr);
+          }
         } else if (t.type === 'LIQUIDATION') {
           totalPago += amt;
+          if (dotacaoId) {
+            const curr = dotacaoTotals.get(dotacaoId) || { empenhado: 0, cancelado: 0, pago: 0 };
+            curr.pago += amt;
+            dotacaoTotals.set(dotacaoId, curr);
+          }
         }
       }
 
@@ -957,6 +957,7 @@ export class FinancialService {
         .filter(t => t.type === 'LIQUIDATION')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
+      // Atualizar contratos
       await this.supabaseService.client
         .from('contratos')
         .update({
@@ -966,6 +967,19 @@ export class FinancialService {
           data_ultimo_pagamento: lastPay?.date || null
         })
         .eq('id', contractId);
+
+      // Atualizar dotações individuais (consistência com o contrato)
+      for (const [dotacaoId, totals] of dotacaoTotals) {
+        const empenhadoLiquido = Math.max(0, totals.empenhado - totals.cancelado);
+        await this.supabaseService.client
+          .from('dotacoes')
+          .update({
+            total_empenhado: empenhadoLiquido,
+            total_cancelado: totals.cancelado,
+            total_pago: totals.pago,
+          })
+          .eq('id', dotacaoId);
+      }
 
     } catch (err) {
       console.error('[FinancialService] Erro ao atualizar totais do contrato:', contractId, err);

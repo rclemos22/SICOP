@@ -105,10 +105,11 @@ export class DashboardService {
 
   private _isFirstLoad = true;
 
-  /** Exibe loading apenas na primeira carga. Refreshes silenciosos não piscam a tela. */
+  readonly isRefreshing = signal(false);
+
   readonly isLoading = computed(() => this._isFirstLoad && (this.contractService.loading() || this.budgetService.loading() || this.financialService.loading()));
 
-  readonly hasError = computed(() => this.contractService.error() || this.budgetService.error());
+  readonly hasError = computed(() => this.contractService.error() || this.budgetService.error() || this.financialService.error());
 
   // ── Sync Status ────────────────────────────────────────────────────────
 
@@ -282,35 +283,17 @@ export class DashboardService {
   );
 
   readonly totalCommittedValue = computed(() => {
-    const year = this.appContext.anoExercicio();
-    const activeContractIds = new Set(this.filteredContracts().map(c => c.id));
-    const trans = this.financialService.transactions().filter(t => activeContractIds.has(t.contract_id));
-    
-    let total = 0;
-    trans.forEach(t => {
-      const tYear = new Date(t.date).getFullYear();
-      if (tYear < year) {
-        if (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT) total += t.amount;
-        if (t.type === TransactionType.CANCELLATION || t.type === TransactionType.LIQUIDATION) total -= t.amount;
-      } else if (tYear === year) {
-        if (t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT) total += t.amount;
-        if (t.type === TransactionType.CANCELLATION) total -= t.amount;
-      }
-    });
-    return Math.max(0, total);
+    const active = this.filteredContracts().filter(
+      c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO
+    );
+    return active.reduce((acc, c) => acc + (c.total_empenhado || 0), 0);
   });
 
   readonly totalPaidValue = computed(() => {
-    const year = this.appContext.anoExercicio();
-    const activeContractIds = new Set(this.filteredContracts().map(c => c.id));
-    const trans = this.financialService.transactions().filter(t => activeContractIds.has(t.contract_id));
-    
-    let total = 0;
-    trans.forEach(t => {
-      const tYear = new Date(t.date).getFullYear();
-      if (tYear === year && t.type === TransactionType.LIQUIDATION) total += t.amount;
-    });
-    return total;
+    const active = this.filteredContracts().filter(
+      c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO
+    );
+    return active.reduce((acc, c) => acc + (c.total_pago || 0), 0);
   });
 
   readonly totalBalanceToPay = computed(() => Math.max(0, this.totalCommittedValue() - this.totalPaidValue()));
@@ -466,8 +449,8 @@ export class DashboardService {
     this._isFirstLoad = false;
   }
 
-  /** Refresh silencioso: atualiza dados sem piscar a tela (não toca loading state) */
   async refreshAllData(): Promise<void> {
+    this.isRefreshing.set(true);
     const year = this.appContext.anoExercicio();
     await Promise.all([
       this.contractService.loadContracts(undefined, true),
@@ -475,6 +458,7 @@ export class DashboardService {
       this.financialService.loadAllTransactions(true),
       this.loadRecentPayments(year),
     ]);
+    this.isRefreshing.set(false);
   }
 
   async loadRecentPayments(year: number): Promise<void> {
@@ -484,8 +468,14 @@ export class DashboardService {
       .gte('data_pagamento', `${year}-01-01`)
       .lte('data_pagamento', `${year}-12-31`)
       .order('data_pagamento', { ascending: false })
-      .limit(10);
-    if (!error) this.recentPaymentsList.set((data || []) as RecentPayment[]);
+      .limit(20);
+    if (!error) {
+      const contractNumbers = new Set(this.contractService.contracts().map(c => c.contrato));
+      const filtered = (data || []).filter(
+        (r: any) => r.contrato && contractNumbers.has(r.contrato)
+      );
+      this.recentPaymentsList.set(filtered as RecentPayment[]);
+    }
   }
 
   // ── Sync ──────────────────────────────────────────────────────────────

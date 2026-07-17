@@ -24,18 +24,7 @@ import { FinancialService, NesPagamentoRow } from '../../../financial/services/f
 import { AditivoFormComponent } from '../../components/aditivo-form/aditivo-form.component';
 import { ContractService } from '../../services/contract.service';
 
-interface PaymentSchedule {
-  monthLabel: string;
-  reference: string; // YYYY-MM
-  date: Date;
-  valor: number;
-  daysUntil: number;
-  isPast: boolean;
-  status: 'PAID' | 'OPEN' | 'OVERDUE';
-  linkedTransactions: Transaction[];
-  totalPago: number;
-  paidAt?: Date;
-}
+import { PaymentSchedule } from '../../../../shared/models/payment-schedule.model';
 
 @Component({
   selector: 'app-contract-details-page',
@@ -505,11 +494,8 @@ export class ContractDetailsPageComponent {
       }
     });
 
-    // Auto-refresh a cada 5 minutos: busca apenas atualizações dos últimos 15 dias
-    // para não consumir a API oficial com varreduras desnecessárias.
-    // Ignora se houver qualquer sincronização em andamento (navegação, botão manual).
     this.autoRefreshInterval = setInterval(() => {
-      if (this.sigefSyncService.isSyncing()) return;
+      if (this.sigefSyncService.isSyncing() || this.isUpdatingLancamentos()) return;
       this.refreshSigefData(15);
     }, 5 * 60 * 1000);
   }
@@ -1234,16 +1220,12 @@ export class ContractDetailsPageComponent {
     if (!confirm('Deseja remover a marcação de pago desta parcela?')) return;
 
     try {
-      console.log('[ContractDetails] Desmarcar pagamento:', installment.reference);
       const c = this.contract();
       if (!c) throw new Error('Contrato não encontrado');
 
       const parcelasAtuais = c.parcelas_pagas_manual || [];
       const novasParcelas = parcelasAtuais.filter(ref => ref !== installment.reference);
-      
-      console.log('[ContractDetails] Atualizando banco. Novas parcelas:', novasParcelas);
-      
-      // Atualização Otimista
+
       this.contractService.updateContractInSignal(c.id, { parcelas_pagas_manual: novasParcelas });
 
       const { error } = await this.supabaseService.client
@@ -1256,7 +1238,12 @@ export class ContractDetailsPageComponent {
         throw error;
       }
 
-      console.log('[ContractDetails] Sucesso no banco. Sincronizando dados...');
+      await this.supabaseService.client
+        .from('transacoes')
+        .delete()
+        .eq('sigef_id', `manual-pay-${c.id}-${installment.reference}`);
+
+      await this.financialService.updateContractTotals(c.id);
       await this.contractService.loadContracts(undefined, true);
 
     } catch (err: any) {
@@ -1272,14 +1259,10 @@ export class ContractDetailsPageComponent {
       const c = this.contract();
       if (!c) throw new Error('Contrato não encontrado');
 
-      // Adicionar referência da parcela ao array de pagas manualmente
       const parcelasAtuais = c.parcelas_pagas_manual || [];
       if (!parcelasAtuais.includes(installment.reference)) {
         const novasParcelas = [...parcelasAtuais, installment.reference];
-        
-        console.log('[ContractDetails] Atualizando banco. Novas parcelas:', novasParcelas);
-        
-        // Atualização Otimista: Muda o sinal imediatamente para resposta visual instantânea
+
         this.contractService.updateContractInSignal(c.id, { parcelas_pagas_manual: novasParcelas });
 
         const { error } = await this.supabaseService.client
@@ -1288,12 +1271,29 @@ export class ContractDetailsPageComponent {
           .eq('id', c.id);
 
         if (error) {
-          // Reverter em caso de erro
           this.contractService.updateContractInSignal(c.id, { parcelas_pagas_manual: parcelasAtuais });
           throw error;
         }
 
-        console.log('[ContractDetails] Sucesso no banco. Sincronizando dados...');
+        await this.supabaseService.client
+          .from('transacoes')
+          .insert({
+            contract_id: c.id,
+            sigef_id: `manual-pay-${c.id}-${installment.reference}`,
+            description: `PAGAMENTO MANUAL - ${installment.reference}`,
+            commitment_id: '',
+            date: new Date().toISOString().split('T')[0],
+            type: TransactionType.LIQUIDATION,
+            amount: installment.valor,
+            department: 'Pagamento Manual',
+            budget_description: 'Pagamento Manual',
+            parcela_referencia: installment.reference,
+            ob_number: 'MANUAL',
+            document_number: `MANUAL-${installment.reference}`,
+            manual_payment: true,
+          });
+
+        await this.financialService.updateContractTotals(c.id);
         await this.contractService.loadContracts(undefined, true);
       }
     } catch (err: any) {
