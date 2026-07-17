@@ -88,8 +88,8 @@
       </div>
     }
 
-    <!-- Novo Valor Mensal e Data Início (Apenas para Serviços, oculto para Mudança de Razão Social) -->
-    @if (contractTipo() === 'serviço' && !isMudancaRazaoSocial()) {
+    <!-- Novo Valor Mensal e Data Início (Apenas para Serviços, oculto para Mudança de Razão Social e Aditivo Prazo) -->
+    @if (contractTipo() === 'serviço' && !isMudancaRazaoSocial() && !isAditivoPrazoOnly()) {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30 animate-in fade-in slide-in-from-top-2 duration-300">
         <div>
           <label class="block text-xs font-bold text-blue-700 dark:text-blue-400 uppercase mb-1">Novo Valor Mensal (R$)</label>

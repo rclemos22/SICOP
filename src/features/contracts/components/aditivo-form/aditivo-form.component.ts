@@ -142,6 +142,16 @@ export class AditivoFormComponent implements OnInit {
     return tipoNome.includes('PRAZO') || tipoNome.includes('PRORROGACAO');
   }
 
+  isAditivoPrazoOnly(): boolean {
+    const tipo_id = this.aditivoForm.get('tipo_id')?.value;
+    if (!tipo_id) return false;
+    const selectedTipo = this.tiposAditivo().find(t => t.id === tipo_id);
+    const tipoNome = selectedTipo?.nome || '';
+    const isPrazo = tipoNome.includes('PRAZO') || tipoNome.includes('PRORROGACAO');
+    const isValor = tipoNome.includes('VALOR');
+    return isPrazo && !isValor;
+  }
+
   isMudancaRazaoSocial(): boolean {
     const tipo_id = this.aditivoForm.get('tipo_id')?.value;
     if (!tipo_id) return false;
