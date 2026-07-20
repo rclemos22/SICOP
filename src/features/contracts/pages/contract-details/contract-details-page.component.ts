@@ -235,9 +235,8 @@ export class ContractDetailsPageComponent {
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
 
       const isManualPaid = c.parcelas_pagas_manual?.includes(reference);
-      const hasSigefPayment = matches.some(t => !!t.sigef_id && !t.manual_payment);
 
-      if (isManualPaid || hasSigefPayment) {
+      if (isManualPaid) {
         status = 'PAID';
       } else if (isPast) {
         status = 'OVERDUE';
@@ -246,12 +245,6 @@ export class ContractDetailsPageComponent {
       let paidAt: Date | undefined;
       if (isManualPaid) {
         paidAt = new Date();
-      } else if (hasSigefPayment) {
-        const paidTransactions = matches.filter(t => !!t.sigef_id && !t.manual_payment);
-        paidTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        if (paidTransactions.length > 0) {
-          paidAt = new Date(paidTransactions[0].date);
-        }
       }
 
       payments.push({
@@ -263,7 +256,7 @@ export class ContractDetailsPageComponent {
         isPast,
         status,
         isManualPayment: isManualPaid,
-        isSigefPayment: hasSigefPayment,
+        isSigefPayment: false,
         linkedTransactions: matches,
         totalPago: matches.reduce((acc, t) => acc + (t.amount || 0), 0),
         paidAt

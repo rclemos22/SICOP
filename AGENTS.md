@@ -54,3 +54,17 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - `dashboard.service.ts:394-396` — `isPaid` no dashboard não tinha fallback por `payment_month` ou `date` da transação (diferente do contrato detalhes que usa fallback nas linhas 225-231).
 - **Caso concreto**: Contrato 135/2021 com LIQUIDATION em 16/06/2026 aparecia como atrasado na dash porque `parcela_referencia=null` e não havia fallback.
 - Fix: adicionado fallback `payment_month` e extração mês/ano da `date` (mesma lógica do contrato detalhes).
+
+### 8. Botão "Desmarcar Pagamento" não funcionava
+- `contract-details-page.component.ts` — `unmarkInstallmentAsPaid` não recarregava `dbTransactions` após deletar a transação manual, então o `paymentSchedule` computado continuava vendo a transação deletada no cache do sinal.
+- Fix: adicionado `await this.loadTransactions(c.id)` após `loadContracts` no `confirmUnmarkInstallment`.
+
+### 9. "Desmarcar" aparecia para pagamentos via SIGEF (não só manuais)
+- O `@if (p.status !== 'PAID')` mostrava o botão "Desmarcar" para TODAS as parcelas com status PAID, mesmo quando o pagamento era de origem SIGEF (não manual).
+- `hasSigefPayment` no `paymentSchedule` computado não distinguia entre transações manuais (`manual_payment: true`) e SIGEF — qualquer LIQUIDATION com `sigef_id` não nulo contava como pagamento SIGEF, incluindo a manual.
+- Fix: `hasSigefPayment` agora filtra `!t.manual_payment`; adicionados flags `isManualPayment`/`isSigefPayment` ao `PaymentSchedule`. Template usa `@else if (p.isManualPayment)` para exibir o botão "Desmarcar".
+- `contract-details-page.component.html` — quando `p.isSigefPayment && !p.isManualPayment`, exibe badge "Pago via SIGEF" no lugar do botão.
+
+### 10. `confirm()` nativo substituído por modal estilizado
+- `unmarkInstallmentAsPaid` usava `confirm()` nativo do navegador, destoando do visual do sistema.
+- Criado modal de confirmação `isUnmarkConfirmModalOpen` com ícone undo, cores vermelhas, e texto explicativo, seguindo o mesmo padrão do modal "Marcar como Pago".
