@@ -68,3 +68,18 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 ### 10. `confirm()` nativo substituído por modal estilizado
 - `unmarkInstallmentAsPaid` usava `confirm()` nativo do navegador, destoando do visual do sistema.
 - Criado modal de confirmação `isUnmarkConfirmModalOpen` com ícone undo, cores vermelhas, e texto explicativo, seguindo o mesmo padrão do modal "Marcar como Pago".
+
+### 11. Desativada consideração de transações SIGEF no cronograma de pagamentos
+- `paymentSchedule` no contract-details considerava LIQUIDATION transactions (`hasSigefPayment`) para marcar parcelas como PAID.
+- Removida `hasSigefPayment` do cálculo de status — agora apenas `parcelas_pagas_manual` define PAID.
+- `isSigefPayment` nos objetos de parcela sempre `false`; template não mostra mais badge "Pago via SIGEF".
+- DB: removidos "2026-05" e "2026-06" de `parcelas_pagas_manual` em 17 contratos (maio/junho ainda não pagos).
+
+### 12. `overdueInstallments` no dashboard ignorava SIGEF
+- `dashboard.service.ts` — `overdueInstallments` usava `allTransactions.some(...)` para verificar LIQUIDATIONs por data, fazendo com que 101 transações SIGEF de Maio/Junho 2026 marcassem como pagas.
+- Fix: removido o check de transações; `isPaid` verifica apenas `parcelas_pagas_manual`.
+
+### 13. Card "Atas de Licitação" não aparecia
+- Template do dashboard só exibia o card quando `expiringCount > 0 || pendingAdesoesCount > 0`.
+- Com apenas 1 ATA ativa (018/2026, vigência até 2027-05-20) e 0 adesões pendentes, o card nunca aparecia.
+- Fix: adicionado `totalActive` ao `AtaAlertMetric`; `@if` agora também exibe o card quando `totalActive > 0`.
