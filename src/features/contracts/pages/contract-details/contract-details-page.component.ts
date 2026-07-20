@@ -1245,6 +1245,7 @@ export class ContractDetailsPageComponent {
 
       await this.financialService.updateContractTotals(c.id);
       await this.contractService.loadContracts(undefined, true);
+      await this.loadTransactions(c.id);
 
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao desmarcar pagamento:', err);
