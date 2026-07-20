@@ -339,7 +339,7 @@ export class DashboardService {
 
   readonly expiringContracts = computed(() =>
     this.filteredContracts()
-      .filter(c => c.status_efetivo === ContractStatus.FINALIZANDO)
+      .filter(c => c.tipo !== 'material' && c.status_efetivo === ContractStatus.FINALIZANDO)
       .sort((a, b) => (a.dias_restantes || 0) - (b.dias_restantes || 0))
   );
 
