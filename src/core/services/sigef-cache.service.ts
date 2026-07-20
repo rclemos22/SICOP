@@ -613,8 +613,8 @@ export class SigefCacheService {
 
   calcularValorEmpenhado(movimentos: SigefNeMovimento[]): number {
     return movimentos.reduce((total, m) => {
-      // Eventos 400010 (empenho) e 400011 (reforço) somam
-      if (m.cdevento === 400010 || m.cdevento === 400011) {
+      // Eventos 400010/400013 (empenho) e 400011 (reforço) somam
+      if (m.cdevento === 400010 || m.cdevento === 400013 || m.cdevento === 400011) {
         return total + (m.vlnotaempenho || 0);
       }
       // Evento 400012 (anulação) subtrai

@@ -32,12 +32,19 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - Removido `dotacao_id` de todos os payloads de upsert.
 - `updateContractTotals` agora usa `BudgetService` + `commitment_id` para mapear dotações.
 
+### 6. Evento 400013 ignorado como empenho original
+- Contrato 001/2026 (UG DPEMA) tinha NE 2026NE000853 com `cdevento=400013` no cache, mas `syncSigefTransactions` só reconhecia 400010/400011/400012.
+- `financial.service.ts:678` — filtro de commitment agora inclui `m.cdevento === 400013`.
+- `sigef-cache.service.ts:617` — `calcularValorEmpenhado` agora soma evento 400013.
+- Fix manual aplicado: transaction COMMITMENT inserida, totais do contrato e dotação corrigidos.
+- Após redeploy, sincronizações futuras do contrato serão processadas corretamente.
+
 ## Sync Result (Jul 2026)
 - 32 contratos sincronizados com transações reais (cache NE + OB).
-- Total empenhado global: R$ 6.515.941,98
+- Total empenhado global: R$ 6.690.801,98 (+174.860)
 - Total pago global: R$ 5.649.922,48
 - Saldo a pagar global: R$ 1.040.879,50
 - 1 contrato (124/2024) sem dotações com NE — não tem transações.
 
-## Known Issues
-- Contrato 001/2026: `total_empenhado=0` mas `total_pago=174.860` — dados de NE ausentes no cache.
+## Previously Known (now fixed)
+- ~~Contrato 001/2026: `total_empenhado=0` mas `total_pago=174.860` — dados de NE ausentes no cache.~~

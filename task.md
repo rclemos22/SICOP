@@ -165,6 +165,8 @@ O formulário também possui autocomplete de fornecedores que preenche automatic
 - Busca de OBs de anos posteriores ao ano da NE (pagamentos podem ser efetuados em anos seguintes)
 - Correção na consulta de OBs usando parâmetro `nuordembancaria` correto
 - Adição de logs de debug para facilitar troubleshooting
+- Evento 400013 agora é reconhecido como Empenho Original (antes só 400010/400011/400012)
+- `syncSigefTransactions` e `calcularValorEmpenhado` tratam 400013 como commitment
 
 ### Correções de Bugs
 - Correção de IDs duplicados em transações financeiras (uso de Map com IDs únicos)

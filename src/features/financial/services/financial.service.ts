@@ -375,7 +375,8 @@ export class FinancialService {
     const EVENTO_LABELS: Record<number, string> = {
       400010: 'Empenho Inicial',
       400011: 'Reforço de Empenho',
-      400012: 'Anulação de Empenho'
+      400012: 'Anulação de Empenho',
+      400013: 'Empenho Original'
     };
 
     for (const budget of validBudgets) {
@@ -673,9 +674,9 @@ export class FinancialService {
         const transactionsToUpsert: any[] = [];
 
         // ═══════════════════════════════════════════
-        // A1. COMMITMENT (Empenho Original 400010)
+        // A1. COMMITMENT (Empenho Original 400010 / 400013)
         // ═══════════════════════════════════════════
-        const originalMovs = movimentosCache.filter(m => m.cdevento === 400010);
+        const originalMovs = movimentosCache.filter(m => m.cdevento === 400010 || m.cdevento === 400013);
         for (const mov of originalMovs) {
           const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
           if (vl > 0) {
