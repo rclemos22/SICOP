@@ -10,6 +10,8 @@ export interface PaymentSchedule {
   daysUntil: number;
   isPast: boolean;
   status: InstallmentStatus;
+  isManualPayment: boolean;
+  isSigefPayment: boolean;
   linkedTransactions: Transaction[];
   totalPago: number;
   paidAt?: Date;

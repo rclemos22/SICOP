@@ -79,6 +79,7 @@ export class ContractDetailsPageComponent {
   isObjetoModalOpen = signal(false);
   isLinkObModalOpen = signal(false);
   isMarkAsPaidModalOpen = signal(false);
+  isUnmarkConfirmModalOpen = signal(false);
   
   editingAditivo = signal<Aditivo | null>(null);
   editingDotacao = signal<Dotacao | null>(null);
@@ -234,8 +235,7 @@ export class ContractDetailsPageComponent {
       let status: 'PAID' | 'OPEN' | 'OVERDUE' = 'OPEN';
 
       const isManualPaid = c.parcelas_pagas_manual?.includes(reference);
-
-      const hasSigefPayment = matches.some(t => !!t.sigef_id);
+      const hasSigefPayment = matches.some(t => !!t.sigef_id && !t.manual_payment);
 
       if (isManualPaid || hasSigefPayment) {
         status = 'PAID';
@@ -243,7 +243,16 @@ export class ContractDetailsPageComponent {
         status = 'OVERDUE';
       }
 
-      const paidAt = isManualPaid ? new Date() : undefined;
+      let paidAt: Date | undefined;
+      if (isManualPaid) {
+        paidAt = new Date();
+      } else if (hasSigefPayment) {
+        const paidTransactions = matches.filter(t => !!t.sigef_id && !t.manual_payment);
+        paidTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (paidTransactions.length > 0) {
+          paidAt = new Date(paidTransactions[0].date);
+        }
+      }
 
       payments.push({
         monthLabel,
@@ -253,6 +262,8 @@ export class ContractDetailsPageComponent {
         daysUntil: Math.ceil((installmentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
         isPast,
         status,
+        isManualPayment: isManualPaid,
+        isSigefPayment: hasSigefPayment,
         linkedTransactions: matches,
         totalPago: matches.reduce((acc, t) => acc + (t.amount || 0), 0),
         paidAt
@@ -1216,8 +1227,29 @@ export class ContractDetailsPageComponent {
     this.selectedInstallment.set(null);
   }
 
-  async unmarkInstallmentAsPaid(installment: PaymentSchedule) {
-    if (!confirm('Deseja remover a marcação de pago desta parcela?')) return;
+  /** Confirma o pagamento vindo do modal (marcar como pago) */
+  async markInstallmentAsPaid() {
+    const installment = this.selectedInstallment();
+    if (!installment) return;
+    await this.markInstallmentAsPaidDirectly(installment);
+    this.closeMarkAsPaidModal();
+  }
+
+  /** Abre modal de confirmação para desmarcar pagamento manual */
+  openUnmarkConfirmModal(installment: PaymentSchedule) {
+    this.selectedInstallment.set(installment);
+    this.isUnmarkConfirmModalOpen.set(true);
+  }
+
+  closeUnmarkConfirmModal() {
+    this.isUnmarkConfirmModalOpen.set(false);
+    this.selectedInstallment.set(null);
+  }
+
+  /** Remove a marcação manual de pago da parcela */
+  async confirmUnmarkInstallment() {
+    const installment = this.selectedInstallment();
+    if (!installment) return;
 
     try {
       const c = this.contract();
@@ -1247,9 +1279,11 @@ export class ContractDetailsPageComponent {
       await this.contractService.loadContracts(undefined, true);
       await this.loadTransactions(c.id);
 
+      this.closeUnmarkConfirmModal();
     } catch (err: any) {
       console.error('[ContractDetails] Erro ao desmarcar pagamento:', err);
       alert('Erro ao remover pagamento: ' + (err.message || 'Erro desconhecido'));
+      this.closeUnmarkConfirmModal();
     }
   }
 

@@ -419,9 +419,9 @@
                                       <span class="material-symbols-outlined text-[14px]">check</span>
                                       Marcar Pago
                                     </button>
-                                  } @else {
+                                  } @else if (p.isManualPayment) {
                                     <button 
-                                      (click)="unmarkInstallmentAsPaid(p)"
+                                      (click)="openUnmarkConfirmModal(p)"
                                       class="p-1 px-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 transition-all shadow-sm flex items-center gap-1 text-[9px] font-bold uppercase"
                                       title="Desmarcar pagamento"
                                     >
@@ -1351,6 +1351,60 @@
               >
                 <span class="material-symbols-outlined text-[18px]">check</span>
                 Confirmar Pagamento
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Modal: Confirmar Remoção de Pagamento Manual -->
+    @if (isUnmarkConfirmModalOpen()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div class="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-800 overflow-hidden animate-in zoom-in-95 duration-200">
+          
+          <!-- Header -->
+          <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900">
+            <div class="flex items-center gap-4">
+              <div class="h-12 w-12 rounded-2xl bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-red-500 text-[28px]">undo</span>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Remover Pagamento</h3>
+                <p class="text-sm text-gray-500 flex items-center gap-1.5 mt-0.5">
+                  Parcela: <span class="font-bold text-sco-blue">{{ selectedInstallment()?.monthLabel }}</span>
+                  <span class="h-1 w-1 rounded-full bg-gray-300"></span>
+                  <span class="font-bold text-gray-700 dark:text-gray-300">{{ selectedInstallment()?.valor | currency:'BRL':'symbol':'1.2-2' }}</span>
+                </p>
+              </div>
+            </div>
+            <button (click)="closeUnmarkConfirmModal()" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <!-- Content -->
+          <div class="p-8 bg-gray-50/50 dark:bg-gray-900/50">
+            <div class="bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 p-4 rounded-2xl mb-6">
+              <p class="text-xs font-medium text-red-800 dark:text-red-300 flex items-start gap-2">
+                <span class="material-symbols-outlined text-[16px] mt-0.5">warning</span>
+                Deseja remover a marcação de pago desta parcela? Esta ação irá desfazer o pagamento manual registrado e atualizar os totais do contrato.
+              </p>
+            </div>
+
+            <div class="flex gap-3">
+              <button 
+                (click)="closeUnmarkConfirmModal()"
+                class="flex-1 px-6 py-3 text-sm font-bold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                (click)="confirmUnmarkInstallment()"
+                class="flex-1 px-6 py-3 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-all shadow-md shadow-red-500/20 flex items-center justify-center gap-2"
+              >
+                <span class="material-symbols-outlined text-[18px]">undo</span>
+                Remover Pagamento
               </button>
             </div>
           </div>
