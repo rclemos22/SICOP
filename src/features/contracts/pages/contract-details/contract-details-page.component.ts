@@ -218,7 +218,7 @@ export class ContractDetailsPageComponent {
       const lastDayOfDueMonth = new Date(year, month + 1, 0).getDate();
       const actualDay = Math.min(paymentDay, lastDayOfDueMonth);
 
-      const installmentDate = new Date(year, month, actualDay);
+      const installmentDate = new Date(year, month - 1, actualDay);
       const isPast = installmentDate < today;
       const monthLabel = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 
