@@ -40,7 +40,7 @@
       @if (lowBudgetAlerts().length > 0) {
         <app-low-budget-card [alerts]="lowBudgetAlerts()" (viewContract)="handleViewContract($event)" />
       }
-      @if (ataAlertMetrics().expiringCount > 0 || ataAlertMetrics().pendingAdesoesCount > 0) {
+      @if (ataAlertMetrics().expiringCount > 0 || ataAlertMetrics().pendingAdesoesCount > 0 || ataAlertMetrics().totalActive > 0) {
         <app-ata-alerts-card [metrics]="ataAlertMetrics()" (navigateToAtas)="goToAtas()" />
       }
     </div>

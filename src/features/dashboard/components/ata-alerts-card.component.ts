@@ -4,6 +4,7 @@ export interface AtaAlertMetric {
   expiringCount: number;
   pendingAdesoesCount: number;
   criticalSaldoCount: number;
+  totalActive: number;
 }
 
 @Component({

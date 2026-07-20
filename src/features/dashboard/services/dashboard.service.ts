@@ -375,7 +375,6 @@ export class DashboardService {
     const contracts = this.contractService.contracts().filter(
       c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO
     );
-    const allTransactions = this.financialService.transactions();
     const alerts: OverdueAlert[] = [];
 
     contracts.forEach(c => {
@@ -391,16 +390,7 @@ export class DashboardService {
         const ref = `${year}-${String(m).padStart(2, '0')}`;
         const overdue = this.pagamentoEmAtraso(c, year, m, ref);
         if (overdue) {
-          const isPaid = allTransactions.some(
-            t => t.contract_id === c.id && t.type === TransactionType.LIQUIDATION && (
-              t.parcela_referencia === ref ||
-              t.payment_month === ref ||
-              (() => {
-                const txRef = `${new Date(t.date).getFullYear()}-${String(new Date(t.date).getMonth() + 1).padStart(2, '0')}`;
-                return txRef === ref;
-              })()
-            )
-          ) || (c.parcelas_pagas_manual?.includes(ref) || false);
+          const isPaid = c.parcelas_pagas_manual?.includes(ref) || false;
           if (!isPaid) {
             alerts.push({
               contractId: c.id, contractName: c.contrato, supplier: c.contratada,

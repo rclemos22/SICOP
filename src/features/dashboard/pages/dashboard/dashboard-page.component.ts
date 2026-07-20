@@ -81,10 +81,12 @@ export class DashboardPageComponent implements OnInit {
       const dias = Math.ceil((new Date(a.vigencia_fim).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       return dias >= 0 && dias <= 60;
     });
+    const totalActive = atas.filter(a => a.status === 'ATIVA').length;
     return {
       expiringCount: expiring.length,
       pendingAdesoesCount: Object.values(this.ataPendingCounts()).reduce((s, c) => s + c, 0),
       criticalSaldoCount: this.ataCriticalCount(),
+      totalActive,
     };
   });
 
