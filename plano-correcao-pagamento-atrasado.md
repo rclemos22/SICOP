@@ -10,15 +10,13 @@
 - No contrato detalhes, Junho aparece como pago **por fallback** (extrai mês/ano da `date` da transação)
 - Na dash, Junho aparece como atrasado porque o `isPaid` não tem esse fallback
 
-### Bug A — Off-by-one no `pagamentoEmAtraso()` (`dashboard.service.ts:147`)
-```typescript
-// ❌ month já é 1-based (getMonth()+1), soma +1 novamente
-const dueMonth = month + 1; // Junho vira Julho → 10/Jul < hoje → vencido
-```
-- Consequência: a data de vencimento de cada parcela é calculada com +1 mês
-- Exemplo: parcela de Jun (m=6) vira 10/Jul que é passado → considera vencida
-- Parcela de Jul (m=7) vira 10/Ago que é futuro → NÃO considera vencida
-- Efeito líquido: TODAS as parcelas de Jan a Jun viram "vencidas"
+### Regra de Negócio — Lapso temporal (serviço em M, pago em M+1)
+O `month + 1` em `pagamentoEmAtraso()` **não é um bug** — é a regra de negócio:
+- Serviço prestado em Janeiro → pago em Fevereiro
+- Serviço prestado em Junho → pago em Julho
+- O vencimento considera o mês do pagamento (M+1), não o mês do serviço (M)
+- Parcela de Junho (m=6) calcula vencimento em 10/Jul → se 10/Jul passou, está em atraso
+- Parcela de Julho (m=7) calcula vencimento em 10/Ago → futuro → não atrasado
 
 ### Bug B — `isPaid` sem fallback por data (`dashboard.service.ts:394-396`)
 ```typescript
@@ -33,49 +31,23 @@ const isPaid = allTransactions.some(
 - O contrato detalhes reconhece como pago via fallback (`t.date` → "2026-06")
 - A dash NÃO reconhece → `isPaid = false` → alerta indevido
 
-### Bug C — Off-by-one no `paymentSchedule()` (`contract-details-page.component.ts:221`)
+### `paymentSchedule()` — data correta por regra de negócio (`contract-details-page.component.ts:221`)
 ```typescript
-// ❌ month é 1-based (getMonth()+1), mas Date() espera 0-based
+// month é 1-based (getMonth()+1) e reflete o mês do pagamento (M+1)
 const installmentDate = new Date(year, month, actualDay);
-// Junho vira new Date(2026, 6, 10) = 10 de Julho
+// Junho: new Date(2026, 6, 10) = 10 de Julho → CORRETO (paga-se em Julho)
 ```
-- Data exibida na tabela de parcelas está 1 mês adiantada
-- Não afeta o dashboard, mas afeta a exibição no contrato
+- A data exibida na tabela de parcelas está **correta** pela regra de negócio
+- Serviço em Junho → pagamento esperado em Julho → data exibida 10/Jul
 
-## Plano de Ação
+## O que foi corrigido (único bug real)
 
-### Passo 1 — Corrigir `pagamentoEmAtraso` (dashboard, off-by-one)
-**Arquivo:** `src/features/dashboard/services/dashboard.service.ts` — Linha 147
-
-```typescript
-// ANTES
-const dueMonth = month + 1;
-const dueYear = dueMonth > 12 ? year + 1 : year;
-const dueAdjusted = dueMonth > 12 ? 1 : dueMonth;
-const lastDay = new Date(dueYear, dueAdjusted - 1, 0).getDate();
-const actualDay = Math.min(paymentDay, lastDay);
-const installmentDate = new Date(dueYear, dueAdjusted - 1, actualDay);
-
-// DEPOIS
-const lastDay = new Date(year, month, 0).getDate();
-const actualDay = Math.min(paymentDay, lastDay);
-const installmentDate = new Date(year, month - 1, actualDay);
-```
-
-**Risco**: Nenhum — `month` sempre estará entre 1 e 12, não precisa de rollover anual.
-
-### Passo 2 — Corrigir `isPaid` no dashboard (fallback por data)
+### Fallback `isPaid` no dashboard (era o único bug)
 **Arquivo:** `src/features/dashboard/services/dashboard.service.ts` — Linhas 394-396
 
-Adicionar as mesmas verificações de fallback que o contrato detalhes usa:
+A dashboard só verificava `parcela_referencia === ref` para determinar se uma transação LIQUIDATION pagou a parcela. O contrato detalhes tem fallback adicional por `payment_month` e extração mês/ano da `date`. Adicionado o mesmo fallback:
 
 ```typescript
-// ANTES
-const isPaid = allTransactions.some(
-  t => t.contract_id === c.id && t.type === TransactionType.LIQUIDATION && t.parcela_referencia === ref
-) || (c.parcelas_pagas_manual?.includes(ref) || false);
-
-// DEPOIS
 const isPaid = allTransactions.some(
   t => t.contract_id === c.id && t.type === TransactionType.LIQUIDATION && (
     t.parcela_referencia === ref ||
@@ -88,22 +60,11 @@ const isPaid = allTransactions.some(
 ) || (c.parcelas_pagas_manual?.includes(ref) || false);
 ```
 
-**Risco**: Muito baixo — mesmo padrão já usado no contrato detalhes (linhas 225-231). Pode ser extraído para função auxiliar se preferir.
+### O que NÃO foi alterado (comportamento correto mantido)
+- `pagamentoEmAtraso()` com `month + 1` — **correto**: serviço em M é pago em M+1
+- `installmentDate` com `new Date(year, month, actualDay)` — **correto**: data reflete mês do pagamento
 
-### Passo 3 — Corrigir `paymentSchedule` (contrato detalhes, off-by-one)
-**Arquivo:** `src/features/contracts/pages/contract-details/contract-details-page.component.ts` — Linha 221
-
-```typescript
-// ANTES
-const installmentDate = new Date(year, month, actualDay);
-
-// DEPOIS
-const installmentDate = new Date(year, month - 1, actualDay);
-```
-
-**Risco**: Nenhum — apenas corrige a data exibida. O `monthLabel` e a lógica de status usam `currentDate` (correto) para o label, e a verificação `isPast` agora usará a data correta.
-
-### Passo 4 — Verificar `recentPaymentsList` (dashboard)
+### Verificar `recentPaymentsList` (dashboard)
 **Arquivo:** `src/features/dashboard/services/dashboard.service.ts`
 
 - Linha 434: `t.parcela_referencia === reference` — esta comparação usa a referência correta. Sem mudanças necessárias.
@@ -129,13 +90,9 @@ const installmentDate = new Date(year, month - 1, actualDay);
 ## Arquivos afetados
 | Arquivo | Linha(s) | O que muda |
 |---------|----------|-----------|
-| `src/features/dashboard/services/dashboard.service.ts` | 147 | Off-by-one no cálculo da data de vencimento |
 | `src/features/dashboard/services/dashboard.service.ts` | 394-396 | `isPaid` ganha fallback por `payment_month` e `date` |
-| `src/features/contracts/pages/contract-details/contract-details-page.component.ts` | 221 | Off-by-one na data exibida da parcela |
 
-## Ordem de execução
-1. Editar `dashboard.service.ts` — corrigir `pagamentoEmAtraso`
-2. Editar `dashboard.service.ts` — corrigir `isPaid` (adicionar fallback)
-3. Editar `contract-details-page.component.ts` — corrigir `installmentDate`
-4. Testar visualmente no navegador (especialmente contrato 135/2021)
-5. Commitar e fazer push
+## Ordem de execução (já concluído)
+1. Editar `dashboard.service.ts` — adicionar fallback `isPaid`
+2. Testar visualmente no navegador (especialmente contrato 135/2021)
+3. Commitar e fazer push

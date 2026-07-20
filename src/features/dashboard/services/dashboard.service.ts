@@ -144,9 +144,12 @@ export class DashboardService {
   ): boolean {
     if (!c.valor_mensal || !c.data_pagamento || !c.data_inicio) return false;
     const paymentDay = Number(c.data_pagamento);
-    const lastDay = new Date(year, month, 0).getDate();
+    const dueMonth = month + 1;
+    const dueYear = dueMonth > 12 ? year + 1 : year;
+    const dueAdjusted = dueMonth > 12 ? 1 : dueMonth;
+    const lastDay = new Date(dueYear, dueAdjusted - 1, 0).getDate();
     const actualDay = Math.min(paymentDay, lastDay);
-    const installmentDate = new Date(year, month - 1, actualDay);
+    const installmentDate = new Date(dueYear, dueAdjusted - 1, actualDay);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return installmentDate < today;

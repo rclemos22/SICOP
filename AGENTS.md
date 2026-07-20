@@ -49,8 +49,8 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 ## Previously Known (now fixed)
 - ~~Contrato 001/2026: `total_empenhado=0` mas `total_pago=174.860` — dados de NE ausentes no cache.~~
 
-### 7. Off-by-one em meses (Pagamentos em Atraso falso positivo)
-- `dashboard.service.ts:147` — `pagamentoEmAtraso()` somava +1 ao mês (1-based+1), deslocando todas as datas de vencimento em 1 mês.
-- `dashboard.service.ts:394-396` — `isPaid` no dashboard não tinha fallback por `payment_month` ou `date` da transação. Diferente do contrato detalhes que usa fallback (linhas 225-231).
-- `contract-details-page.component.ts:221` — `installmentDate` usava `month` (1-based) em `Date()` que espera 0-based, exibindo data errada nas parcelas.
+### 7. Pagamentos em Atraso — falso positivo no dashboard
+- Regra de negócio: serviço em M, pago em M+1 (ex: Jan pago em Fev). O `month+1` em `pagamentoEmAtraso` está **correto**.
+- `dashboard.service.ts:394-396` — `isPaid` no dashboard não tinha fallback por `payment_month` ou `date` da transação (diferente do contrato detalhes que usa fallback nas linhas 225-231).
 - **Caso concreto**: Contrato 135/2021 com LIQUIDATION em 16/06/2026 aparecia como atrasado na dash porque `parcela_referencia=null` e não havia fallback.
+- Fix: adicionado fallback `payment_month` e extração mês/ano da `date` (mesma lógica do contrato detalhes).
