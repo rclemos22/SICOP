@@ -1,10 +1,10 @@
 import { Injectable } from '@angular/core';
-import { Ata, SaldoItem } from '../../../shared/models/ata.model';
+import { Ata, SaldoItem, AtaAdesao, getAdesaoStatusLabel } from '../../../shared/models/ata.model';
 
 @Injectable({ providedIn: 'root' })
 export class AtaExportService {
 
-  exportSaldoCsv(ata: Ata, saldos: SaldoItem[]): void {
+  exportSaldoCsv(ata: Ata, saldos: SaldoItem[], adesoes?: AtaAdesao[]): void {
     const header = [
       'Item', 'Descrição', 'Unidade', 'Quantidade Registrada',
       'Valor Unitário', 'Consumido Interno', 'Aderido (Carona)',
@@ -35,7 +35,7 @@ export class AtaExportService {
       '', '', '', '',
     ];
 
-    const content = [
+    const lines = [
       `Relatório de Saldo de Ata - ${ata.numero_ata}`,
       `Processo: ${ata.numero_processo}`,
       `Fornecedor: ${ata.fornecedor_nome || '-'}`,
@@ -45,13 +45,39 @@ export class AtaExportService {
       header.join(','),
       ...rows.map(r => r.join(',')),
       totals.join(','),
+    ];
+
+    // Seção de Órgãos Aderentes
+    if (adesoes && adesoes.length > 0) {
+      const saldoMap = new Map<string, number>();
+      for (const s of saldos) {
+        saldoMap.set(s.item_id, s.numero_item);
+      }
+      lines.push(
+        '',
+        'ÓRGÃOS ADERENTES (CARONA)',
+        'Processo SEI,Órgão,CNPJ,Item,Quantidade,Status',
+        ...adesoes
+          .filter(a => a.status === 'AUTORIZADA' || a.status === 'PENDENTE')
+          .map(a => [
+            a.processo_sei || '-',
+            this.csvEscape(a.razao_orgao),
+            a.cnpj_orgao,
+            saldoMap.get(a.ata_item_id) ?? '',
+            a.quantidade_autorizada ?? a.quantidade_solicitada,
+            getAdesaoStatusLabel(a.status),
+          ].join(','))
+      );
+    }
+
+    lines.push(
       '',
       'Dispositivo Legal: Art. 86, Lei 14.133/2021',
       '§ 3º - Limite individual: cada órgão não participante não poderá exceder 50% dos quantitativos dos itens registrados em ata.',
       '§ 4º - Limite coletivo: o total das adesões externas não poderá exceder o dobro (200%) do quantitativo de cada item.',
-    ].join('\n');
+    );
 
-    this.download(content, `saldo_ata_${ata.numero_ata.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+    this.download(lines.join('\n'), `saldo_ata_${ata.numero_ata.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
   }
 
   exportAtasListCsv(atas: Ata[]): void {

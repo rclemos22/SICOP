@@ -788,24 +788,25 @@ export class FinancialService {
           });
         }
 
-        // ═══════════════════════════════════════════
-        // D. Upsert + Limpeza de registros legados
-        // ═══════════════════════════════════════════
+      // ═══════════════════════════════════════════
+      // D. Upsert + Limpeza de registros legados
+      // ═══════════════════════════════════════════
 
-        if (transactionsToUpsert.length > 0) {
-          const { error } = await this.supabaseService.client
-            .from('transacoes')
-            .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
-          if (error) throw error;
-          this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
+      if (transactionsToUpsert.length > 0) {
+        const { error } = await this.supabaseService.client
+          .from('transacoes')
+          .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
+        if (error) throw error;
+        this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-          // Limpa formatos legados APENAS se houver registros NOVOS do mesmo tipo
-          // para substituí-los. Caso contrário, preserva os existentes.
-          const hasNewComRef = transactionsToUpsert.some(
-            t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT
-          );
-          const hasNewLiq = transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION);
+        // Limpa formatos legados APENAS se houver registros NOVOS do mesmo tipo
+        // para substituí-los. Caso contrário, preserva os existentes.
+        const hasNewComRef = transactionsToUpsert.some(
+          t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT
+        );
+        const hasNewLiq = transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION);
 
+        try {
           if (hasNewComRef) {
             await this.supabaseService.client
               .from('transacoes')
@@ -822,8 +823,11 @@ export class FinancialService {
               .eq('commitment_id', neValue)
               .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%');
           }
-
+        } catch (cleanupErr: any) {
+          console.warn(`[${neValue}] Erro na limpeza de registros legados (não crítico):`, cleanupErr.message);
         }
+
+      }
       } catch (err: any) {
         const msg = `NE ${neValue}: ${err.message || 'Erro desconhecido'}`;
         console.error('[FinancialService] Erro ao sincronizar transacoes para contrato:', contractId, msg);

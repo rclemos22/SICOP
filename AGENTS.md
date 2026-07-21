@@ -83,3 +83,35 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - Template do dashboard só exibia o card quando `expiringCount > 0 || pendingAdesoesCount > 0`.
 - Com apenas 1 ATA ativa (018/2026, vigência até 2027-05-20) e 0 adesões pendentes, o card nunca aparecia.
 - Fix: adicionado `totalActive` ao `AtaAlertMetric`; `@if` agora também exibe o card quando `totalActive > 0`.
+
+### 14. ATA — Fornecedor não salvava
+- Coluna `fornecedor_nome` não existia na tabela `atas`; `ata.service.ts:188` lia `raw.fornecedor_nome` sempre undefined.
+- Criada migration `sql/13_FIX_ATAS_FORNECEDOR_E_ITENS.sql`: `ADD COLUMN fornecedor_nome`, recria `vw_atas_resumo`.
+- `ata-form.component.ts`: campo `fornecedor_nome` no form, `selectSupplier()` salva `razao_social`.
+- `ata.service.ts`: `addAta()`/`updateAta()` incluem `fornecedor_nome`.
+
+### 15. ATA — Edição apagava consumo interno e adesões
+- `saveItens()` fazia `DELETE FROM ata_itens WHERE ata_id = ?` + reINSERT, quebrando FKs com `ata_consumo_interno` / `ata_adesoes` via cascade.
+- Migration `sql/13_FIX_ATAS_FORNECEDOR_E_ITENS.sql`: remove `ON DELETE CASCADE` das FKs.
+- `saveItens()` reescrita com diff (INSERT/UPDATE/DELETE seletivo) preservando FKs.
+
+### 16. Contrato 80/2025 — Diagnóstico de divergência
+- `_loadTransactionsFromCache` tinha dedup key usando `ne` duplicado em vez de `document_number`.
+- Cleanup de registros legados em `syncSigefTransactions` sem error handling próprio (interrompia o fluxo).
+- SQL `sql/14_DIAGNOSTICO_CONTRATO_80_2025.sql`: diagnóstico completo (contrato, transações, cache, mirror, disparidades, correção).
+- `financial.service.ts:809-828`: cleanup envolvido em try-catch próprio.
+
+### 17. Relatório PDF de Saldo de ATA — Logo, órgãos aderentes, async
+- `ata-pdf.service.ts`: cabeçalho com logo DPEMA + "DEFENSORIA PÚBLICA DO ESTADO" / "Supervisão de Informática".
+- Tabela "Órgãos Aderentes" (verde) incluída com colunas: Proc. SEI, Órgão, CNPJ, Item, Quantidade, Status.
+- Footer com paginação; método `async` com try-catch.
+- Logo em `public/logo_dpema.png` (servida via `assets` em `angular.json`).
+- `angular.json`: adicionada seção `assets` apontando para `public/`.
+- `ata-export.service.ts`: CSV inclui seção de órgãos aderentes.
+
+### 18. ATA — Campo Processo SEI nas adesões
+- Modelo `AtaAdesao`: adicionado `processo_sei?: string`.
+- Formulário de solicitação inclui campo "Nº Processo SEI".
+- Card da adesão exibe "Processo SEI: xxx" e apenas número do item (sem descrição).
+- PDF e CSV incluem coluna "Proc. SEI" na ordem: Proc. SEI → Órgão → CNPJ → Item → Quantidade → Status.
+- Migration `sql/15_ADD_PROCCESSO_SEI_ADESOES.sql`: `ALTER TABLE ata_adesoes ADD COLUMN processo_sei TEXT`.

@@ -140,6 +140,7 @@ export class SaldoAtaService {
           ata_item_id: adesao.ata_item_id,
           cnpj_orgao: adesao.cnpj_orgao,
           razao_orgao: adesao.razao_orgao,
+          processo_sei: adesao.processo_sei || null,
           quantidade_solicitada: adesao.quantidade_solicitada,
           quantidade_autorizada: null,
           status: 'PENDENTE',

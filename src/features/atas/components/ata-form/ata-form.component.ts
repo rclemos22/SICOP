@@ -44,6 +44,7 @@ export class AtaFormComponent implements OnInit {
       numero_processo: ['', Validators.required],
       numero_ata: ['', Validators.required],
       fornecedor_id: ['', Validators.required],
+      fornecedor_nome: [''],
       objeto: [''],
       data_assinatura: [''],
       vigencia_inicio: [''],
@@ -80,6 +81,7 @@ export class AtaFormComponent implements OnInit {
         numero_processo: current.numero_processo,
         numero_ata: current.numero_ata,
         fornecedor_id: current.fornecedor_id || '',
+        fornecedor_nome: current.fornecedor_nome || '',
         objeto: current.objeto,
         data_assinatura: current.data_assinatura ? new Date(current.data_assinatura).toISOString().split('T')[0] : '',
         vigencia_inicio: current.vigencia_inicio ? new Date(current.vigencia_inicio).toISOString().split('T')[0] : '',
@@ -98,6 +100,7 @@ export class AtaFormComponent implements OnInit {
 
   addItem(item?: AtaItem) {
     const group = this.fb.group({
+      id: [item?.id ?? null],
       numero_item: [item?.numero_item ?? this.itensArray.length + 1, Validators.required],
       descricao: [item?.descricao ?? '', Validators.required],
       unidade: [item?.unidade ?? ''],
@@ -119,7 +122,7 @@ export class AtaFormComponent implements OnInit {
   }
 
   selectSupplier(supplier: Supplier) {
-    this.form.patchValue({ fornecedor_id: supplier.id });
+    this.form.patchValue({ fornecedor_id: supplier.id, fornecedor_nome: supplier.razao_social });
     this.supplierSearch.set(supplier.razao_social);
     this.showSupplierDropdown.set(false);
   }
@@ -149,6 +152,7 @@ export class AtaFormComponent implements OnInit {
         numero_processo: raw.numero_processo,
         numero_ata: raw.numero_ata,
         fornecedor_id: raw.fornecedor_id,
+        fornecedor_nome: raw.fornecedor_nome || null,
         objeto: raw.objeto || null,
         data_assinatura: raw.data_assinatura || null,
         vigencia_inicio: raw.vigencia_inicio || null,
@@ -158,6 +162,7 @@ export class AtaFormComponent implements OnInit {
         observacao: raw.observacao || null,
       };
       const itens: AtaItem[] = raw.itens.map((i: any, idx: number) => ({
+        id: i.id || undefined,
         numero_item: idx + 1,
         descricao: i.descricao,
         unidade: i.unidade || null,

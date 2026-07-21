@@ -70,6 +70,7 @@ export interface AtaAdesao {
   ata_item_id: string;
   cnpj_orgao: string;
   razao_orgao: string;
+  processo_sei?: string;
   quantidade_solicitada: number;
   quantidade_autorizada?: number;
   status: AdesaoStatus;

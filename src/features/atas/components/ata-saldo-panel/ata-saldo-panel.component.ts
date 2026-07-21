@@ -34,7 +34,7 @@ export class AtaSaldoPanelComponent implements OnInit {
 
   // Adesão form
   showAdesaoForm = signal(false);
-  adesaoForm = { ata_item_id: '', cnpj_orgao: '', razao_orgao: '', quantidade_solicitada: 0, justificativa: '' };
+  adesaoForm = { ata_item_id: '', cnpj_orgao: '', razao_orgao: '', processo_sei: '', quantidade_solicitada: 0, justificativa: '' };
 
   // Validation messages
   validationError = signal<string | null>(null);
@@ -144,7 +144,7 @@ export class AtaSaldoPanelComponent implements OnInit {
 
   // ---- Adesões ----
   openAdesaoForm() {
-    this.adesaoForm = { ata_item_id: '', cnpj_orgao: '', razao_orgao: '', quantidade_solicitada: 0, justificativa: '' };
+    this.adesaoForm = { ata_item_id: '', cnpj_orgao: '', razao_orgao: '', processo_sei: '', quantidade_solicitada: 0, justificativa: '' };
     this.validationError.set(null);
     this.showAdesaoForm.set(true);
   }
@@ -167,6 +167,7 @@ export class AtaSaldoPanelComponent implements OnInit {
       ata_item_id: f.ata_item_id,
       cnpj_orgao: f.cnpj_orgao,
       razao_orgao: f.razao_orgao,
+      processo_sei: f.processo_sei || undefined,
       quantidade_solicitada: f.quantidade_solicitada,
       justificativa: f.justificativa || undefined,
       status: 'PENDENTE',
@@ -250,12 +251,12 @@ export class AtaSaldoPanelComponent implements OnInit {
     if (!result.error) await this.loadData();
   }
 
-  exportPdf() {
-    this.pdfService.gerarRelatorioSaldo(this.ata(), this.itens(), this.saldos());
+  async exportPdf() {
+    await this.pdfService.gerarRelatorioSaldo(this.ata(), this.itens(), this.saldos(), this.adesoes());
   }
 
   exportCsv() {
-    this.exportService.exportSaldoCsv(this.ata(), this.saldos());
+    this.exportService.exportSaldoCsv(this.ata(), this.saldos(), this.adesoes());
   }
 
   getSaldoItem(ataItemId: string): SaldoItem | undefined {

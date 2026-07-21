@@ -79,6 +79,7 @@ export class AtaService {
           numero_ata: ata.numero_ata,
           objeto: ata.objeto || null,
           fornecedor_id: ata.fornecedor_id || null,
+          fornecedor_nome: ata.fornecedor_nome || null,
           data_assinatura: ata.data_assinatura || null,
           vigencia_inicio: ata.vigencia_inicio || null,
           vigencia_fim: ata.vigencia_fim || null,
@@ -110,6 +111,7 @@ export class AtaService {
           numero_ata: ata.numero_ata,
           objeto: ata.objeto,
           fornecedor_id: ata.fornecedor_id,
+          fornecedor_nome: ata.fornecedor_nome,
           data_assinatura: ata.data_assinatura,
           vigencia_inicio: ata.vigencia_inicio,
           vigencia_fim: ata.vigencia_fim,
@@ -149,26 +151,71 @@ export class AtaService {
 
   async saveItens(ataId: string, itens: AtaItem[]): Promise<Result<null>> {
     try {
-      const { error: deleteError } = await this.supabaseService.client
+      const { data: existingItens, error: fetchError } = await this.supabaseService.client
         .from('ata_itens')
-        .delete()
+        .select('id')
         .eq('ata_id', ataId);
 
-      if (deleteError) throw deleteError;
+      if (fetchError) throw fetchError;
 
-      if (itens.length > 0) {
-        const { error: insertError } = await this.supabaseService.client
+      const existingIds = new Set((existingItens || []).map(i => i.id));
+      const incomingIds = new Set(itens.filter(i => i.id).map(i => i.id!));
+
+      const toDelete = [...existingIds].filter(id => !incomingIds.has(id));
+
+      if (toDelete.length > 0) {
+        const { data: refConsumo } = await this.supabaseService.client
+          .from('ata_consumo_interno')
+          .select('ata_item_id')
+          .in('ata_item_id', toDelete)
+          .limit(1);
+
+        const { data: refAdesoes } = await this.supabaseService.client
+          .from('ata_adesoes')
+          .select('ata_item_id')
+          .in('ata_item_id', toDelete)
+          .limit(1);
+
+        if ((refConsumo && refConsumo.length > 0) || (refAdesoes && refAdesoes.length > 0)) {
+          return fail('Não é possível remover itens que possuem registros de consumo interno ou adesões vinculados. Remova os vínculos primeiro.');
+        }
+
+        const { error: deleteError } = await this.supabaseService.client
           .from('ata_itens')
-          .insert(itens.map(item => ({
-            ata_id: ataId,
-            numero_item: item.numero_item,
-            descricao: item.descricao,
-            unidade: item.unidade || null,
-            quantidade: item.quantidade,
-            valor_unitario: item.valor_unitario,
-          })));
+          .delete()
+          .in('id', toDelete);
 
-        if (insertError) throw insertError;
+        if (deleteError) throw deleteError;
+      }
+
+      for (const item of itens) {
+        if (item.id && existingIds.has(item.id)) {
+          const { error: updateError } = await this.supabaseService.client
+            .from('ata_itens')
+            .update({
+              numero_item: item.numero_item,
+              descricao: item.descricao,
+              unidade: item.unidade || null,
+              quantidade: item.quantidade,
+              valor_unitario: item.valor_unitario,
+            })
+            .eq('id', item.id);
+
+          if (updateError) throw updateError;
+        } else {
+          const { error: insertError } = await this.supabaseService.client
+            .from('ata_itens')
+            .insert({
+              ata_id: ataId,
+              numero_item: item.numero_item,
+              descricao: item.descricao,
+              unidade: item.unidade || null,
+              quantidade: item.quantidade,
+              valor_unitario: item.valor_unitario,
+            });
+
+          if (insertError) throw insertError;
+        }
       }
 
       return ok(null);
