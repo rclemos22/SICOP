@@ -115,3 +115,18 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - Card da adesão exibe "Processo SEI: xxx" e apenas número do item (sem descrição).
 - PDF e CSV incluem coluna "Proc. SEI" na ordem: Proc. SEI → Órgão → CNPJ → Item → Quantidade → Status.
 - Migration `sql/15_ADD_PROCCESSO_SEI_ADESOES.sql`: `ALTER TABLE ata_adesoes ADD COLUMN processo_sei TEXT`.
+
+### 19. ATA — Separação saldo consumo próprio vs adesão + painel
+- Migration `sql/16_SEPARAR_SALDO_CONSUMO_ADESAO.sql`: adiciona `saldo_consumo_interno` e `saldo_adesao_total` em `vw_ata_saldo_item` e `vw_ata_saldo_resumo`.
+- Modelo `SaldoItem`: novos campos `saldo_consumo_interno`, `saldo_adesao_total`, `percentual_utilizado`.
+- Modelo `SaldoResumo`: novos campos `total_saldo_consumo_interno`, `total_saldo_adesao_total`.
+- `saldo-ata.service.ts`: `validarLimiteAdesao` usa `saldo_adesao_total`, `validarLimiteConsumoInterno` usa `saldo_consumo_interno`.
+- `ata-saldo-panel.component.ts`: dois cards globais separados (Consumo Próprio e Saldo Adesão), quantidades sem `.00`, detalhamento por item com 6 colunas.
+
+### 20. ATA — Relatório PDF com tabelas separadas
+- `ata-pdf.service.ts`:
+  - **Tabela 1 — Consumo Próprio** (azul): todos os itens com #, Descrição, Unid., Qtd Registrada, Consumido Interno, **Saldo Consumo Próprio**, % Utilizado.
+  - **Tabela 2 — Itens com Adesão** (verde): apenas itens com adesões, colunas: #, Descrição, Unid., Qtd Registrada, **Limite Colet. (200%)**, Limite Indiv. (50%), Aderido, **Saldo para Adesão**.
+  - **Tabela 3 — Órgãos Aderentes** mantida; removida tabela de consolidação.
+  - `fmtInt()` para exibir inteiros sem decimais; `headStyles` com `halign: center` e `valign: middle`.
+- `ata-export.service.ts`: CSV com colunas "Saldo Consumo Próprio" e "Saldo Adesão Total".

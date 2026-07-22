@@ -91,6 +91,10 @@ export interface SaldoItem {
   quantidade_consumida_interna: number;
   quantidade_aderida: number;
   saldo_disponivel: number;
+  // Saldo disponível para consumo próprio pelo órgão gerenciador (até 100% do registrado)
+  saldo_consumo_interno: number;
+  // Saldo total disponível para adesões (limite coletivo 200% - já aderido)
+  saldo_adesao_total: number;
   percentual_utilizado: number;
   numero_ata: string;
   numero_processo: string;
@@ -111,6 +115,8 @@ export interface SaldoResumo {
   total_quantidade_consumida: number;
   total_quantidade_aderida: number;
   total_saldo_disponivel: number;
+  total_saldo_consumo_interno: number;
+  total_saldo_adesao_total: number;
   percentual_geral: number;
 }
 

@@ -94,22 +94,26 @@
         </div>
 
         <!-- Resumo Global -->
-        <div class="grid grid-cols-4 gap-3 mb-4">
+        <div class="grid grid-cols-5 gap-3 mb-4">
           <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
             <span class="text-[10px] font-bold text-gray-500 uppercase">Registrado</span>
-            <p class="text-sm font-bold text-gray-900 dark:text-white mt-1">{{ saldoGlobal().registrado | number:'1.2-2' }}</p>
+            <p class="text-sm font-bold text-gray-900 dark:text-white mt-1">{{ saldoGlobal().registrado }}</p>
           </div>
           <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
             <span class="text-[10px] font-bold text-gray-500 uppercase">Consumido</span>
-            <p class="text-sm font-bold text-amber-600 dark:text-amber-400 mt-1">{{ saldoGlobal().consumido | number:'1.2-2' }}</p>
+            <p class="text-sm font-bold text-amber-600 dark:text-amber-400 mt-1">{{ saldoGlobal().consumido }}</p>
           </div>
           <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
             <span class="text-[10px] font-bold text-gray-500 uppercase">Aderido</span>
-            <p class="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">{{ saldoGlobal().aderido | number:'1.2-2' }}</p>
+            <p class="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">{{ saldoGlobal().aderido }}</p>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
+            <span class="text-[10px] font-bold text-gray-500 uppercase">Consumo Próprio</span>
+            <p class="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ saldoGlobal().consumoInterno }}</p>
           </div>
           <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 text-center">
             <span class="text-[10px] font-bold text-gray-500 uppercase">Disponível</span>
-            <p class="text-sm font-bold text-green-600 dark:text-green-400 mt-1">{{ saldoGlobal().disponivel | number:'1.2-2' }}</p>
+            <p class="text-sm font-bold text-green-600 dark:text-green-400 mt-1">{{ saldoGlobal().disponivel }}</p>
           </div>
         </div>
 
@@ -177,7 +181,7 @@
                 </div>
 
                 <!-- Detalhamento -->
-                <div class="grid grid-cols-5 gap-2 text-xs mb-2">
+                <div class="grid grid-cols-6 gap-2 text-xs mb-2">
                   <div class="text-center">
                     <div class="text-gray-400">Registrado</div>
                     <div class="font-mono font-bold text-gray-700 dark:text-gray-300">{{ item.quantidade_registrada }}</div>
@@ -191,8 +195,12 @@
                     <div class="font-mono font-bold text-blue-600">{{ item.quantidade_aderida }}</div>
                   </div>
                   <div class="text-center">
-                    <div class="text-green-500">Disponível</div>
-                    <div class="font-mono font-bold text-green-600">{{ item.saldo_disponivel }}</div>
+                    <div class="text-emerald-500">Consumo Próprio</div>
+                    <div class="font-mono font-bold text-emerald-600">{{ item.saldo_consumo_interno }}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-violet-500">Adesão (200%)</div>
+                    <div class="font-mono font-bold text-violet-600">{{ item.saldo_adesao_total }}</div>
                   </div>
                   <div class="text-center">
                     <div class="text-purple-500">Valor Unit.</div>
@@ -201,11 +209,13 @@
                 </div>
 
                 <!-- Limites Legais do Item -->
-                <div class="flex items-center gap-3 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-800 pt-2 mt-1">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-800 pt-2 mt-1">
                   <span class="font-semibold">Limites:</span>
                   <span>Individual (50%): <strong class="text-orange-600 dark:text-orange-400">{{ item.quantidade_registrada * 0.5 | number:'1.2-2' }}</strong></span>
                   <span>Coletivo (200%): <strong class="text-red-600 dark:text-red-400">{{ item.quantidade_registrada * 2.0 | number:'1.2-2' }}</strong></span>
                   <span>Saldo adesão: <strong class="text-blue-600 dark:text-blue-400">{{ (item.saldo_adesao ?? Math.max(0, (item.quantidade_registrada * 2.0) - item.quantidade_aderida)) | number:'1.2-2' }}</strong></span>
+                  <span>Consumo próprio: <strong class="text-emerald-600 dark:text-emerald-400">{{ item.saldo_consumo_interno | number:'1.2-2' }}</strong></span>
+                  <span>Disponível adesão: <strong class="text-violet-600 dark:text-violet-400">{{ item.saldo_adesao_total | number:'1.2-2' }}</strong></span>
                 </div>
               </div>
             }

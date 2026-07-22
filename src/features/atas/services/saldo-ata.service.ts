@@ -294,16 +294,16 @@ export class SaldoAtaService {
       );
     }
 
-    const restanteIndividual = limiteIndividual - jaAutorizadoMesmoOrgao;
+    const restanteIndividual = Math.max(0, limiteIndividual - jaAutorizadoMesmoOrgao);
 
     // Art. 86, § 4º — Limite coletivo: total das adesões não pode exceder 200% (dobro)
     const limiteColetivo = item.quantidade_registrada * 2.0;
     const restanteColetivo = Math.max(0, limiteColetivo - item.quantidade_aderida);
 
-    // Saldo físico ainda disponível no item
-    const saldoFisico = Math.max(0, item.saldo_disponivel);
+    // Saldo total disponível para adesões (considerando o limite coletivo de 200%)
+    const saldoAdesaoTotal = Math.max(0, item.saldo_adesao_total);
 
-    const maximoPermitido = Math.min(restanteIndividual, restanteColetivo, saldoFisico);
+    const maximoPermitido = Math.min(restanteIndividual, restanteColetivo, saldoAdesaoTotal);
 
     if (quantidadePretendida > maximoPermitido) {
       let motivo = `Quantidade excede o limite legal. Máximo permitido: ${maximoPermitido} unidades.`;
@@ -313,8 +313,8 @@ export class SaldoAtaService {
       if (restanteColetivo < quantidadePretendida) {
         motivo += `\n• Limite coletivo (§ 4º, 200%): restam ${restanteColetivo} unidades (já aderido: ${item.quantidade_aderida}).`;
       }
-      if (saldoFisico < quantidadePretendida) {
-        motivo += `\n• Saldo disponível em ata: ${saldoFisico} unidades.`;
+      if (saldoAdesaoTotal < quantidadePretendida) {
+        motivo += `\n• Saldo disponível para adesão: ${saldoAdesaoTotal} unidades.`;
       }
       return { permitido: false, motivo, maximoPermitido };
     }
@@ -334,8 +334,7 @@ export class SaldoAtaService {
 
     const item = saldo.data;
     // Órgão gerenciador pode consumir até 100% da quantidade registrada
-    const consumido = item.quantidade_consumida_interna;
-    const saldoRestante = item.quantidade_registrada - consumido;
+    const saldoRestante = Math.max(0, item.saldo_consumo_interno);
 
     if (quantidadePretendida > saldoRestante) {
       return {
@@ -362,6 +361,8 @@ export class SaldoAtaService {
       quantidade_consumida_interna: Number(raw.quantidade_consumida_interna) || 0,
       quantidade_aderida: Number(raw.quantidade_aderida) || 0,
       saldo_disponivel: Number(raw.saldo_disponivel) || 0,
+      saldo_consumo_interno: raw.saldo_consumo_interno != null ? Number(raw.saldo_consumo_interno) : Math.max(0, (Number(raw.quantidade_registrada) || 0) - (Number(raw.quantidade_consumida_interna) || 0)),
+      saldo_adesao_total: raw.saldo_adesao_total != null ? Number(raw.saldo_adesao_total) : Math.max(0, ((Number(raw.quantidade_registrada) || 0) * 2.0) - (Number(raw.quantidade_aderida) || 0)),
       percentual_utilizado: Number(raw.percentual_utilizado) || 0,
       numero_ata: raw.numero_ata ?? '',
       numero_processo: raw.numero_processo ?? '',
@@ -383,6 +384,8 @@ export class SaldoAtaService {
       total_quantidade_consumida: Number(raw.total_quantidade_consumida) || 0,
       total_quantidade_aderida: Number(raw.total_quantidade_aderida) || 0,
       total_saldo_disponivel: Number(raw.total_saldo_disponivel) || 0,
+      total_saldo_consumo_interno: raw.total_saldo_consumo_interno != null ? Number(raw.total_saldo_consumo_interno) : Math.max(0, (Number(raw.total_quantidade_registrada) || 0) - (Number(raw.total_quantidade_consumida) || 0)),
+      total_saldo_adesao_total: raw.total_saldo_adesao_total != null ? Number(raw.total_saldo_adesao_total) : Math.max(0, ((Number(raw.total_quantidade_registrada) || 0) * 2.0) - (Number(raw.total_quantidade_aderida) || 0)),
       percentual_geral: Number(raw.percentual_geral) || 0,
     };
   }

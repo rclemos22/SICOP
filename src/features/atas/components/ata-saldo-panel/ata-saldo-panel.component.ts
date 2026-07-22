@@ -69,6 +69,7 @@ export class AtaSaldoPanelComponent implements OnInit {
       consumido: items.reduce((a, b) => a + b.quantidade_consumida_interna, 0),
       aderido: items.reduce((a, b) => a + b.quantidade_aderida, 0),
       disponivel: items.reduce((a, b) => a + b.saldo_disponivel, 0),
+      consumoInterno: items.reduce((a, b) => a + b.saldo_consumo_interno, 0),
     };
   });
 

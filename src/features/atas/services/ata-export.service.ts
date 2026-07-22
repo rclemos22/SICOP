@@ -8,8 +8,9 @@ export class AtaExportService {
     const header = [
       'Item', 'Descrição', 'Unidade', 'Quantidade Registrada',
       'Valor Unitário', 'Consumido Interno', 'Aderido (Carona)',
-      'Saldo Disponível', '% Utilizado',
-      'Limite Individual (50%)', 'Limite Coletivo (200%)', 'Saldo para Adesão',
+      'Saldo Consumo Próprio (100%)', 'Saldo Adesão Total (200%)',
+      'Saldo para Adesão', 'Saldo Disponível', '% Utilizado',
+      'Limite Individual (50%)', 'Limite Coletivo (200%)',
     ];
 
     const rows = saldos.map(item => [
@@ -20,19 +21,24 @@ export class AtaExportService {
       item.valor_unitario,
       item.quantidade_consumida_interna,
       item.quantidade_aderida,
+      item.saldo_consumo_interno,
+      item.saldo_adesao_total,
+      item.saldo_adesao ?? Math.max(0, (item.quantidade_registrada * 2.0) - item.quantidade_aderida),
       item.saldo_disponivel,
       `${item.percentual_utilizado}%`,
       item.limite_individual ?? item.quantidade_registrada * 0.5,
       item.limite_coletivo ?? item.quantidade_registrada * 2.0,
-      item.saldo_adesao ?? Math.max(0, (item.quantidade_registrada * 2.0) - item.quantidade_aderida),
     ]);
 
     const totals = [
       '', 'TOTAIS', '', saldos.reduce((a, b) => a + b.quantidade_registrada, 0),
       '', saldos.reduce((a, b) => a + b.quantidade_consumida_interna, 0),
       saldos.reduce((a, b) => a + b.quantidade_aderida, 0),
+      saldos.reduce((a, b) => a + b.saldo_consumo_interno, 0),
+      saldos.reduce((a, b) => a + b.saldo_adesao_total, 0),
+      saldos.reduce((a, b) => a + (b.saldo_adesao ?? 0), 0),
       saldos.reduce((a, b) => a + b.saldo_disponivel, 0),
-      '', '', '', '',
+      '', '', '',
     ];
 
     const lines = [

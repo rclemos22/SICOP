@@ -97,44 +97,53 @@ export class AtaPdfService {
       yPos += 7;
     }
 
-    // Tabela de Itens e Saldos
-    const bodyRows = itens.map(item => {
+    // ────────────────────────────────────────────────────────────────
+    // Tabela 1 — CONSUMO PRÓPRIO (GESTOR)
+    // ────────────────────────────────────────────────────────────────
+    let yFinal = yPos + 2;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0);
+    doc.text('CONSUMO PRÓPRIO — ÓRGÃO GERENCIADOR', pageW / 2, yFinal, { align: 'center' });
+    yFinal += 6;
+
+    const consumoRows = itens.map(item => {
       const saldo = saldos.find(s => s.item_id === item.id);
+      const consumido = saldo?.quantidade_consumida_interna ?? 0;
+      const saldoConsumo = saldo?.saldo_consumo_interno ?? Math.max(0, item.quantidade - consumido);
+      const pct = item.quantidade > 0 ? ((consumido / item.quantidade) * 100).toFixed(2) : '0.00';
       return [
         String(item.numero_item),
         item.descricao,
         item.unidade || '-',
-        this.fmt(item.quantidade),
-        this.fmt(item.valor_unitario),
-        this.fmt(saldo?.quantidade_consumida_interna ?? 0),
-        this.fmt(saldo?.quantidade_aderida ?? 0),
-        this.fmt(saldo?.saldo_disponivel ?? item.quantidade),
-        saldo ? `${saldo.percentual_utilizado}%` : '0%',
+        this.fmtInt(item.quantidade),
+        this.fmtInt(consumido),
+        this.fmtInt(saldoConsumo),
+        `${pct}%`,
       ];
     });
 
-    const tableStartY = yPos + 2;
-
     autoTable(doc, {
-      startY: tableStartY,
-      head: [['#', 'Descrição', 'Unid.', 'Qtd Reg.', 'Valor Unit.', 'Consumido', 'Aderido', 'Disponível', '%']],
-      body: bodyRows,
+      startY: yFinal,
+      head: [['#', 'Descrição', 'Unid.', 'Qtd Registrada', 'Consumido Interno', 'Saldo Consumo Próprio', '% Utilizado']],
+      body: consumoRows,
       theme: 'grid',
       headStyles: {
         fillColor: [33, 118, 255],
         textColor: 255,
         fontStyle: 'bold',
         fontSize: 7,
+        halign: 'center',
+        valign: 'middle',
       },
       bodyStyles: { fontSize: 7 },
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
         3: { halign: 'right' },
         4: { halign: 'right' },
-        5: { halign: 'right' },
-        6: { halign: 'right' },
-        7: { halign: 'right', fontStyle: 'bold' },
-        8: { halign: 'center', fontStyle: 'bold' },
+        5: { halign: 'right', fontStyle: 'bold' },
+        6: { halign: 'center', fontStyle: 'bold' },
       },
       margin: { left: margin, right: margin },
       didDrawPage: (data) => {
@@ -142,39 +151,77 @@ export class AtaPdfService {
       },
     });
 
-    // Tabela de Consolidação
-    let yFinal = (doc as any).lastAutoTable.finalY + 8;
-    const totalReg = itens.reduce((a, b) => a + b.quantidade, 0);
-    const totalCons = saldos.reduce((a, b) => a + b.quantidade_consumida_interna, 0);
-    const totalAd = saldos.reduce((a, b) => a + b.quantidade_aderida, 0);
-    const totalDisp = saldos.reduce((a, b) => a + b.saldo_disponivel, 0);
-    const pctGeral = totalReg > 0 ? ((totalCons + totalAd) / totalReg * 100).toFixed(2) : '0.00';
+    yFinal = (doc as any).lastAutoTable.finalY + 10;
 
-    autoTable(doc, {
-      startY: yFinal,
-      head: [['Indicador', 'Valor']],
-      body: [
-        ['Quantidade Total Registrada', this.fmt(totalReg)],
-        ['Total Consumido (Gestor)', this.fmt(totalCons)],
-        ['Total Aderido (Carona)', this.fmt(totalAd)],
-        ['Saldo Disponível', this.fmt(totalDisp)],
-        ['Percentual Utilizado', `${pctGeral}%`],
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [33, 118, 255], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
-      columnStyles: {
-        1: { halign: 'right', fontStyle: 'bold' },
-      },
-      margin: { left: margin, right: margin },
-      didDrawPage: (data) => {
-        this.drawFooter(doc, pageW, data.pageNumber);
-      },
+    // ────────────────────────────────────────────────────────────────
+    // Tabela 2 — ITENS COM ADESÃO (CARONA)
+    // ────────────────────────────────────────────────────────────────
+    const itensComAdesao = itens.filter(item => {
+      const saldo = saldos.find(s => s.item_id === item.id);
+      const temAdesao = adesoes.some(a => a.ata_item_id === item.id && (a.status === 'AUTORIZADA' || a.status === 'PENDENTE'));
+      return temAdesao || (saldo && saldo.quantidade_aderida > 0);
     });
 
-    yFinal = (doc as any).lastAutoTable.finalY + 8;
+    if (itensComAdesao.length > 0) {
+      if (yFinal + 20 > doc.internal.pageSize.getHeight() - 30) {
+        doc.addPage();
+        yFinal = 20;
+      }
 
-    // Tabela de Órgãos Aderentes
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0);
+      doc.text('ITENS COM ADESÃO (CARONA)', pageW / 2, yFinal, { align: 'center' });
+      yFinal += 6;
+
+      const adesaoRows = itensComAdesao.map(item => {
+        const saldo = saldos.find(s => s.item_id === item.id);
+        return [
+          String(item.numero_item),
+          item.descricao,
+          item.unidade || '-',
+          this.fmtInt(item.quantidade),
+          this.fmtInt(item.quantidade * 2.0),
+          this.fmtInt(item.quantidade * 0.5),
+          this.fmtInt(saldo?.quantidade_aderida ?? 0),
+          this.fmtInt(saldo?.saldo_adesao_total ?? 0),
+        ];
+      });
+
+      autoTable(doc, {
+        startY: yFinal,
+        head: [['#', 'Descrição', 'Unid.', 'Qtd Registrada', 'Limite Colet. (200%)', 'Limite Indiv. (50%)', 'Aderido', 'Saldo para Adesão']],
+        body: adesaoRows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [46, 160, 67],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 7,
+          halign: 'center',
+          valign: 'middle',
+        },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: {
+          0: { cellWidth: 8, halign: 'center' },
+          3: { halign: 'right' },
+          4: { halign: 'right' },
+          5: { halign: 'right' },
+          6: { halign: 'right' },
+          7: { halign: 'right', fontStyle: 'bold' },
+        },
+        margin: { left: margin, right: margin },
+        didDrawPage: (data) => {
+          this.drawFooter(doc, pageW, data.pageNumber);
+        },
+      });
+
+      yFinal = (doc as any).lastAutoTable.finalY + 8;
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Tabela 3 — ÓRGÃOS ADERENTES
+    // ────────────────────────────────────────────────────────────────
     const adesoesFiltradas = adesoes.filter(a => a.status === 'AUTORIZADA' || a.status === 'PENDENTE');
     if (adesoesFiltradas.length > 0) {
       if (yFinal + 20 > doc.internal.pageSize.getHeight() - 30) {
@@ -195,7 +242,7 @@ export class AtaPdfService {
           a.razao_orgao,
           a.cnpj_orgao,
           String(saldoItem?.numero_item ?? ''),
-          this.fmt(a.quantidade_autorizada ?? a.quantidade_solicitada),
+          this.fmtInt(a.quantidade_autorizada ?? a.quantidade_solicitada),
           getAdesaoStatusLabel(a.status),
         ];
       });
@@ -211,6 +258,7 @@ export class AtaPdfService {
           fontStyle: 'bold',
           fontSize: 8,
           halign: 'center',
+          valign: 'middle',
         },
         bodyStyles: { fontSize: 7 },
         columnStyles: {
@@ -286,5 +334,9 @@ export class AtaPdfService {
 
   private fmt(val: number): string {
     return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  private fmtInt(val: number): string {
+    return val.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
 }
