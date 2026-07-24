@@ -130,3 +130,40 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
   - **Tabela 3 — Órgãos Aderentes** mantida; removida tabela de consolidação.
   - `fmtInt()` para exibir inteiros sem decimais; `headStyles` com `halign: center` e `valign: middle`.
 - `ata-export.service.ts`: CSV com colunas "Saldo Consumo Próprio" e "Saldo Adesão Total".
+
+### 21. Múltiplos Itens por Adesão (Carona) + Remoção de CNPJ
+- **Problema**: Adesão permitia apenas 1 item por solicitação; campo CNPJ obrigatório no formulário.
+- **Solução**: Criada tabela `ata_adesao_itens` (junction) para suportar múltiplos itens por pedido.
+- `sql/17_MULTIPLOS_ITENS_ADESAO.sql`:
+  - Cria `ata_adesao_itens(adesao_id, ata_item_id, quantidade_solicitada, quantidade_autorizada)`.
+  - Migra dados existentes de `ata_adesoes` para a nova tabela.
+  - Recria `vw_ata_saldo_item` e `vw_ata_saldo_resumo` incluindo `ata_adesao_itens`.
+  - Nenhuma coluna antiga removida (backward compat).
+- `ata.model.ts`: adicionada interface `AtaAdesaoItem`; `AtaAdesao.itens?` opcional.
+- `saldo-ata.service.ts`:
+  - `solicitarAdesao` aceita `itens[]` (modo multi-item) ou `ata_item_id` (modo legado).
+  - `listarAdesoes` carrega `itens` via `ata_adesao_itens`.
+  - `autorizarAdesao(id, qtd, itemId?)` autoriza item específico.
+  - `validarMultiplosItens()` valida todos os itens de uma solicitação.
+- `ata-saldo-panel.component.ts`: formulário substitui select único por grid checkboxes + inputs de quantidade. CNPJ removido do form.
+- `ata-saldo-panel.component.html`: cards de adesão exibem lista de itens; modal de autorização com seleção de item.
+- `ata-pdf.service.ts`: Tabela "Órgãos Aderentes" sem CNPJ; cada item vira linha separada.
+- `ata-export.service.ts`: CSV "Órgãos Aderentes" sem CNPJ; itens como linhas separadas.
+
+### 21a. Fix: `ata_item_id`/`quantidade_solicitada` NOT NULL + erro silencioso
+- Migration `sql/17_MULTIPLOS_ITENS_ADESAO.sql`: adicionado `ALTER TABLE ata_adesoes ALTER COLUMN ata_item_id DROP NOT NULL` e `ALTER TABLE ata_adesoes ALTER COLUMN quantidade_solicitada DROP NOT NULL` — necessário para insert multi-item que omite essas colunas.
+- `ata-saldo-panel.component.ts:236`: `submitAdesao()` agora exibe `result.error` via `validationError` quando o service retorna falha (antes o erro era silencioso).
+
+### 21b. Fix: `cnpj_orgao` NOT NULL + validação por nome
+- Migration `sql/17_MULTIPLOS_ITENS_ADESAO.sql`: adicionado `ALTER TABLE ata_adesoes ALTER COLUMN cnpj_orgao DROP NOT NULL` — o campo CNPJ foi removido do formulário, mas a constraint impedia inserções sem ele.
+- `saldo-ata.service.ts:145`: removido `cnpj_orgao` do insert multi-item (não é mais coletado).
+- `saldo-ata.service.ts:369-397`: `validarLimiteAdesao` alterado de `.eq('cnpj_orgao', ...)` para `.eq('razao_orgao', ...)` — o limite individual de 50% (Art. 86 §3º) agora consulta pela razão social do órgão, já que CNPJ não é mais solicitado.
+
+### 22. Duplicatas em `ata_adesao_itens` (Item repetido 3x na mesma adesão)
+- **Causa**: Migration `17_MULTIPLOS_ITENS_ADESAO.sql` usava `INSERT ... SELECT` sem `ON CONFLICT` — re-executada múltiplas vezes criava registros duplicados.
+- **Correção**: `sql/17_MULTIPLOS_ITENS_ADESAO.sql`:
+  - Adicionada UNIQUE constraint `uk_ata_adesao_itens(adesao_id, ata_item_id)` (step 2b).
+  - INSERT migratório alterado para `ON CONFLICT (adesao_id, ata_item_id) DO NOTHING`.
+- **Código legado**: `solicitarAdesao` no modo legado fazia `.insert()` sem `.select('id')`, depois consultava `ata_adesoes` por `ata_item_id` + `status` para achar o ID — podia associar item à adesão errada se houvesse múltiplas pendentes. Corrigido para `.select('id').single()` direto no insert.
+- **SQL de cleanup**: `sql/18_FIX_DUPLICATAS_ITENS_ADESAO.sql` — diagnóstico + remoção de duplicatas mantendo o registro mais antigo + UNIQUE constraint.
+- **Ordem de execução**: (1) `17_MULTIPLOS_ITENS_ADESAO.sql` → (2) `18_FIX_DUPLICATAS_ITENS_ADESAO.sql` (se já tiver duplicatas) OU só `17` (para instalação limpa).

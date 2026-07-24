@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Ata, AtaItem, SaldoItem, AtaAdesao, getAtaStatusLabel, getAdesaoStatusLabel } from '../../../shared/models/ata.model';
+import { Ata, AtaItem, SaldoItem, AtaAdesao, AtaAdesaoItem, getAtaStatusLabel, getAdesaoStatusLabel } from '../../../shared/models/ata.model';
 
 @Injectable({ providedIn: 'root' })
 export class AtaPdfService {
@@ -154,15 +154,9 @@ export class AtaPdfService {
     yFinal = (doc as any).lastAutoTable.finalY + 10;
 
     // ────────────────────────────────────────────────────────────────
-    // Tabela 2 — ITENS COM ADESÃO (CARONA)
+    // Tabela 2 — SALDO DA ATA (Todos os Itens)
     // ────────────────────────────────────────────────────────────────
-    const itensComAdesao = itens.filter(item => {
-      const saldo = saldos.find(s => s.item_id === item.id);
-      const temAdesao = adesoes.some(a => a.ata_item_id === item.id && (a.status === 'AUTORIZADA' || a.status === 'PENDENTE'));
-      return temAdesao || (saldo && saldo.quantidade_aderida > 0);
-    });
-
-    if (itensComAdesao.length > 0) {
+    if (itens.length > 0) {
       if (yFinal + 20 > doc.internal.pageSize.getHeight() - 30) {
         doc.addPage();
         yFinal = 20;
@@ -171,11 +165,14 @@ export class AtaPdfService {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(0);
-      doc.text('ITENS COM ADESÃO (CARONA)', pageW / 2, yFinal, { align: 'center' });
+      doc.text('SALDO DA ATA', pageW / 2, yFinal, { align: 'center' });
       yFinal += 6;
 
-      const adesaoRows = itensComAdesao.map(item => {
+      const saldoRows = itens.map(item => {
         const saldo = saldos.find(s => s.item_id === item.id);
+        const aderido = saldo?.quantidade_aderida ?? 0;
+        const limiteColetivo = item.quantidade * 2.0;
+        const pct = limiteColetivo > 0 ? ((aderido / limiteColetivo) * 100).toFixed(2) : '0.00';
         return [
           String(item.numero_item),
           item.descricao,
@@ -183,18 +180,19 @@ export class AtaPdfService {
           this.fmtInt(item.quantidade),
           this.fmtInt(item.quantidade * 2.0),
           this.fmtInt(item.quantidade * 0.5),
-          this.fmtInt(saldo?.quantidade_aderida ?? 0),
+          this.fmtInt(aderido),
           this.fmtInt(saldo?.saldo_adesao_total ?? 0),
+          `${pct}%`,
         ];
       });
 
       autoTable(doc, {
         startY: yFinal,
-        head: [['#', 'Descrição', 'Unid.', 'Qtd Registrada', 'Limite Colet. (200%)', 'Limite Indiv. (50%)', 'Aderido', 'Saldo para Adesão']],
-        body: adesaoRows,
+        head: [['#', 'Descrição', 'Unid.', 'Qtd Registrada', 'Limite Colet. (200%)', 'Limite Indiv. (50%)', 'Aderido', 'Saldo para Adesão', '% Utilizado']],
+        body: saldoRows,
         theme: 'grid',
         headStyles: {
-          fillColor: [46, 160, 67],
+          fillColor: [237, 121, 64],
           textColor: 255,
           fontStyle: 'bold',
           fontSize: 7,
@@ -209,6 +207,7 @@ export class AtaPdfService {
           5: { halign: 'right' },
           6: { halign: 'right' },
           7: { halign: 'right', fontStyle: 'bold' },
+          8: { halign: 'center', fontStyle: 'bold' },
         },
         margin: { left: margin, right: margin },
         didDrawPage: (data) => {
@@ -222,7 +221,7 @@ export class AtaPdfService {
     // ────────────────────────────────────────────────────────────────
     // Tabela 3 — ÓRGÃOS ADERENTES
     // ────────────────────────────────────────────────────────────────
-    const adesoesFiltradas = adesoes.filter(a => a.status === 'AUTORIZADA' || a.status === 'PENDENTE');
+    const adesoesFiltradas = adesoes.filter(a => a.status === 'AUTORIZADA');
     if (adesoesFiltradas.length > 0) {
       if (yFinal + 20 > doc.internal.pageSize.getHeight() - 30) {
         doc.addPage();
@@ -235,21 +234,42 @@ export class AtaPdfService {
       doc.text('ÓRGÃOS ADERENTES (CARONA)', pageW / 2, yFinal, { align: 'center' });
       yFinal += 6;
 
-      const adesoesRows = adesoesFiltradas.map(a => {
-        const saldoItem = saldos.find(s => s.item_id === a.ata_item_id);
-        return [
-          a.processo_sei || '-',
-          a.razao_orgao,
-          a.cnpj_orgao,
-          String(saldoItem?.numero_item ?? ''),
-          this.fmtInt(a.quantidade_autorizada ?? a.quantidade_solicitada),
-          getAdesaoStatusLabel(a.status),
-        ];
-      });
+      const adesoesRows: any[][] = [];
+      for (const a of adesoesFiltradas) {
+        if (a.itens && a.itens.length > 0) {
+          for (const item of a.itens) {
+            const saldoItem = saldos.find(s => s.item_id === item.ata_item_id);
+            adesoesRows.push([
+              a.processo_sei || '-',
+              a.razao_orgao,
+              String(saldoItem?.numero_item ?? ''),
+              this.fmtInt(item.quantidade_autorizada ?? item.quantidade_solicitada),
+              getAdesaoStatusLabel(a.status),
+            ]);
+          }
+        } else if (a.ata_item_id) {
+          const saldoItem = saldos.find(s => s.item_id === a.ata_item_id);
+          adesoesRows.push([
+            a.processo_sei || '-',
+            a.razao_orgao,
+            String(saldoItem?.numero_item ?? ''),
+            this.fmtInt(a.quantidade_autorizada ?? a.quantidade_solicitada ?? 0),
+            getAdesaoStatusLabel(a.status),
+          ]);
+        } else {
+          adesoesRows.push([
+            a.processo_sei || '-',
+            a.razao_orgao,
+            '',
+            this.fmtInt(a.quantidade_autorizada ?? a.quantidade_solicitada ?? 0),
+            getAdesaoStatusLabel(a.status),
+          ]);
+        }
+      }
 
       autoTable(doc, {
         startY: yFinal,
-        head: [['Proc. SEI', 'Órgão', 'CNPJ', 'Item', 'Quantidade', 'Status']],
+        head: [['Proc. SEI', 'Órgão', 'Item', 'Quantidade', 'Status']],
         body: adesoesRows,
         theme: 'grid',
         headStyles: {
@@ -262,12 +282,11 @@ export class AtaPdfService {
         },
         bodyStyles: { fontSize: 7 },
         columnStyles: {
-          0: { cellWidth: 34 },
-          1: { cellWidth: 60 },
-          2: { cellWidth: 26 },
-          3: { halign: 'center', cellWidth: 10 },
-          4: { halign: 'right', cellWidth: 22 },
-          5: { halign: 'center', cellWidth: 18 },
+          0: { cellWidth: 40 },
+          1: { cellWidth: 80 },
+          2: { halign: 'center', cellWidth: 12 },
+          3: { halign: 'right', cellWidth: 22 },
+          4: { halign: 'center', cellWidth: 18 },
         },
         margin: { left: margin, right: margin },
         didDrawPage: (data) => {

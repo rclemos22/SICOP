@@ -64,20 +64,30 @@ export interface AtaConsumoInterno {
   created_at?: string;
 }
 
+export interface AtaAdesaoItem {
+  id?: string;
+  adesao_id: string;
+  ata_item_id: string;
+  quantidade_solicitada: number;
+  quantidade_autorizada?: number;
+  created_at?: string;
+}
+
 export interface AtaAdesao {
   id?: string;
   ata_id: string;
-  ata_item_id: string;
-  cnpj_orgao: string;
+  ata_item_id?: string;
+  cnpj_orgao?: string;
   razao_orgao: string;
   processo_sei?: string;
-  quantidade_solicitada: number;
+  quantidade_solicitada?: number;
   quantidade_autorizada?: number;
   status: AdesaoStatus;
   data_solicitacao: string;
   data_resposta?: string;
   justificativa?: string;
   created_at?: string;
+  itens?: AtaAdesaoItem[];
 }
 
 export interface SaldoItem {

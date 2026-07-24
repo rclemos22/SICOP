@@ -1,7 +1,7 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
-import { AtaConsumoInterno, AtaAdesao, SaldoItem, SaldoResumo, AdesaoStatus } from '../../../shared/models/ata.model';
+import { AtaConsumoInterno, AtaAdesao, AtaAdesaoItem, SaldoItem, SaldoResumo, AdesaoStatus } from '../../../shared/models/ata.model';
 import { Result, ok, fail } from '../../../shared/models/result.model';
 
 @Injectable({ providedIn: 'root' })
@@ -133,22 +133,72 @@ export class SaldoAtaService {
 
   async solicitarAdesao(adesao: AtaAdesao): Promise<Result<null>> {
     try {
-      const { error } = await this.supabaseService.client
-        .from('ata_adesoes')
-        .insert({
-          ata_id: adesao.ata_id,
-          ata_item_id: adesao.ata_item_id,
-          cnpj_orgao: adesao.cnpj_orgao,
-          razao_orgao: adesao.razao_orgao,
-          processo_sei: adesao.processo_sei || null,
-          quantidade_solicitada: adesao.quantidade_solicitada,
-          quantidade_autorizada: null,
-          status: 'PENDENTE',
-          data_solicitacao: adesao.data_solicitacao || new Date().toISOString().split('T')[0],
-          justificativa: adesao.justificativa || null,
-        });
+      const itens = adesao.itens || [];
+      const temMultiplosItens = itens.length > 1 || (itens.length === 1 && adesao.ata_item_id == null);
 
-      if (error) throw error;
+      if (temMultiplosItens && itens.length > 0) {
+        // Modo multi-item: insere adesao sem item específico, depois insere itens
+        const { data, error } = await this.supabaseService.client
+          .from('ata_adesoes')
+          .insert({
+            ata_id: adesao.ata_id,
+            razao_orgao: adesao.razao_orgao,
+            processo_sei: adesao.processo_sei || null,
+            status: 'PENDENTE',
+            data_solicitacao: adesao.data_solicitacao || new Date().toISOString().split('T')[0],
+            justificativa: adesao.justificativa || null,
+          })
+          .select('id')
+          .single();
+
+        if (error) throw error;
+
+        const itensToInsert = itens.map(item => ({
+          adesao_id: data.id,
+          ata_item_id: item.ata_item_id,
+          quantidade_solicitada: item.quantidade_solicitada,
+        }));
+
+        const { error: itensError } = await this.supabaseService.client
+          .from('ata_adesao_itens')
+          .insert(itensToInsert);
+
+        if (itensError) throw itensError;
+      } else if (adesao.ata_item_id) {
+        // Modo legado: item único direto na tabela principal
+        const { data: inserted, error } = await this.supabaseService.client
+          .from('ata_adesoes')
+          .insert({
+            ata_id: adesao.ata_id,
+            ata_item_id: adesao.ata_item_id,
+            cnpj_orgao: adesao.cnpj_orgao || null,
+            razao_orgao: adesao.razao_orgao,
+            processo_sei: adesao.processo_sei || null,
+            quantidade_solicitada: adesao.quantidade_solicitada,
+            quantidade_autorizada: null,
+            status: 'PENDENTE',
+            data_solicitacao: adesao.data_solicitacao || new Date().toISOString().split('T')[0],
+            justificativa: adesao.justificativa || null,
+          })
+          .select('id')
+          .single();
+
+        if (error) throw error;
+
+        // Também insere na nova tabela para consistência
+        if (inserted) {
+          await this.supabaseService.client
+            .from('ata_adesao_itens')
+            .insert({
+              adesao_id: inserted.id,
+              ata_item_id: adesao.ata_item_id,
+              quantidade_solicitada: adesao.quantidade_solicitada,
+            });
+        }
+      } else {
+        return fail('Informe ao menos um item para solicitar adesão.');
+      }
+
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'SaldoAtaService.solicitarAdesao');
@@ -156,18 +206,40 @@ export class SaldoAtaService {
     }
   }
 
-  async autorizarAdesao(id: string, quantidadeAutorizada: number): Promise<Result<null>> {
+  async autorizarAdesao(id: string, quantidadeAutorizada: number, itemId?: string): Promise<Result<null>> {
     try {
-      const { error } = await this.supabaseService.client
-        .from('ata_adesoes')
-        .update({
-          quantidade_autorizada: quantidadeAutorizada,
-          status: 'AUTORIZADA',
-          data_resposta: new Date().toISOString().split('T')[0],
-        })
-        .eq('id', id);
+      if (itemId) {
+        const { error } = await this.supabaseService.client
+          .from('ata_adesao_itens')
+          .update({
+            quantidade_autorizada: quantidadeAutorizada,
+          })
+          .eq('id', itemId);
 
-      if (error) throw error;
+        if (error) throw error;
+
+        const { error: statusError } = await this.supabaseService.client
+          .from('ata_adesoes')
+          .update({
+            status: 'AUTORIZADA',
+            data_resposta: new Date().toISOString().split('T')[0],
+          })
+          .eq('id', id);
+
+        if (statusError) throw statusError;
+      } else {
+        const { error } = await this.supabaseService.client
+          .from('ata_adesoes')
+          .update({
+            quantidade_autorizada: quantidadeAutorizada,
+            status: 'AUTORIZADA',
+            data_resposta: new Date().toISOString().split('T')[0],
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+      }
+
       return ok(null);
     } catch (err: any) {
       this.errorHandler.handle(err, 'SaldoAtaService.autorizarAdesao');
@@ -223,7 +295,30 @@ export class SaldoAtaService {
 
       const { data, error } = await query;
       if (error) throw error;
-      return ok(data || []);
+
+      const adesoes = (data || []) as AtaAdesao[];
+
+      for (const adesao of adesoes) {
+        const { data: itens } = await this.supabaseService.client
+          .from('ata_adesao_itens')
+          .select('*')
+          .eq('adesao_id', adesao.id)
+          .order('created_at', { ascending: true });
+
+        adesao.itens = (itens || []) as AtaAdesaoItem[];
+
+        if (adesao.itens.length === 0 && adesao.ata_item_id) {
+          adesao.itens = [{
+            id: undefined,
+            adesao_id: adesao.id!,
+            ata_item_id: adesao.ata_item_id,
+            quantidade_solicitada: adesao.quantidade_solicitada || 0,
+            quantidade_autorizada: adesao.quantidade_autorizada,
+          }];
+        }
+      }
+
+      return ok(adesoes);
     } catch (err: any) {
       return fail(err.message || 'Erro ao listar adesões');
     }
@@ -264,7 +359,7 @@ export class SaldoAtaService {
 
   // ---- Validações Legais (Art. 86, Lei 14.133/2021) ----
 
-  async validarLimiteAdesao(ataItemId: string, quantidadePretendida: number, cnpjOrgao?: string): Promise<{
+  async validarLimiteAdesao(ataItemId: string, quantidadePretendida: number, orgaoIdentificador?: string): Promise<{
     permitido: boolean;
     motivo?: string;
     maximoPermitido: number;
@@ -281,12 +376,12 @@ export class SaldoAtaService {
 
     // Quanto este órgão já consumiu (para respeitar o § 3º cumulativamente)
     let jaAutorizadoMesmoOrgao = 0;
-    if (cnpjOrgao) {
+    if (orgaoIdentificador) {
       const { data: adesoesOrgao } = await this.supabaseService.client
         .from('ata_adesoes')
         .select('quantidade_autorizada')
         .eq('ata_item_id', ataItemId)
-        .eq('cnpj_orgao', cnpjOrgao)
+        .eq('razao_orgao', orgaoIdentificador)
         .eq('status', 'AUTORIZADA');
 
       jaAutorizadoMesmoOrgao = (adesoesOrgao || []).reduce(
@@ -320,6 +415,31 @@ export class SaldoAtaService {
     }
 
     return { permitido: true, maximoPermitido };
+  }
+
+  async validarMultiplosItens(
+    itens: Array<{ ata_item_id: string; quantidade: number }>,
+    orgaoIdentificador?: string
+  ): Promise<{
+    permitido: boolean;
+    motivo?: string;
+    erros?: Array<{ itemId: string; motivo: string }>;
+  }> {
+    const erros: Array<{ itemId: string; motivo: string }> = [];
+
+    for (const item of itens) {
+      const validacao = await this.validarLimiteAdesao(item.ata_item_id, item.quantidade, orgaoIdentificador);
+      if (!validacao.permitido) {
+        erros.push({ itemId: item.ata_item_id, motivo: validacao.motivo! });
+      }
+    }
+
+    if (erros.length > 0) {
+      const motivoGeral = erros.map(e => e.motivo).join('\n\n');
+      return { permitido: false, motivo: motivoGeral, erros };
+    }
+
+    return { permitido: true };
   }
 
   async validarLimiteConsumoInterno(ataItemId: string, quantidadePretendida: number): Promise<{

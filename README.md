@@ -181,6 +181,7 @@ src/
 | 10 | `10_CORRIGIR_PAGAMENTOS_CONTRATO_014_2026.sql` | Corrige pagamentos incorretos do contrato 014/2026: remove OBs órfãs, recalcula totais |
 | 11 | `11_LIMPEZA_TOTAL_PAGAMENTOS.sql` | Remove TODOS os pagamentos (OB/LIQUIDATION) de todos os contratos para recarga limpa via SIGEF |
 | 12 | `12_SANITIZACAO_COMPLETA_SIGEF.sql` | Remove COMPLETAMENTE mirror, cache e transacoes do SIGEF; zera totais (exceto `total_cancelado`); diagnóstico de dotações orfãs |
+| 17 | `17_MULTIPLOS_ITENS_ADESAO.sql` | Cria `ata_adesao_itens` para suportar múltiplos itens por adesão; recria views de saldo |
 
 ### Tabela `aditivos`
 

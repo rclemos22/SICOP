@@ -34,13 +34,14 @@ export class AtaSaldoPanelComponent implements OnInit {
 
   // Adesão form
   showAdesaoForm = signal(false);
-  adesaoForm = { ata_item_id: '', cnpj_orgao: '', razao_orgao: '', processo_sei: '', quantidade_solicitada: 0, justificativa: '' };
+  adesaoForm = { itens: [] as Array<{ ata_item_id: string; quantidade: number }>, razao_orgao: '', processo_sei: '', justificativa: '' };
 
   // Validation messages
   validationError = signal<string | null>(null);
 
   // Authorization modal
   showAuthModal = signal<AtaAdesao | null>(null);
+  authItemSelecionado = signal<{ itemId: string; itemNumero: number; itemDescricao: string } | null>(null);
   authQuantidade = signal(0);
   authValidation = signal<{ permitido: boolean; motivo?: string; maximoPermitido: number } | null>(null);
 
@@ -145,19 +146,74 @@ export class AtaSaldoPanelComponent implements OnInit {
 
   // ---- Adesões ----
   openAdesaoForm() {
-    this.adesaoForm = { ata_item_id: '', cnpj_orgao: '', razao_orgao: '', processo_sei: '', quantidade_solicitada: 0, justificativa: '' };
+    const itensIniciais = this.saldos().map(s => ({
+      ata_item_id: s.item_id,
+      quantidade: 0,
+    }));
+    this.adesaoForm = { itens: itensIniciais, razao_orgao: '', processo_sei: '', justificativa: '' };
     this.validationError.set(null);
     this.showAdesaoForm.set(true);
   }
 
+  toggleItemSelecionado(itemId: string) {
+    const itens = this.adesaoForm.itens;
+    const idx = itens.findIndex(i => i.ata_item_id === itemId);
+    if (idx >= 0) {
+      if (itens[idx].quantidade > 0) {
+        itens[idx].quantidade = 0;
+      } else {
+        itens[idx].quantidade = 1;
+      }
+      this.adesaoForm = { ...this.adesaoForm, itens: [...itens] };
+    }
+  }
+
+  getItemQuantidade(itemId: string): number {
+    const found = this.adesaoForm.itens.find(i => i.ata_item_id === itemId);
+    return found?.quantidade ?? 0;
+  }
+
+  setItemQuantidade(itemId: string, qtd: number) {
+    const itens = this.adesaoForm.itens;
+    const idx = itens.findIndex(i => i.ata_item_id === itemId);
+    if (idx >= 0) {
+      itens[idx].quantidade = Math.max(0, qtd);
+      this.adesaoForm = { ...this.adesaoForm, itens: [...itens] };
+    }
+  }
+
+  onItemQtdInput(event: Event, itemId: string) {
+    const target = event.target as HTMLInputElement;
+    this.setItemQuantidade(itemId, Number(target.value));
+  }
+
+  getAuthAtaItemId(): string {
+    const adesao = this.showAuthModal();
+    const selItem = this.authItemSelecionado();
+    if (!adesao || !selItem) return '';
+    const itemAtual = adesao.itens?.find(i => i.id === selItem.itemId);
+    return itemAtual?.ata_item_id || adesao.ata_item_id || '';
+  }
+
+  getItensSelecionados() {
+    return this.adesaoForm.itens.filter(i => i.quantidade > 0);
+  }
+
   async submitAdesao() {
     const f = this.adesaoForm;
-    if (!f.ata_item_id || !f.cnpj_orgao || !f.razao_orgao || f.quantidade_solicitada <= 0) {
-      this.validationError.set('Preencha todos os campos obrigatórios.');
+    const itensSelecionados = this.getItensSelecionados();
+
+    if (!f.razao_orgao) {
+      this.validationError.set('Informe a Razão Social do órgão solicitante.');
       return;
     }
 
-    const validacao = await this.saldoService.validarLimiteAdesao(f.ata_item_id, f.quantidade_solicitada, f.cnpj_orgao);
+    if (itensSelecionados.length === 0) {
+      this.validationError.set('Selecione ao menos um item e informe a quantidade.');
+      return;
+    }
+
+    const validacao = await this.saldoService.validarMultiplosItens(itensSelecionados, f.razao_orgao);
     if (!validacao.permitido) {
       this.validationError.set(validacao.motivo!);
       return;
@@ -165,52 +221,90 @@ export class AtaSaldoPanelComponent implements OnInit {
 
     const result = await this.saldoService.solicitarAdesao({
       ata_id: this.ata().id,
-      ata_item_id: f.ata_item_id,
-      cnpj_orgao: f.cnpj_orgao,
       razao_orgao: f.razao_orgao,
       processo_sei: f.processo_sei || undefined,
-      quantidade_solicitada: f.quantidade_solicitada,
+      itens: itensSelecionados.map(i => ({
+        adesao_id: '',
+        ata_item_id: i.ata_item_id,
+        quantidade_solicitada: i.quantidade,
+      })),
       justificativa: f.justificativa || undefined,
       status: 'PENDENTE',
       data_solicitacao: new Date().toISOString().split('T')[0],
     });
 
-    if (!result.error) {
-      this.showAdesaoForm.set(false);
-      this.validationError.set(null);
-      await this.loadData();
+    if (result.error) {
+      this.validationError.set(result.error);
+      return;
     }
+
+    this.showAdesaoForm.set(false);
+    this.validationError.set(null);
+    await this.loadData();
   }
 
   openAuthModal(adesao: AtaAdesao) {
     this.showAuthModal.set(adesao);
-    this.authQuantidade.set(adesao.quantidade_solicitada);
+    this.authItemSelecionado.set(null);
+    this.authQuantidade.set(0);
     this.authValidation.set(null);
-    this.validateAuthQuantidade(adesao, adesao.quantidade_solicitada);
+
+    if (adesao.itens && adesao.itens.length > 0) {
+      const primeiroItem = adesao.itens[0];
+      const saldoItem = this.getSaldoItem(primeiroItem.ata_item_id);
+      this.authItemSelecionado.set({
+        itemId: primeiroItem.id || '',
+        itemNumero: saldoItem?.numero_item || 0,
+        itemDescricao: saldoItem?.descricao_item || '',
+      });
+      this.authQuantidade.set(primeiroItem.quantidade_solicitada);
+      this.validateAuthQuantidade(adesao, primeiroItem.ata_item_id, primeiroItem.quantidade_solicitada);
+    }
   }
 
-  async validateAuthQuantidade(adesao: AtaAdesao, quantidade: number) {
+  selectAuthItem(item: { itemId: string; ataItemId: string; qtdSolicitada: number }) {
+    const saldoItem = this.getSaldoItem(item.ataItemId);
+    this.authItemSelecionado.set({
+      itemId: item.itemId,
+      itemNumero: saldoItem?.numero_item || 0,
+      itemDescricao: saldoItem?.descricao_item || '',
+    });
+    this.authQuantidade.set(item.qtdSolicitada);
+    this.validateAuthQuantidade(this.showAuthModal()!, item.ataItemId, item.qtdSolicitada);
+  }
+
+  async validateAuthQuantidade(adesao: AtaAdesao, ataItemId: string, quantidade: number) {
     if (quantidade <= 0) {
       this.authValidation.set({ permitido: false, motivo: 'Quantidade deve ser maior que zero.', maximoPermitido: 0 });
       return;
     }
-    const result = await this.saldoService.validarLimiteAdesao(adesao.ata_item_id, quantidade, adesao.cnpj_orgao);
+    const result = await this.saldoService.validarLimiteAdesao(ataItemId, quantidade, adesao.cnpj_orgao);
     this.authValidation.set(result);
   }
 
   async confirmAutorizarAdesao() {
     const adesao = this.showAuthModal();
     const quantidade = this.authQuantidade();
+    const itemSelecionado = this.authItemSelecionado();
     if (!adesao || quantidade <= 0) return;
 
     const validacao = this.authValidation();
     if (!validacao?.permitido) return;
 
-    const result = await this.saldoService.autorizarAdesao(adesao.id!, quantidade);
-    if (!result.error) {
-      this.showAuthModal.set(null);
-      this.authValidation.set(null);
-      await this.loadData();
+    if (itemSelecionado && itemSelecionado.itemId) {
+      const result = await this.saldoService.autorizarAdesao(adesao.id!, quantidade, itemSelecionado.itemId);
+      if (!result.error) {
+        this.showAuthModal.set(null);
+        this.authValidation.set(null);
+        await this.loadData();
+      }
+    } else {
+      const result = await this.saldoService.autorizarAdesao(adesao.id!, quantidade);
+      if (!result.error) {
+        this.showAuthModal.set(null);
+        this.authValidation.set(null);
+        await this.loadData();
+      }
     }
   }
 
@@ -219,10 +313,11 @@ export class AtaSaldoPanelComponent implements OnInit {
     this.authValidation.set(null);
   }
 
-  onAuthQuantidadeInput(event: Event, adesao: AtaAdesao) {
-    const value = Number((event.target as HTMLInputElement).value);
+  onAuthQuantidadeInput(event: Event, ataItemId: string) {
+    const target = event.target as HTMLInputElement;
+    const value = Number(target.value);
     this.authQuantidade.set(value);
-    this.validateAuthQuantidade(adesao, value);
+    this.validateAuthQuantidade(this.showAuthModal()!, ataItemId, value);
   }
 
   openRejectModal(adesao: AtaAdesao) {

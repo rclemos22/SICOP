@@ -59,20 +59,34 @@ export class AtaExportService {
       for (const s of saldos) {
         saldoMap.set(s.item_id, s.numero_item);
       }
-      lines.push(
-        '',
-        'ÓRGÃOS ADERENTES (CARONA)',
-        'Processo SEI,Órgão,CNPJ,Item,Quantidade,Status',
-        ...adesoes
-          .filter(a => a.status === 'AUTORIZADA' || a.status === 'PENDENTE')
-          .map(a => [
+      const adesoesLinhas: string[] = [];
+      for (const a of adesoes.filter(a => a.status === 'AUTORIZADA' || a.status === 'PENDENTE')) {
+        if (a.itens && a.itens.length > 0) {
+          for (const item of a.itens) {
+            adesoesLinhas.push([
+              a.processo_sei || '-',
+              this.csvEscape(a.razao_orgao),
+              saldoMap.get(item.ata_item_id) ?? '',
+              item.quantidade_autorizada ?? item.quantidade_solicitada,
+              getAdesaoStatusLabel(a.status),
+            ].join(','));
+          }
+        } else if (a.ata_item_id) {
+          adesoesLinhas.push([
             a.processo_sei || '-',
             this.csvEscape(a.razao_orgao),
-            a.cnpj_orgao,
             saldoMap.get(a.ata_item_id) ?? '',
             a.quantidade_autorizada ?? a.quantidade_solicitada,
             getAdesaoStatusLabel(a.status),
-          ].join(','))
+          ].join(','));
+        }
+      }
+
+      lines.push(
+        '',
+        'ÓRGÃOS ADERENTES (CARONA)',
+        'Processo SEI,Órgão,Item,Quantidade,Status',
+        ...adesoesLinhas
       );
     }
 
