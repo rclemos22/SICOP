@@ -12,7 +12,7 @@ WITH liquidations AS (
   WHERE type = 'LIQUIDATION'
   GROUP BY contract_id
 )
-SELECT c.id, c.numero, c.contratante_nome,
+SELECT c.id, c.contrato AS numero, c.contratada AS contratante_nome,
        c.total_empenhado, c.total_pago, c.saldo_a_pagar,
        COALESCE(l.sum_liq, 0) AS sum_liquidations,
        (c.total_pago - COALESCE(l.sum_liq, 0)) AS diff_pago,
@@ -43,7 +43,7 @@ WHERE ob.nunotaempenho IS NOT NULL
 ORDER BY ob.dtpagamento DESC;
 
 -- 3. Contratos sem nenhuma transação LIQUIDATION mas com total_pago > 0
-SELECT c.id, c.numero, c.contratante_nome, c.total_pago
+SELECT c.id, c.contrato AS numero, c.contratada AS contratante_nome, c.total_pago
 FROM contratos c
 WHERE c.total_pago > 0
   AND NOT EXISTS (
