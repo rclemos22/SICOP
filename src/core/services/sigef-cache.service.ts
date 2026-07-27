@@ -786,20 +786,16 @@ export class SigefCacheService {
 
   async clearCacheForNe(neNumber: string): Promise<void> {
     const ne = neNumber.trim().toUpperCase();
-    await Promise.all([
-      this.supabaseService.client.from('sigef_notas_empenho').delete().eq('nunotaempenho', ne),
-      this.supabaseService.client.from('sigef_ne_movimentos').delete().eq('nunotaempenho', ne),
-      this.supabaseService.client.from('sigef_ordens_bancarias').delete().eq('nunotaempenho', ne),
-    ]);
+    await this.supabaseService.client.from('sigef_notas_empenho').delete().eq('nunotaempenho', ne);
+    await this.supabaseService.client.from('sigef_ne_movimentos').delete().eq('nunotaempenho', ne);
+    await this.supabaseService.client.from('sigef_ordens_bancarias').delete().eq('nunotaempenho', ne);
     this.debug.cache(`Cache limpo para NE ${ne}`);
   }
 
   async clearAllCache(): Promise<void> {
-    await Promise.all([
-      this.supabaseService.client.from('sigef_notas_empenho').delete().neq('nunotaempenho', ''),
-      this.supabaseService.client.from('sigef_ne_movimentos').delete().neq('nunotaempenho', ''),
-      this.supabaseService.client.from('sigef_ordens_bancarias').delete().neq('nunotaempenho', ''),
-    ]);
+    await this.supabaseService.client.from('sigef_notas_empenho').delete().neq('nunotaempenho', '');
+    await this.supabaseService.client.from('sigef_ne_movimentos').delete().neq('nunotaempenho', '');
+    await this.supabaseService.client.from('sigef_ordens_bancarias').delete().neq('nunotaempenho', '');
     this.debug.cache('Cache de NE e OB totalmente limpo');
   }
 

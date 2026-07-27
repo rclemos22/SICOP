@@ -188,3 +188,7 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - `app.component.ts`: `sidebarOpen` e `windowWidth` convertidos para `signal`; adicionado `isDesktop` computed; `theme` signal com persistência em localStorage; `effect` sincroniza classe `dark`/`light` no `<html>`.
 - `app.component.html`: sidebarmd:translate-x-0; bindings usam `sidebarOpen()`/`isDesktop()`; overlay condicional `!isDesktop()`; toggle tema no header (ícone `light_mode`/`dark_mode`).
 - `index.html`: removido `class="dark"` do `<html>`; script inline de FOUC prevention lê localStorage/media query antes do Angular carregar.
+
+### 27. Deadlock no clearAllCache — `Promise.all` → sequencial (Jul 2026)
+- `sigef-cache.service.ts:787-804`: `clearCacheForNe` e `clearAllCache` usavam `Promise.all` para deletar de 3 tabelas em paralelo, causando deadlock (`ShareLock`) quando duas sessões executavam simultaneamente com ordens de lock invertidas.
+- Corrigido para execução **sequencial** com ordem consistente: `sigef_notas_empenho` → `sigef_ne_movimentos` → `sigef_ordens_bancarias`.
