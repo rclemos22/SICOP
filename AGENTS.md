@@ -198,3 +198,8 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - `sigef-sync-page.component.ts`: adicionado botão "Reprocessar Financeiro" que chama `FinancialService.backfillTransacoes()` — recalcula `total_empenhado`/`total_pago`/`saldo_a_pagar` de todos os contratos a partir do cache atual.
 
 **Causa raiz do contrato 066/2026**: O `syncSigefTransactions` só é executado quando explicitamente chamado. Se a OB `2026OB003480` foi carregada no cache após a última sincronização, o contrato ficou com `total_pago` desatualizado. O `backfillTransacoes()` (ou o novo botão) resolve.
+
+### 29. UNIQUE constraint ausente em sigef_id — upsert falhava com HTTP 400 (Jul 2026)
+- `sql/21_ADD_UNIQUE_SIGEF_ID_TRANSACOES.sql`: adiciona `uk_transacoes_sigef_id UNIQUE (sigef_id)` na tabela `transacoes`.
+- **Problema**: `sigef_id` não tinha UNIQUE constraint, então o `onConflict: 'sigef_id'` no upsert da `financial.service.ts:799` retornava HTTP 400 e as transações NÃO eram salvas. `updateContractTotals` recalculava a partir de dados vazios/stale, zerando totais.
+- **Correção**: migration remove duplicatas (se houver) e adiciona `uk_transacoes_sigef_id`.
