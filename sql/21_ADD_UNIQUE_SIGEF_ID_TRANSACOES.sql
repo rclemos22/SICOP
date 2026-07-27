@@ -33,7 +33,7 @@ DELETE FROM public.transacoes
 WHERE id IN (SELECT id FROM dup WHERE rn > 1);
 
 -- 3. Garantir que id e NOT NULL e preencher UUIDs faltantes
-UPDATE public.transacoes SET id = gen_random_uuid()::text WHERE id IS NULL;
+UPDATE public.transacoes SET id = gen_random_uuid() WHERE id IS NULL;
 ALTER TABLE public.transacoes ALTER COLUMN id SET NOT NULL;
 
 -- 4. Adicionar PRIMARY KEY em id (se nao existir)
