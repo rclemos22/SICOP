@@ -192,3 +192,9 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 ### 27. Deadlock no clearAllCache — `Promise.all` → sequencial (Jul 2026)
 - `sigef-cache.service.ts:787-804`: `clearCacheForNe` e `clearAllCache` usavam `Promise.all` para deletar de 3 tabelas em paralelo, causando deadlock (`ShareLock`) quando duas sessões executavam simultaneamente com ordens de lock invertidas.
 - Corrigido para execução **sequencial** com ordem consistente: `sigef_notas_empenho` → `sigef_ne_movimentos` → `sigef_ordens_bancarias`.
+
+### 28. Varredura de divergências de pagamento + botão "Reprocessar Financeiro" (Jul 2026)
+- `sql/20_DIAGNOSTICO_DIVERGENCIAS_PAGAMENTO.sql`: diagnóstico completo — contratos com divergência total_pago vs soma LIQUIDATIONs, OBs pagas no cache sem transação correspondente, contratos sem LIQUIDATION mas com total_pago > 0, OBs agrupadas por NE, NEs órfãs sem dotação.
+- `sigef-sync-page.component.ts`: adicionado botão "Reprocessar Financeiro" que chama `FinancialService.backfillTransacoes()` — recalcula `total_empenhado`/`total_pago`/`saldo_a_pagar` de todos os contratos a partir do cache atual.
+
+**Causa raiz do contrato 066/2026**: O `syncSigefTransactions` só é executado quando explicitamente chamado. Se a OB `2026OB003480` foi carregada no cache após a última sincronização, o contrato ficou com `total_pago` desatualizado. O `backfillTransacoes()` (ou o novo botão) resolve.

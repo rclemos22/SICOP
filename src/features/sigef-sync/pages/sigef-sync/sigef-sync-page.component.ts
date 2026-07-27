@@ -4,6 +4,7 @@ import { SigefSchedulerService } from '../../../../core/services/sigef-scheduler
 import { SigefBulkSyncService } from '../../../../core/services/sigef-bulk-sync.service';
 import { SigefSyncService, SyncTask } from '../../../../core/services/sigef-sync.service';
 import { SyncHistoryService, SyncLogEntry } from '../../../../core/services/sync-history.service';
+import { FinancialService } from '../../../financial/services/financial.service';
 
 @Component({
   selector: 'app-sigef-sync-page',
@@ -133,7 +134,7 @@ import { SyncHistoryService, SyncLogEntry } from '../../../../core/services/sync
       }
 
       <!-- Action Buttons -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <button
           (click)="sincronizarTotal()"
           [disabled]="isRunning()"
@@ -183,6 +184,24 @@ import { SyncHistoryService, SyncLogEntry } from '../../../../core/services/sync
               <h3 class="text-lg font-bold text-slate-900 dark:text-white">Limpar Cache</h3>
               <p class="text-sm text-slate-500 dark:text-slate-400">
                 Limpa o cache estruturado e repopula a partir do espelho (sem chamar API).
+              </p>
+            </div>
+          </div>
+        </button>
+
+        <button
+          (click)="reprocessarFinanceiro()"
+          [disabled]="isRunning()"
+          class="p-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+              <span class="material-symbols-outlined text-[28px] text-purple-600 dark:text-purple-400">replay</span>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white">Reprocessar Financeiro</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                Recalcula todos os totais financeiros a partir do cache. Útil após carregar OBs novas.
               </p>
             </div>
           </div>
@@ -263,6 +282,7 @@ export class SigefSyncPageComponent implements OnInit, OnDestroy {
   protected bulkSyncService = inject(SigefBulkSyncService);
   protected syncService = inject(SigefSyncService);
   private syncHistory = inject(SyncHistoryService);
+  private financialService = inject(FinancialService);
 
   protected message = signal<string | null>(null);
   protected bulkProgress = this.bulkSyncService.progress;
@@ -357,6 +377,26 @@ export class SigefSyncPageComponent implements OnInit, OnDestroy {
     } catch (err: any) {
       this.message.set('Erro: ' + (err.message || 'Erro desconhecido'));
       this.syncHistory.addEntry('error', 'sync_quick', 'manual', 'Erro na atualização rápida: ' + (err.message || 'Erro desconhecido'));
+      setTimeout(() => this.message.set(null), 8000);
+    } finally {
+      this.isRunning.set(false);
+    }
+  }
+
+  async reprocessarFinanceiro() {
+    this.isRunning.set(true);
+    this.message.set(null);
+    this.lastSyncMessage.set('Reprocessando financeiro de todos os contratos...');
+    this.syncHistory.addEntry('start', 'backfill', 'manual', 'Reprocessamento financeiro iniciado');
+    try {
+      await this.financialService.backfillTransacoes();
+      this.message.set('Reprocessamento financeiro concluído com sucesso!');
+      this.lastSyncMessage.set('Concluído em ' + new Date().toLocaleTimeString('pt-BR'));
+      this.syncHistory.addEntry('success', 'backfill', 'manual', 'Reprocessamento financeiro concluído');
+      setTimeout(() => this.message.set(null), 5000);
+    } catch (err: any) {
+      this.message.set('Erro: ' + (err.message || 'Erro desconhecido'));
+      this.syncHistory.addEntry('error', 'backfill', 'manual', 'Erro no reprocessamento: ' + (err.message || 'Erro desconhecido'));
       setTimeout(() => this.message.set(null), 8000);
     } finally {
       this.isRunning.set(false);
