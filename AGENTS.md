@@ -199,7 +199,15 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 
 **Causa raiz do contrato 066/2026**: O `syncSigefTransactions` só é executado quando explicitamente chamado. Se a OB `2026OB003480` foi carregada no cache após a última sincronização, o contrato ficou com `total_pago` desatualizado. O `backfillTransacoes()` (ou o novo botão) resolve.
 
-### 29. UNIQUE constraint ausente em sigef_id — upsert falhava com HTTP 400 (Jul 2026)
-- `sql/21_ADD_UNIQUE_SIGEF_ID_TRANSACOES.sql`: adiciona `uk_transacoes_sigef_id UNIQUE (sigef_id)` na tabela `transacoes`.
-- **Problema**: `sigef_id` não tinha UNIQUE constraint, então o `onConflict: 'sigef_id'` no upsert da `financial.service.ts:799` retornava HTTP 400 e as transações NÃO eram salvas. `updateContractTotals` recalculava a partir de dados vazios/stale, zerando totais.
-- **Correção**: migration remove duplicatas (se houver) e adiciona `uk_transacoes_sigef_id`.
+### 29. UNIQUE constraint ausente em sigef_id + PRIMARY KEY ausente — PGRST204 (Jul 2026)
+- `sql/21_ADD_UNIQUE_SIGEF_ID_TRANSACOES.sql`: adiciona PRIMARY KEY (id) e UNIQUE (sigef_id) na tabela `transacoes`.
+- **Problema**: `sigef_id` não tinha UNIQUE constraint + `transacoes` não tinha PRIMARY KEY. Upsert com `onConflict: 'sigef_id'` retornava HTTP 400 (código PGRST204). Transações não eram salvas, `updateContractTotals` recalculava de dados vazios.
+- **Correção**: migration trata NULLs em id, adiciona PK + UNIQUE, e força recarga do schema via `NOTIFY pgrst, 'reload schema'`.
+
+### 30. Centralização de dados financeiros — correções de consistência (Jul 2026)
+- **`financial.service.ts:970-978`**: removido `saldo_a_pagar` do UPDATE em `updateContractTotals()` — valor é sempre recalculado na leitura (`mapRawToContract`), escrita é redundante.
+- **`contract.service.ts:476`**: removidos `total_empenhado`, `total_pago`, `saldo_a_pagar`, `data_ultimo_pagamento` do `allowedFields` em `updateContract()` — impede sobrescrita manual acidental.
+- **`financial.service.ts:938-961`**: adicionado warning `nesSemDotacao` — loga NE cujas transações não têm dotação vinculada.
+- **`contract-details-page.component.ts:410-429`**: `paymentProgress` agora usa valores agregados do contrato (`contract().total_empenhado`/`total_pago`) em vez de recalcular do zero a partir de `nesPagamentos` — elimina dual-source entre KPIs e aba Dotação.
+- **`financial.service.ts:307`**: dedup key de movimentos trocada de `${ne}|${type}|${ne}|${amount}` (repetia NE como documentNumber) para `${ne}|${type}|${cdevento}|${amount}` — evita dedup incorreto de eventos 400010 vs 400013 com mesmo valor.
+- **`financial.service.ts:996-1001`**: adicionada verificação de consistência pós-escrita — `sum(dotacoes.total_empenhado) == contratos.total_empenhado` com log se divergir.

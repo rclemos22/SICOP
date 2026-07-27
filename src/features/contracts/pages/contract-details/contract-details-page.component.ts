@@ -408,23 +408,24 @@ export class ContractDetailsPageComponent {
   });
 
   paymentProgress = computed(() => {
+    const c = this.contract();
     const rows = this.filteredNesPagamentos();
     const brutoRows = rows.filter(r => r.tipo === 'EMPENHO' || r.tipo === 'REFORCO');
-    const anulacaoRows = rows.filter(r => r.tipo === 'ANULACAO');
     const pagamentoRows = rows.filter(r => r.tipo === 'PAGAMENTO' && r.obNumber);
-    const totalEmpenhadoBruto = brutoRows.reduce((s, r) => s + r.amount, 0);
-    const totalCancelado = anulacaoRows.reduce((s, r) => s + r.amount, 0);
-    const totalEmpenhado = Math.max(0, totalEmpenhadoBruto - totalCancelado);
-    const totalPago = pagamentoRows.reduce((s, r) => s + r.amount, 0);
+    // Valores financeiros: usa os agregados do contrato (fonte centralizada)
+    const totalEmpenhado = c?.total_empenhado || 0;
+    const totalPago = c?.total_pago || 0;
+    // NE/OB counts: derivados do detalhamento
     const neCount = new Set(brutoRows.map(r => r.ne)).size;
+    const obCount = pagamentoRows.length;
     return {
       totalEmpenhado,
-      totalEmpenhadoBruto,
-      totalCancelado,
+      totalEmpenhadoBruto: totalEmpenhado,
+      totalCancelado: 0,
       totalPago,
       percentPaid: totalEmpenhado > 0 ? Math.round((totalPago / totalEmpenhado) * 100) : 0,
       neCount,
-      obCount: pagamentoRows.length
+      obCount
     };
   });
 

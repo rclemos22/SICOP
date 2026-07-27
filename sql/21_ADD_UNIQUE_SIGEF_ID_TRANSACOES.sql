@@ -32,7 +32,11 @@ WITH dup AS (
 DELETE FROM public.transacoes
 WHERE id IN (SELECT id FROM dup WHERE rn > 1);
 
--- 3. Adicionar PRIMARY KEY em id (se nao existir)
+-- 3. Garantir que id e NOT NULL e preencher UUIDs faltantes
+UPDATE public.transacoes SET id = gen_random_uuid()::text WHERE id IS NULL;
+ALTER TABLE public.transacoes ALTER COLUMN id SET NOT NULL;
+
+-- 4. Adicionar PRIMARY KEY em id (se nao existir)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -47,7 +51,7 @@ BEGIN
   END IF;
 END $$;
 
--- 4. Adicionar UNIQUE constraint em sigef_id (se ja existir, ignora)
+-- 5. Adicionar UNIQUE constraint em sigef_id (se ja existir, ignora)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -63,7 +67,10 @@ BEGIN
   END IF;
 END $$;
 
--- 5. Verificar constraints resultantes
+-- 6. Forcar PostgREST a recarregar o schema
+NOTIFY pgrst, 'reload schema';
+
+-- 7. Verificar constraints resultantes
 SELECT '=== CONSTRAINTS FINAIS ===' AS etapa;
 SELECT conname, contype
 FROM pg_constraint

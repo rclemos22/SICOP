@@ -304,7 +304,7 @@ export class FinancialService {
         else if (rd.cdevento === 400011) type = TransactionType.REINFORCEMENT;
         const ne = m.nunotaempenho || '';
         const amount = Math.abs(Number(vl) || 0);
-        const dedupKey = `${ne}|${type}|${ne}|${amount}`;
+        const dedupKey = `${ne}|${type}|${rd.cdevento || ''}|${amount}`;
         if (existingKeys?.has(dedupKey)) return;
         existingKeys?.add(dedupKey);
 
@@ -932,6 +932,7 @@ export class FinancialService {
       let totalEmpenhado = 0;
       let totalPago = 0;
       const dotacaoTotals = new Map<string, { empenhado: number; cancelado: number; pago: number }>();
+      const nesSemDotacao = new Set<string>();
 
       for (const t of trans || []) {
         const amt = Math.abs(Number(t.amount) || 0);
@@ -942,6 +943,8 @@ export class FinancialService {
             const curr = dotacaoTotals.get(dotacaoId) || { empenhado: 0, cancelado: 0, pago: 0 };
             curr.empenhado += amt;
             dotacaoTotals.set(dotacaoId, curr);
+          } else if (t.commitment_id) {
+            nesSemDotacao.add(t.commitment_id.trim());
           }
         } else if (t.type === 'CANCELLATION') {
           totalEmpenhado = Math.max(0, totalEmpenhado - amt);
@@ -949,6 +952,8 @@ export class FinancialService {
             const curr = dotacaoTotals.get(dotacaoId) || { empenhado: 0, cancelado: 0, pago: 0 };
             curr.cancelado += amt;
             dotacaoTotals.set(dotacaoId, curr);
+          } else if (t.commitment_id) {
+            nesSemDotacao.add(t.commitment_id.trim());
           }
         } else if (t.type === 'LIQUIDATION') {
           totalPago += amt;
@@ -956,23 +961,26 @@ export class FinancialService {
             const curr = dotacaoTotals.get(dotacaoId) || { empenhado: 0, cancelado: 0, pago: 0 };
             curr.pago += amt;
             dotacaoTotals.set(dotacaoId, curr);
+          } else if (t.commitment_id) {
+            nesSemDotacao.add(t.commitment_id.trim());
           }
         }
       }
 
-      const saldoAPagar = Math.max(0, totalEmpenhado - totalPago);
+      if (nesSemDotacao.size > 0) {
+        console.warn(`[FinancialService] Contrato ${contractId}: ${nesSemDotacao.size} NE(s) sem dotação vinculada: ${[...nesSemDotacao].join(', ')}`);
+      }
 
       const lastPay = (trans || [])
         .filter(t => t.type === 'LIQUIDATION')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
-      // Atualizar contratos
+      // Atualizar contratos (saldo_a_pagar é calculado na leitura, não precisa persistir)
       await this.supabaseService.client
         .from('contratos')
         .update({
           total_empenhado: totalEmpenhado,
           total_pago: totalPago,
-          saldo_a_pagar: saldoAPagar,
           data_ultimo_pagamento: lastPay?.date || null
         })
         .eq('id', contractId);
@@ -988,6 +996,12 @@ export class FinancialService {
             total_pago: totals.pago,
           })
           .eq('id', dotacaoId);
+      }
+
+      // Verificação de consistência
+      const sumDotacaoEmpenho = [...dotacaoTotals.values()].reduce((s, d) => s + Math.max(0, d.empenhado - d.cancelado), 0);
+      if (totalEmpenhado !== sumDotacaoEmpenho) {
+        console.warn(`[FinancialService] Contrato ${contractId}: divergência total_empenhado (${totalEmpenhado}) vs soma dotações (${sumDotacaoEmpenho})`);
       }
 
     } catch (err) {
