@@ -1,6 +1,6 @@
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localePt from '@angular/common/locales/pt';
-import { Component, inject, HostListener, LOCALE_ID } from '@angular/core';
+import { Component, inject, HostListener, LOCALE_ID, signal, effect, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { AppContextService } from './core/services/app-context.service';
@@ -25,9 +25,26 @@ export class AppComponent {
   public bulkSyncService   = inject(SigefBulkSyncService);
   public sigefScheduler    = inject(SigefSchedulerService);
 
-  sidebarOpen = false;
-  windowWidth = window.innerWidth;
+  readonly sidebarOpen = signal(false);
+  readonly windowWidth = signal(window.innerWidth);
+  readonly theme = signal<'light' | 'dark'>(
+    (localStorage.getItem('theme') as 'light' | 'dark') || 'light'
+  );
+  readonly isDesktop = computed(() => this.windowWidth() >= 1024);
 
-  @HostListener('window:resize', ['$event.target.innerWidth'])
-  onResize(w: number) { this.windowWidth = w; }
+  @HostListener('window:resize')
+  onResize() { this.windowWidth.set(window.innerWidth); }
+
+  constructor() {
+    effect(() => {
+      const t = this.theme();
+      document.documentElement.classList.toggle('dark', t === 'dark');
+      document.documentElement.classList.toggle('light', t === 'light');
+      localStorage.setItem('theme', t);
+    });
+  }
+
+  toggleTheme() {
+    this.theme.update(t => t === 'dark' ? 'light' : 'dark');
+  }
 }

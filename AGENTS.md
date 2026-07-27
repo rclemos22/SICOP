@@ -183,3 +183,8 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 ### 25. Cache SIGEF — Dedup OBs e logs de erro
 - `sigef-cache.service.ts:462`: `saveOrdensBancarias` agora filtra duplicatas por `nuordembancaria|cdunidadegestora|nudocumento` antes do upsert.
 - `sigef-cache.service.ts`: Adicionados `console.error` nos catchs de `getNeMovimentos`, `getNeMovimentosGlobal`, `getOrdensBancariasPorNe` para diagnóstico.
+
+### 26. Sidebar reativa + Toggle Tema (Jul 2026)
+- `app.component.ts`: `sidebarOpen` e `windowWidth` convertidos para `signal`; adicionado `isDesktop` computed; `theme` signal com persistência em localStorage; `effect` sincroniza classe `dark`/`light` no `<html>`.
+- `app.component.html`: sidebarmd:translate-x-0; bindings usam `sidebarOpen()`/`isDesktop()`; overlay condicional `!isDesktop()`; toggle tema no header (ícone `light_mode`/`dark_mode`).
+- `index.html`: removido `class="dark"` do `<html>`; script inline de FOUC prevention lê localStorage/media query antes do Angular carregar.
