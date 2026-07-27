@@ -24,9 +24,21 @@ WITH dup AS (
 DELETE FROM public.transacoes
 WHERE id IN (SELECT id FROM dup WHERE rn > 1);
 
--- 3. Adicionar UNIQUE constraint
-ALTER TABLE public.transacoes
-  ADD CONSTRAINT uk_transacoes_sigef_id UNIQUE (sigef_id);
+-- 3. Adicionar UNIQUE constraint (se já existir, ignora)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.transacoes'::regclass
+      AND conname = 'uk_transacoes_sigef_id'
+  ) THEN
+    ALTER TABLE public.transacoes
+      ADD CONSTRAINT uk_transacoes_sigef_id UNIQUE (sigef_id);
+    RAISE NOTICE 'Constraint uk_transacoes_sigef_id adicionada.';
+  ELSE
+    RAISE NOTICE 'Constraint uk_transacoes_sigef_id já existe.';
+  END IF;
+END $$;
 
 -- 4. Verificar
 SELECT '=== CONSTRAINT ADICIONADA ===' AS etapa;
