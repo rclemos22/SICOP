@@ -22,7 +22,7 @@ import { LowBudgetAlert } from '../services/dashboard.service';
         <div class="grid grid-cols-2 gap-2">
           @for (a of displayedAlerts(); track a.contractId) {
             <div
-              (click)="viewContract.emit(a.contractNumber)"
+              (click)="viewContract.emit(a.contractId)"
               class="flex items-center p-3 bg-gray-50/50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-900/50 hover:bg-amber-50/20 transition-all cursor-pointer group"
               title="Clique para ir ao contrato"
             >

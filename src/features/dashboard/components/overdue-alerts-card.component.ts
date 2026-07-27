@@ -22,7 +22,7 @@ import { OverdueAlert } from '../services/dashboard.service';
         <div class="grid grid-cols-2 gap-2">
           @for (a of displayedAlerts(); track a.contractId + a.reference) {
             <div
-              (click)="viewContract.emit(a.contractName)"
+              (click)="viewContract.emit(a.contractId)"
               class="flex items-center p-3 bg-gray-50/50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-900/50 hover:bg-red-50/20 transition-all cursor-pointer group"
               title="Clique para ir ao contrato"
             >

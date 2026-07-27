@@ -167,3 +167,19 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - **Código legado**: `solicitarAdesao` no modo legado fazia `.insert()` sem `.select('id')`, depois consultava `ata_adesoes` por `ata_item_id` + `status` para achar o ID — podia associar item à adesão errada se houvesse múltiplas pendentes. Corrigido para `.select('id').single()` direto no insert.
 - **SQL de cleanup**: `sql/18_FIX_DUPLICATAS_ITENS_ADESAO.sql` — diagnóstico + remoção de duplicatas mantendo o registro mais antigo + UNIQUE constraint.
 - **Ordem de execução**: (1) `17_MULTIPLOS_ITENS_ADESAO.sql` → (2) `18_FIX_DUPLICATAS_ITENS_ADESAO.sql` (se já tiver duplicatas) OU só `17` (para instalação limpa).
+
+### 23. Dashboard — Refatoração visual e responsiva + correções
+- `dashboard-page.component.html`: `navigate.emit()` quebrado substituído por `goToContracts()`; `rounded-xl` → `rounded-lg` em cards; gaps padronizados em 16px; skeleton loading realista com shape de cards; grid alertas `lg:grid-cols-3`; Saldo a Pagar com progress bar.
+- `app.component.html`: Sidebar com `translate-x` animado + overlay mobile; links fecham sidebar via `(click)="sidebarOpen = false"`; seletor de ano `rounded-lg`; modal sync `rounded-xl`.
+- `app.component.ts`: Adicionado `windowWidth` + `@HostListener('window:resize')` para controle responsivo da sidebar.
+- `dashboard.service.ts:349`: `lowBudgetAlerts` agora filtra por ano-base (`data_inicio` ≤ year ≤ `data_fim`), evitando alertas de contratos fora do exercício selecionado.
+- `overdue-alerts-card.component.ts`, `low-budget-card.component.ts`, `expiring-contracts.component.ts`: click handlers corrigidos para emitir `contractId` (string) em vez de `contractName`/`contractNumber`.
+
+### 24. Sync — Proteção contra deleção de registros recém-criados + sigef_id único
+- `financial.service.ts:809-828`: Cleanup legado agora exclui do `NOT IN` os `sigef_id` recém-upsertados, prevenindo deleção acidental de registros que acabaram de ser salvos.
+- `financial.service.ts:680`: `sigef_id` de COMMITMENT usa índice `oi` (ex: `cache-com-2026NE000853-0`) em vez de valor fixo, garantindo unicidade.
+- `contract-comparison-chart.ts`: Interface `ContractComparisonData` ganha campo `contractId`; click handler navega por `contractId` em vez de `contract` string.
+
+### 25. Cache SIGEF — Dedup OBs e logs de erro
+- `sigef-cache.service.ts:462`: `saveOrdensBancarias` agora filtra duplicatas por `nuordembancaria|cdunidadegestora|nudocumento` antes do upsert.
+- `sigef-cache.service.ts`: Adicionados `console.error` nos catchs de `getNeMovimentos`, `getNeMovimentosGlobal`, `getOrdensBancariasPorNe` para diagnóstico.

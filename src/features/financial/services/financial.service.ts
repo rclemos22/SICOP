@@ -677,12 +677,13 @@ export class FinancialService {
         // A1. COMMITMENT (Empenho Original 400010 / 400013)
         // ═══════════════════════════════════════════
         const originalMovs = movimentosCache.filter(m => m.cdevento === 400010 || m.cdevento === 400013);
-        for (const mov of originalMovs) {
+        for (let oi = 0; oi < originalMovs.length; oi++) {
+          const mov = originalMovs[oi];
           const vl = Math.abs(Number(mov.vlnotaempenho) || 0);
           if (vl > 0) {
             transactionsToUpsert.push({
               contract_id: contractId,
-              sigef_id: `cache-com-${neValue}`,
+              sigef_id: `cache-com-${neValue}-${oi}`,
               description: `EMPENHO ORIGINAL - NE ${neValue}`,
               commitment_id: neValue,
               date: fmtDate(mov.dtlancamento || budget.data_disponibilidade),
@@ -799,29 +800,32 @@ export class FinancialService {
         if (error) throw error;
         this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
 
-        // Limpa formatos legados APENAS se houver registros NOVOS do mesmo tipo
-        // para substituí-los. Caso contrário, preserva os existentes.
+        // Coleta os sigef_id que acabaram de ser upsertados para protegê-los do cleanup
+        const newSigefIds = new Set(transactionsToUpsert.map(t => t.sigef_id).filter(Boolean));
+
         const hasNewComRef = transactionsToUpsert.some(
           t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT
         );
         const hasNewLiq = transactionsToUpsert.some(t => t.type === TransactionType.LIQUIDATION);
 
         try {
-          if (hasNewComRef) {
+          if (hasNewComRef && newSigefIds.size > 0) {
             await this.supabaseService.client
               .from('transacoes')
               .delete()
               .eq('contract_id', contractId)
               .eq('commitment_id', neValue)
-              .like('sigef_id', 'cache-mov-%');
+              .like('sigef_id', 'cache-mov-%')
+              .not('sigef_id', 'in', `(${[...newSigefIds].map(id => `"${id}"`).join(',')})`);
           }
-          if (hasNewLiq) {
+          if (hasNewLiq && newSigefIds.size > 0) {
             await this.supabaseService.client
               .from('transacoes')
               .delete()
               .eq('contract_id', contractId)
               .eq('commitment_id', neValue)
-              .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%');
+              .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%')
+              .not('sigef_id', 'in', `(${[...newSigefIds].map(id => `"${id}"`).join(',')})`);
           }
         } catch (cleanupErr: any) {
           console.warn(`[${neValue}] Erro na limpeza de registros legados (não crítico):`, cleanupErr.message);

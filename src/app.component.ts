@@ -1,6 +1,6 @@
 import { CommonModule, registerLocaleData } from '@angular/common';
 import localePt from '@angular/common/locales/pt';
-import { Component, inject, LOCALE_ID } from '@angular/core';
+import { Component, inject, HostListener, LOCALE_ID } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { AppContextService } from './core/services/app-context.service';
@@ -26,5 +26,8 @@ export class AppComponent {
   public sigefScheduler    = inject(SigefSchedulerService);
 
   sidebarOpen = false;
-  toggleSidebar() { this.sidebarOpen = !this.sidebarOpen; }
+  windowWidth = window.innerWidth;
+
+  @HostListener('window:resize', ['$event.target.innerWidth'])
+  onResize(w: number) { this.windowWidth = w; }
 }

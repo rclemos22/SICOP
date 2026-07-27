@@ -258,6 +258,7 @@ export class SigefCacheService {
 
       return data.map(this.mapToNeMovimento);
     } catch (err) {
+      console.error(`[SigefCache] getNeMovimentos(${ug}, ${neNumber}) erro:`, err);
       return [];
     }
   }
@@ -283,6 +284,7 @@ export class SigefCacheService {
 
       return data.map(this.mapToNeMovimento);
     } catch (err) {
+      console.error(`[SigefCache] getNeMovimentosGlobal(${neNumber}) erro:`, err);
       return [];
     }
   }
@@ -366,7 +368,7 @@ export class SigefCacheService {
       this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${neNumber}): ${data.length} OB(s)`);
       return data.map(this.mapToOrdemBancaria);
     } catch (err: any) {
-      this.debug.error(`getOrdensBancariasPorNe(${ug}, ${neNumber}) exception: ${err.message}`);
+      console.error(`[SigefCache] getOrdensBancariasPorNe(${ug}, ${neNumber}) erro:`, err);
       return [];
     }
   }
@@ -454,44 +456,52 @@ export class SigefCacheService {
   }
 
   async saveOrdensBancarias(obs: SigefOrdemBancaria[]): Promise<void> {
-    const payload = obs.map(ob => ({
-      nuordembancaria: ob.nuordembancaria,
-      cdunidadegestora: ob.cdunidadegestora,
-      nunotaempenho: ob.nunotaempenho,
-      cdgestao: ob.cdgestao,
-      cdevento: ob.cdevento,
-      nudocumento: ob.nudocumento,
-      cdcredor: ob.cdcredor,
-      cdtipocredor: ob.cdtipocredor,
-      cdugfavorecida: ob.cdugfavorecida,
-      cdorgao: ob.cdorgao,
-      cdsubacao: ob.cdsubacao,
-      cdfuncao: ob.cdfuncao,
-      cdsubfuncao: ob.cdsubfuncao,
-      cdprograma: ob.cdprograma,
-      cdacao: ob.cdacao,
-      localizagasto: ob.localizagasto,
-      cdnaturezadespesa: ob.cdnaturezadespesa,
-      cdfonte: ob.cdfonte,
-      cdmodalidade: ob.cdmodalidade,
-      vltotal: ob.vltotal,
-      dtlancamento: ob.dtlancamento,
-      dtpagamento: ob.dtpagamento,
-      cdsituacaoordembancaria: ob.cdsituacaoordembancaria,
-      situacaopreparacaopagamento: ob.situacaopreparacaopagamento,
-      tipoordembancaria: ob.tipoordembancaria,
-      tipopreparacaopagamento: ob.tipopreparacaopagamento,
-      deobservacao: ob.deobservacao,
-      definalidade: ob.definalidade,
-      usuario_responsavel: ob.usuario_responsavel,
-      nuguiarecebimento: ob.nuguiarecebimento,
-      vlguiarecebimento: ob.vlguiarecebimento,
-      nunotalancamento: ob.nunotalancamento,
-      numns: ob.numns,
-      domicilio_origem: ob.domicilio_origem,
-      domicilio_destino: ob.domicilio_destino,
-      last_sync: new Date().toISOString()
-    }));
+    const seen = new Set<string>();
+    const payload = obs
+      .filter(ob => {
+        const key = `${ob.nuordembancaria}|${ob.cdunidadegestora}|${ob.nudocumento}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(ob => ({
+        nuordembancaria: ob.nuordembancaria,
+        cdunidadegestora: ob.cdunidadegestora,
+        nunotaempenho: ob.nunotaempenho,
+        cdgestao: ob.cdgestao,
+        cdevento: ob.cdevento,
+        nudocumento: ob.nudocumento,
+        cdcredor: ob.cdcredor,
+        cdtipocredor: ob.cdtipocredor,
+        cdugfavorecida: ob.cdugfavorecida,
+        cdorgao: ob.cdorgao,
+        cdsubacao: ob.cdsubacao,
+        cdfuncao: ob.cdfuncao,
+        cdsubfuncao: ob.cdsubfuncao,
+        cdprograma: ob.cdprograma,
+        cdacao: ob.cdacao,
+        localizagasto: ob.localizagasto,
+        cdnaturezadespesa: ob.cdnaturezadespesa,
+        cdfonte: ob.cdfonte,
+        cdmodalidade: ob.cdmodalidade,
+        vltotal: ob.vltotal,
+        dtlancamento: ob.dtlancamento,
+        dtpagamento: ob.dtpagamento,
+        cdsituacaoordembancaria: ob.cdsituacaoordembancaria,
+        situacaopreparacaopagamento: ob.situacaopreparacaopagamento,
+        tipoordembancaria: ob.tipoordembancaria,
+        tipopreparacaopagamento: ob.tipopreparacaopagamento,
+        deobservacao: ob.deobservacao,
+        definalidade: ob.definalidade,
+        usuario_responsavel: ob.usuario_responsavel,
+        nuguiarecebimento: ob.nuguiarecebimento,
+        vlguiarecebimento: ob.vlguiarecebimento,
+        nunotalancamento: ob.nunotalancamento,
+        numns: ob.numns,
+        domicilio_origem: ob.domicilio_origem,
+        domicilio_destino: ob.domicilio_destino,
+        last_sync: new Date().toISOString()
+      }));
 
     if (payload.length > 0) {
       await this.supabaseService.client

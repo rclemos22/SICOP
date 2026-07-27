@@ -1,57 +1,69 @@
 <div class="flex h-screen overflow-hidden">
-  <aside class="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hidden md:flex flex-col">
-    <div class="h-16 flex items-center justify-center px-6">
+  <!-- Mobile overlay -->
+  @if (sidebarOpen) {
+    <div class="fixed inset-0 z-40 bg-black/40 md:hidden" (click)="sidebarOpen = false"></div>
+  }
+
+  <aside class="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col transition-transform duration-300 md:translate-x-0 fixed md:static inset-y-0 left-0 z-50 md:z-auto"
+    [class.-translate-x-full]="!sidebarOpen && windowWidth < 1024"
+    [class.translate-x-0]="sidebarOpen || windowWidth >= 1024">
+    <div class="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700">
       <span class="font-bold text-2xl tracking-tight text-sco-blue dark:text-white">SICOP</span>
     </div>
     <nav class="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
       <a routerLink="/" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
          [routerLinkActiveOptions]="{ exact: true }"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">dashboard</span>
         Dashboard
       </a>
       <a routerLink="/contracts" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">description</span>
         Contratos
       </a>
       <a routerLink="/atas" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">gavel</span>
         Atas
       </a>
-
       <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-
       <a routerLink="/financial" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">account_balance_wallet</span>
         Financeiro
       </a>
       <a routerLink="/budget" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">monetization_on</span>
         Orçamento
       </a>
       <a routerLink="/suppliers" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">business</span>
         Fornecedores
       </a>
-
       <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-
       <a routerLink="/nota-empenho" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">receipt_long</span>
         Nota de Empenho
       </a>
       <a routerLink="/ordem-bancaria" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">payments</span>
         Ordem Bancária
       </a>
       <a routerLink="/sincronizar-sigef" routerLinkActive="bg-sco-blue/5 text-sco-blue dark:bg-white/5 dark:text-white"
+         (click)="sidebarOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors group text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sco-blue">
         <span class="material-symbols-outlined text-[22px]">sync</span>
         Sincronizar SIGEF
@@ -92,14 +104,14 @@
       </button>
     </div>
 
-    <header class="h-16 shrink-0 flex items-center justify-between px-8 bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm z-10 sticky top-0 border-b border-gray-200/50 dark:border-gray-700">
+    <header class="h-16 shrink-0 flex items-center justify-between px-4 md:px-8 bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm z-10 sticky top-0 border-b border-gray-200/50 dark:border-gray-700">
       <div class="flex items-center gap-4">
-        <button (click)="toggleSidebar()" class="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+        <button (click)="sidebarOpen = true" class="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
           <span class="material-symbols-outlined">menu</span>
         </button>
       </div>
       <div class="flex items-center gap-4">
-        <div class="relative flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1.5 shadow-sm hover:border-sco-blue/30 hover:shadow transition-all group cursor-pointer">
+        <div class="relative flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 shadow-sm hover:border-sco-blue/30 hover:shadow transition-all group cursor-pointer">
           <span class="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-sco-blue dark:text-gray-500 transition-colors">calendar_today</span>
           <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">{{ contextService.anoExercicio() }}</span>
           <span class="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600 dark:text-gray-500 transition-colors">keyboard_arrow_down</span>
@@ -119,7 +131,7 @@
 
     @if (sigefSyncService.isLocked()) {
       <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm transition-all animate-in fade-in duration-300">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-sco-blue/20 flex flex-col items-center text-center">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 border border-sco-blue/20 flex flex-col items-center text-center">
           <div class="relative w-20 h-20 mb-6">
             <div class="absolute inset-0 border-4 border-sco-blue/10 rounded-full"></div>
             <div class="absolute inset-0 border-4 border-t-sco-blue rounded-full animate-spin"></div>
@@ -132,7 +144,7 @@
             Estamos atualizando as informações financeiras (NEs e OBs) diretamente da API oficial.
             Por favor, aguarde a conclusão para garantir a integridade dos dados.
           </p>
-          <div class="w-full bg-gray-100 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden mb-3">
+          <div class="w-full bg-gray-100 dark:bg-gray-700 h-2.5 rounded overflow-hidden mb-3">
             <div class="bg-sco-blue h-full transition-all duration-500 ease-out" [style.width.%]="sigefSyncService.progress()"></div>
           </div>
           <div class="flex justify-between w-full text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">

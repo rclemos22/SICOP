@@ -409,16 +409,18 @@ export class ContractDetailsPageComponent {
 
   paymentProgress = computed(() => {
     const rows = this.filteredNesPagamentos();
-    const empenhoRows = rows.filter(r => r.tipo === 'EMPENHO');
+    const brutoRows = rows.filter(r => r.tipo === 'EMPENHO' || r.tipo === 'REFORCO');
     const anulacaoRows = rows.filter(r => r.tipo === 'ANULACAO');
     const pagamentoRows = rows.filter(r => r.tipo === 'PAGAMENTO' && r.obNumber);
-    const totalEmpenhadoBruto = empenhoRows.reduce((s, r) => s + r.amount, 0);
-    const totalAnulado = anulacaoRows.reduce((s, r) => s + r.amount, 0);
-    const totalEmpenhado = Math.max(0, totalEmpenhadoBruto - totalAnulado);
+    const totalEmpenhadoBruto = brutoRows.reduce((s, r) => s + r.amount, 0);
+    const totalCancelado = anulacaoRows.reduce((s, r) => s + r.amount, 0);
+    const totalEmpenhado = Math.max(0, totalEmpenhadoBruto - totalCancelado);
     const totalPago = pagamentoRows.reduce((s, r) => s + r.amount, 0);
-    const neCount = new Set(empenhoRows.map(r => r.ne)).size;
+    const neCount = new Set(brutoRows.map(r => r.ne)).size;
     return {
       totalEmpenhado,
+      totalEmpenhadoBruto,
+      totalCancelado,
       totalPago,
       percentPaid: totalEmpenhado > 0 ? Math.round((totalPago / totalEmpenhado) * 100) : 0,
       neCount,
@@ -433,6 +435,28 @@ export class ContractDetailsPageComponent {
       totalCommitted: progress.totalEmpenhado 
     };
   });
+
+  /** Mapa NE → {commitment, reinforcement, cancellation, payment} para os cards de dotação */
+  neBreakdownMap = computed(() => {
+    const rows = this.nesPagamentos();
+    const map = new Map<string, { commitment: number; reinforcement: number; cancellation: number; payment: number }>();
+    for (const r of rows) {
+      if (!r.ne) continue;
+      const key = r.ne.trim();
+      const current = map.get(key) || { commitment: 0, reinforcement: 0, cancellation: 0, payment: 0 };
+      if (r.tipo === 'EMPENHO') current.commitment += r.amount;
+      else if (r.tipo === 'REFORCO') current.reinforcement += r.amount;
+      else if (r.tipo === 'ANULACAO') current.cancellation += r.amount;
+      else if (r.tipo === 'PAGAMENTO') current.payment += r.amount;
+      map.set(key, current);
+    }
+    return map;
+  });
+
+  getNeBreakdown(ne: string | undefined): { commitment: number; reinforcement: number; cancellation: number; payment: number } {
+    if (!ne) return { commitment: 0, reinforcement: 0, cancellation: 0, payment: 0 };
+    return this.neBreakdownMap().get(ne.trim()) || { commitment: 0, reinforcement: 0, cancellation: 0, payment: 0 };
+  }
 
   // Helpers for Template
   getTypeLabel = getTransactionTypeLabel;
@@ -500,6 +524,7 @@ export class ContractDetailsPageComponent {
 
     this.autoRefreshInterval = setInterval(() => {
       if (this.sigefSyncService.isSyncing() || this.isUpdatingLancamentos()) return;
+      if (this.isAditivoModalOpen() || this.isDotacaoModalOpen() || this.isMarkAsPaidModalOpen() || this.isUnmarkConfirmModalOpen()) return;
       this.refreshSigefData(15);
     }, 5 * 60 * 1000);
   }
@@ -519,10 +544,6 @@ export class ContractDetailsPageComponent {
       await this.loadBudgets(contractId);
       await this.loadTransactions(contractId);
       await this.loadNesPagamentos(contractId);
-
-      // Busca dados recentes do SIGEF via API (últimos 5 dias) para alimentar
-      // o cache local sem consumir a API com varreduras longas.
-      await this.refreshSigefData(5);
     } catch (err) {
       console.error('[ContractDetails] Erro na cadeia de sincronização:', err);
     }
@@ -679,7 +700,7 @@ export class ContractDetailsPageComponent {
     this.editingAditivo.set(null);
   }
 
-  onAditivoSaved(aditivo: Aditivo) {
+  async onAditivoSaved(aditivo: Aditivo) {
     this.aditivos.update(current => {
       const idx = current.findIndex(a => a.id === aditivo.id);
       if (idx >= 0) {
@@ -689,6 +710,11 @@ export class ContractDetailsPageComponent {
       }
       return [aditivo, ...current];
     });
+    const contractId = this.contractId();
+    await Promise.all([
+      this.loadBudgets(contractId),
+      this.loadTransactions(contractId),
+    ]);
     this.closeAditivoModal();
   }
 
@@ -729,7 +755,7 @@ export class ContractDetailsPageComponent {
     this.editingDotacao.set(null);
   }
 
-  onDotacaoSaved(dotacao: Dotacao | null) {
+  async onDotacaoSaved(dotacao: Dotacao | null) {
     if (dotacao) {
       this.budgets.update(current => {
         const idx = current.findIndex(b => b.id === dotacao.id);
@@ -741,8 +767,13 @@ export class ContractDetailsPageComponent {
         return [dotacao, ...current];
       });
     } else {
-      this.loadBudgets(this.contractId());
+      await this.loadBudgets(this.contractId());
     }
+    const contractId = this.contractId();
+    await Promise.all([
+      this.loadAditivos(contractId),
+      this.loadTransactions(contractId),
+    ]);
     this.closeDotacaoModal();
   }
 

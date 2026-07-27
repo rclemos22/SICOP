@@ -49,6 +49,7 @@ export interface PaymentComparisonMonth {
 }
 
 export interface PaymentComparisonContract {
+  contractId: string;
   contract: string;
   contratada: string;
   expected: number;
@@ -268,7 +269,7 @@ export class DashboardService {
       .map(c => {
         const netCommitted = Number(c.total_empenhado) || 0;
         const paid = Number(c.total_pago) || 0;
-        return { contract: c.contrato, contratada: c.contratada, expected: netCommitted, paid, diff: Math.max(0, netCommitted - paid) };
+        return { contractId: c.id, contract: c.contrato, contratada: c.contratada, expected: netCommitted, paid, diff: Math.max(0, netCommitted - paid) };
       })
       .filter(d => d.expected > 0 || d.paid > 0)
       .sort((a, b) => b.expected - a.expected);
@@ -345,9 +346,14 @@ export class DashboardService {
 
   // ── Low Budget Alerts ─────────────────────────────────────────────────
 
-  readonly lowBudgetAlerts = computed<LowBudgetAlert[]>(() =>
-    this.contractService.contracts()
+  readonly lowBudgetAlerts = computed<LowBudgetAlert[]>(() => {
+    const year = this.appContext.anoExercicio();
+    return this.contractService.contracts()
       .filter(c => {
+        const start = c.data_inicio ? new Date(c.data_inicio).getFullYear() : 0;
+        const end = c.data_fim_efetiva ? new Date(c.data_fim_efetiva).getFullYear() : c.data_fim ? new Date(c.data_fim).getFullYear() : 0;
+        const inYear = start <= year && end >= year;
+        if (!inYear) return false;
         const vigente = c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO;
         return vigente && c.tipo !== 'material';
       })
@@ -365,7 +371,7 @@ export class DashboardService {
       .filter(a => a.saldoEmpenho <= a.valorMensal)
       .sort((a, b) => a.percentage - b.percentage)
       .slice(0, 10)
-  );
+  });
 
   // ── Overdue Installments ──────────────────────────────────────────────
 

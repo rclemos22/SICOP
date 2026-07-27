@@ -117,86 +117,83 @@
       <!-- Key Metrics Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         
-        <!-- Total Value (inclui aditivos de valor) -->
+        <!-- Valor Global -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Valor Global</span>
-          <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-1 h-4 bg-sco-blue rounded-full"></div>
+            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Valor Global</span>
+          </div>
+          <div class="text-2xl font-bold text-gray-900 dark:text-white">
             {{ (c.valor_global_atualizado || c.valor_anual) | currency:'BRL':'symbol':'1.2-2' }}
           </div>
           @if (c.valor_global_atualizado && c.valor_global_atualizado !== c.valor_anual) {
-            <p class="text-[10px] text-blue-500 mt-1">Original: {{ c.valor_anual | currency:'BRL':'symbol':'1.2-2' }} + {{ c.total_aditivos_valor | currency:'BRL':'symbol':'1.2-2' }} em aditivos</p>
+            <p class="text-[10px] text-gray-400 mt-1">Original: {{ c.valor_anual | currency:'BRL':'symbol':'1.2-2' }} + aditivos</p>
           }
-          <div class="h-1 w-full bg-blue-100 dark:bg-blue-900/30 rounded-full mt-2">
-            <div class="h-1 bg-sco-blue rounded-full w-full"></div>
-          </div>
         </div>
 
-        <!-- Monthly Value (Only for Service) -->
+        <!-- Valor Mensal (Only for Service) -->
         @if (c.tipo === 'serviço') {
-          <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-blue-100 dark:border-blue-900/30 shadow-sm animate-in zoom-in duration-300">
-            <span class="text-xs font-bold text-blue-500 uppercase tracking-wider block mb-1">Valor Mensal</span>
-            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+          <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div class="flex items-center gap-2 mb-2">
+              <div class="w-1 h-4 bg-blue-400 rounded-full"></div>
+              <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Valor Mensal</span>
+            </div>
+            <div class="text-2xl font-bold text-gray-900 dark:text-white">
               {{ c.valor_mensal != null ? (c.valor_mensal | currency:'BRL':'symbol':'1.2-2') : '---' }}
             </div>
-            <p class="text-[10px] text-blue-400 mt-2">Pagamento Mensal</p>
+            <p class="text-[10px] text-gray-400 mt-1">Pagamento mensal</p>
           </div>
         }
 
-        <!-- Total Empenhado (acumulado) -->
+        <!-- Total Pago -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Empenhado</span>
-          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-            {{ (c.total_empenhado || 0) | currency:'BRL':'symbol':'1.2-2' }}
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-1 h-4 bg-green-500 rounded-full"></div>
+            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Pago</span>
           </div>
-          <!-- Progress Bar (Empenhado vs Global) -->
-          <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-2">
-            <div 
-              class="h-1 bg-blue-500 rounded-full transition-all duration-500"
-              [style.width.%]="((c.total_empenhado || 0) / c.valor_anual) * 100"
-            ></div>
-          </div>
-          <p class="text-[10px] text-gray-400 mt-2 text-right">
-            {{ ((c.total_empenhado || 0) / c.valor_anual) * 100 | number:'1.0-1' }}% Empenhado
-          </p>
-        </div>
-
-        <!-- Total Pago (acumulado) -->
-        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Total Pago</span>
-          <div class="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
+          <div class="text-2xl font-bold text-green-600 dark:text-green-400">
             {{ (c.total_pago || 0) | currency:'BRL':'symbol':'1.2-2' }}
           </div>
-           <!-- Progress Bar (Pago vs Empenhado) -->
-           <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-2">
-             <div 
-               class="h-1 bg-green-500 rounded-full transition-all duration-500"
-               [style.width.%]="c.total_empenhado > 0 ? ((c.total_pago || 0) / c.total_empenhado) * 100 : 0"
-             ></div>
-           </div>
-           <p class="text-[10px] text-gray-400 mt-2 text-right">
-             {{ (c.total_empenhado > 0 ? ((c.total_pago || 0) / c.total_empenhado) * 100 : 0) | number:'1.0-1' }}% do Empenho
-           </p>
-        </div>
-
-        <!-- Saldo a Pagar -->
-        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Saldo a Pagar</span>
-          <div class="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-            {{ Math.max(0, (c.total_empenhado || 0) - (c.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
+          <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-3">
+            <div 
+              class="h-1 bg-green-500 rounded-full transition-all duration-500"
+              [style.width.%]="c.total_empenhado > 0 ? ((c.total_pago || 0) / c.total_empenhado) * 100 : 0"
+            ></div>
           </div>
-          <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-             Restante a pagar
+          <p class="text-[10px] text-gray-400 mt-1 text-right">
+            {{ (c.total_empenhado > 0 ? ((c.total_pago || 0) / c.total_empenhado) * 100 : 0) | number:'1.0-1' }}% liquidado
           </p>
         </div>
 
-        <!-- Days Remaining -->
+        <!-- Saldo de Empenho -->
         <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Vigência</span>
-          <div class="text-2xl font-bold mb-1" [class]="daysRemaining() < 0 ? 'text-red-600' : 'text-gray-900 dark:text-white'">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-1 h-4 bg-amber-500 rounded-full"></div>
+            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Saldo de Empenho</span>
+          </div>
+          <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
+            {{ Math.max(0, (c.total_empenhado || 0) - (c.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
+          </div>
+          <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-3">
+            <div 
+              class="h-1 bg-amber-500 rounded-full transition-all duration-500"
+              [style.width.%]="c.total_empenhado > 0 ? ((Math.max(0, (c.total_empenhado || 0) - (c.total_pago || 0))) / c.total_empenhado) * 100 : 0"
+            ></div>
+          </div>
+          <p class="text-[10px] text-gray-400 mt-1 text-right">A liquidar</p>
+        </div>
+
+        <!-- Vigência -->
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-1 h-4 rounded-full" [class]="daysRemaining() < 0 ? 'bg-red-500' : 'bg-gray-400'"></div>
+            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Vigência</span>
+          </div>
+          <div class="text-2xl font-bold" [class]="daysRemaining() < 0 ? 'text-red-600' : 'text-gray-900 dark:text-white'">
             {{ daysRemaining() < 0 ? 'Vencido' : daysRemaining() + ' dias' }}
           </div>
-          <p class="text-xs text-gray-500 mt-1">
-             Fim: {{ c.data_fim | date:'dd/MM/yyyy' }}
+          <p class="text-[10px] text-gray-400 mt-1">
+            até {{ c.data_fim | date:'dd/MM/yyyy' }}
           </p>
         </div>
       </div>
@@ -754,42 +751,51 @@
                             <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-1">{{ budget.credito }}</h4>
                              <span class="block text-xs text-gray-500 mb-4">Disp.: {{ budget.data_disponibilidade | date:'dd/MM/yyyy' }}</span>
                              
-                             <!-- Valor Dotação -->
-                             <div class="flex justify-between text-sm mb-1">
-                                <span class="text-gray-500">Dotação</span>
-                                <span class="font-semibold text-gray-900 dark:text-white">{{ budget.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}</span>
-                             </div>
-                             <!-- Valor Empenhado (do SIGEF) -->
-                             <div class="flex justify-between text-sm mb-1">
-                                <span class="text-blue-600 dark:text-blue-400 font-medium">Empenhado</span>
-                                <span class="font-bold text-blue-600 dark:text-blue-400">{{ budget.total_empenhado | currency:'BRL':'symbol':'1.2-2' }}</span>
-                             </div>
-                             
-                             <!-- Total Pago (do SIGEF) -->
-                             <div class="flex justify-between text-sm mb-1">
-                                <span class="text-green-600 dark:text-green-400 font-medium">Total Pago</span>
-                                <span class="font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
-                             </div>
+                              @let neData = getNeBreakdown(budget.nunotaempenho);
 
-                             <!-- Cancelamento (do SIGEF) -->
-                             <div class="flex justify-between text-sm mb-1">
-                                <span class="text-red-500 font-medium">Cancelamento</span>
-                                <span class="font-bold text-red-500">{{ (budget.total_cancelado || 0) | currency:'BRL':'symbol':'1.2-2' }}</span>
-                             </div>
+                              <!-- Dotação -->
+                              <div class="flex justify-between text-sm mb-1">
+                                 <span class="text-gray-500">Dotação</span>
+                                 <span class="font-semibold text-gray-900 dark:text-white">{{ budget.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </div>
 
-                             <!-- Saldo do Empenho = Empenhado - Pago - Cancelado -->
-                             <div class="flex justify-between text-sm mb-2 pt-1 border-t border-gray-100 dark:border-gray-700/50">
-                                <span class="text-gray-500 text-xs uppercase font-bold">Saldo Empenho (E-P-C)</span>
-                                <span class="font-bold text-gray-900 dark:text-white">
-                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0) - (budget.total_cancelado || 0)) | currency:'BRL':'symbol':'1.2-2' }}
-                                </span>
-                             </div>
+                              <!-- ──── Empenho ──── -->
+                              <div class="flex justify-between text-xs mb-0.5">
+                                 <span class="text-gray-400">Empenho Original</span>
+                                 <span class="font-bold text-blue-500">{{ neData.commitment | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </div>
+                              <div class="flex justify-between text-xs mb-0.5">
+                                 <span class="text-gray-400">Reforços</span>
+                                 <span class="font-bold text-indigo-500">{{ neData.reinforcement | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </div>
+                              <div class="flex justify-between text-xs mb-1">
+                                 <span class="text-red-400">Cancelado</span>
+                                 <span class="font-bold text-red-500">{{ neData.cancellation | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </div>
 
-                             <!-- Saldo Dotação = Dotação - Empenhado -->
-                             <div class="flex justify-between text-xs mb-3 text-gray-400">
-                                <span>Saldo Dotação (D-E)</span>
-                                <span>{{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}</span>
-                             </div>
+                              <!-- Subtotal Líquido -->
+                              <div class="flex justify-between text-sm mb-1 pt-0.5 border-t border-gray-100 dark:border-gray-700/50">
+                                 <span class="text-gray-500 font-medium text-xs uppercase tracking-wider">Líquido (E+R-C)</span>
+                                 <span class="font-bold text-gray-900 dark:text-white">{{ (budget.total_empenhado || 0) | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </div>
+
+                              <!-- Pago -->
+                              <div class="flex justify-between text-sm mb-1">
+                                 <span class="text-green-600 dark:text-green-400 font-medium">Pago</span>
+                                 <span class="font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </div>
+
+                              <!-- ════ Saldos ════ -->
+                              <div class="flex justify-between text-sm mb-1 pt-1 border-t border-gray-100 dark:border-gray-700/50">
+                                 <span class="text-gray-500 text-xs uppercase font-bold">Saldo de Empenho</span>
+                                 <span class="font-bold text-gray-900 dark:text-white">
+                                   {{ Math.max(0, (budget.total_empenhado || 0) - (budget.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
+                                 </span>
+                              </div>
+                              <div class="flex justify-between text-xs mb-3 text-gray-400">
+                                 <span>Saldo de Dotação (D-E)</span>
+                                 <span>{{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}</span>
+                              </div>
 
                              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
                                 <div 
@@ -803,62 +809,75 @@
                          </div>
                       }
                    </div>
-                  } @else {
-                  <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800">
-                          <tr>
-                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Unidade</th>
-                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dotação</th>
-                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Crédito</th>
-                            <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Disp.</th>
-                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dotação</th>
-                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Empenhado</th>
-                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pago</th>
-                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-red-400">Can.</th>
-                            <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Saldo (E-P-C)</th>
-                          </tr>
-                        </thead>
-                        <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
-                          @for (budget of sortedBudgets(); track budget.id) {
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                              <td class="px-5 py-4 whitespace-nowrap">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border" [class]="getBadgeClass(budget.unid_gestora)">
-                                  {{ budget.unid_gestora }}
-                                </span>
-                              </td>
-                              <td class="px-5 py-4 whitespace-nowrap">
-                                <span class="text-sm font-semibold text-gray-900 dark:text-white font-mono">{{ budget.dotacao }}</span>
-                              </td>
-                              <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                                {{ budget.credito }}
-                              </td>
-                              <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                                {{ budget.data_disponibilidade | date:'dd/MM/yyyy' }}
-                              </td>
-                              <td class="px-5 py-4 text-right whitespace-nowrap">
-                                <span class="text-sm text-gray-900 dark:text-white">{{ budget.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}</span>
-                              </td>
-                              <td class="px-5 py-4 text-right whitespace-nowrap">
-                                <span class="text-sm font-bold text-blue-600 dark:text-blue-400">{{ budget.total_empenhado | currency:'BRL':'symbol':'1.2-2' }}</span>
-                              </td>
-                              <td class="px-5 py-4 text-right whitespace-nowrap">
-                                <span class="text-sm font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
-                              </td>
-                              <td class="px-5 py-4 text-right whitespace-nowrap">
-                                <span class="text-sm font-bold text-red-500">{{ (budget.total_cancelado || 0) | currency:'BRL':'symbol':'1.2-2' }}</span>
-                              </td>
-                              <td class="px-5 py-4 text-right whitespace-nowrap">
-                                <span class="text-sm font-bold text-gray-900 dark:text-white">
-                                  {{ ((budget.total_empenhado || 0) - (budget.total_pago || 0) - (budget.total_cancelado || 0)) | currency:'BRL':'symbol':'1.2-2' }}
-                                </span>
-                              </td>
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
-                    </div>
-                  }
+                   } @else {
+                   <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                         <thead class="bg-gray-50 dark:bg-gray-800">
+                           <tr>
+                             <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Unidade</th>
+                             <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dotação</th>
+                             <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Crédito</th>
+                             <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Disp.</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dotação</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">E. Original</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-indigo-500 uppercase tracking-wider">Reforço</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Líquido</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">Pago</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-red-400 uppercase tracking-wider">Can.</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Saldo Empenho</th>
+                             <th class="px-5 py-3 text-right text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">S. Dotação</th>
+                           </tr>
+                         </thead>
+                         <tbody class="bg-white dark:bg-card-dark divide-y divide-gray-100 dark:divide-gray-800">
+                           @for (budget of sortedBudgets(); track budget.id) {
+                             @let neData = getNeBreakdown(budget.nunotaempenho);
+                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                               <td class="px-5 py-4 whitespace-nowrap">
+                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border" [class]="getBadgeClass(budget.unid_gestora)">
+                                   {{ budget.unid_gestora }}
+                                 </span>
+                               </td>
+                               <td class="px-5 py-4 whitespace-nowrap">
+                                 <span class="text-sm font-semibold text-gray-900 dark:text-white font-mono">{{ budget.dotacao }}</span>
+                               </td>
+                               <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                                 {{ budget.credito }}
+                               </td>
+                               <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                                 {{ budget.data_disponibilidade | date:'dd/MM/yyyy' }}
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm text-gray-900 dark:text-white">{{ budget.valor_dotacao | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm font-bold text-blue-600 dark:text-blue-400">{{ neData.commitment | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm font-bold text-indigo-500">{{ neData.reinforcement | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm font-bold text-gray-900 dark:text-white">{{ (budget.total_empenhado || 0) | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm font-bold text-green-600 dark:text-green-400">{{ budget.total_pago | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm font-bold text-red-500">{{ (budget.total_cancelado || 0) | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm font-bold text-gray-900 dark:text-white">
+                                   {{ Math.max(0, (budget.total_empenhado || 0) - (budget.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
+                                 </span>
+                               </td>
+                               <td class="px-5 py-4 text-right whitespace-nowrap">
+                                 <span class="text-sm font-bold text-gray-400">{{ budget.saldo_disponivel | currency:'BRL':'symbol':'1.2-2' }}</span>
+                               </td>
+                             </tr>
+                           }
+                         </tbody>
+                       </table>
+                     </div>
+                   }
                  } @else {
                    <div class="text-center py-10 text-gray-400">
                       <span class="material-symbols-outlined text-4xl mb-2">money_off</span>

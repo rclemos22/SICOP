@@ -1,6 +1,7 @@
 import * as d3 from 'd3';
 
 export interface ContractComparisonData {
+  contractId: string;
   contract: string;
   expected: number;
   paid: number;
@@ -9,7 +10,7 @@ export interface ContractComparisonData {
 export class ContractComparisonChart {
   private readonly margin = { top: 30, right: 20, bottom: 60, left: 70 };
 
-  render(container: HTMLElement, data: ContractComparisonData[], viewContract: (contract: string) => void): void {
+  render(container: HTMLElement, data: ContractComparisonData[], viewContract: (contractId: string) => void): void {
     d3.select(container).selectAll('*').remove();
     if (!data.length) {
       d3.select(container).append('div').attr('class','flex flex-col items-center justify-center h-full text-slate-400 text-sm')
@@ -78,7 +79,7 @@ export class ContractComparisonChart {
       .attr('x', d => x1(d.key) || 0).attr('y', d => y(d.value))
       .attr('width', x1.bandwidth()).attr('height', d => ch - y(d.value))
       .attr('fill', d => colors[d.key as keyof typeof colors]).attr('rx',2).style('cursor','pointer')
-      .on('click', (event, d) => viewContract(d.contract))
+      .on('click', (event, d) => viewContract(d.contractId))
       .on('mouseover', function (event, d) {
         d3.select(this).attr('opacity',.8);
         const fmt = `R$ ${d.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;

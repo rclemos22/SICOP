@@ -17,7 +17,7 @@ import { Contract } from '../../../shared/models/contract.model';
       <div class="space-y-3 overflow-y-auto max-h-[200px] pr-2 custom-scrollbar">
         @if (contracts().length > 0) {
           @for (c of contracts(); track c.id) {
-            <div (click)="viewContract.emit(c.contrato)"
+             <div (click)="viewContract.emit(c.id)"
                  [class]="priorityRowClass(c.dias_restantes ?? 0)">
               <div class="flex-1 min-w-0 mr-3">
                 <p class="text-xs font-bold text-gray-900 dark:text-white truncate">{{ c.contrato }}</p>
