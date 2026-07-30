@@ -152,16 +152,16 @@
             <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Pago</span>
           </div>
           <div class="text-2xl font-bold text-green-600 dark:text-green-400">
-            {{ (c.total_pago || 0) | currency:'BRL':'symbol':'1.2-2' }}
+            {{ paymentProgress().totalPago | currency:'BRL':'symbol':'1.2-2' }}
           </div>
           <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-3">
             <div 
               class="h-1 bg-green-500 rounded-full transition-all duration-500"
-              [style.width.%]="c.total_empenhado > 0 ? ((c.total_pago || 0) / c.total_empenhado) * 100 : 0"
+              [style.width.%]="paymentProgress().totalEmpenhado > 0 ? (paymentProgress().totalPago / paymentProgress().totalEmpenhado) * 100 : 0"
             ></div>
           </div>
           <p class="text-[10px] text-gray-400 mt-1 text-right">
-            {{ (c.total_empenhado > 0 ? ((c.total_pago || 0) / c.total_empenhado) * 100 : 0) | number:'1.0-1' }}% liquidado
+            {{ paymentProgress().percentPaid }}% liquidado
           </p>
         </div>
 
@@ -172,12 +172,12 @@
             <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Saldo de Empenho</span>
           </div>
           <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
-            {{ Math.max(0, (c.total_empenhado || 0) - (c.total_pago || 0)) | currency:'BRL':'symbol':'1.2-2' }}
+            {{ Math.max(0, paymentProgress().totalEmpenhado - paymentProgress().totalPago) | currency:'BRL':'symbol':'1.2-2' }}
           </div>
           <div class="h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-3">
             <div 
               class="h-1 bg-amber-500 rounded-full transition-all duration-500"
-              [style.width.%]="c.total_empenhado > 0 ? ((Math.max(0, (c.total_empenhado || 0) - (c.total_pago || 0))) / c.total_empenhado) * 100 : 0"
+              [style.width.%]="paymentProgress().totalEmpenhado > 0 ? (Math.max(0, paymentProgress().totalEmpenhado - paymentProgress().totalPago) / paymentProgress().totalEmpenhado) * 100 : 0"
             ></div>
           </div>
           <p class="text-[10px] text-gray-400 mt-1 text-right">A liquidar</p>

@@ -359,16 +359,18 @@ export class DashboardService {
       })
       .map(c => {
         const totalEmpenhado = Number(c.total_empenhado) || 0;
+        const totalCancelado = Number(c.total_cancelado) || 0;
+        const totalEmpenhadoLiquido = Math.max(0, totalEmpenhado - totalCancelado);
         const totalPago = Number(c.total_pago) || 0;
-        const saldoEmpenho = totalEmpenhado - totalPago;
+        const saldoEmpenho = Math.max(0, totalEmpenhadoLiquido - totalPago);
         const valorMensal = Number(c.valor_mensal) || 0;
         return {
           contractId: c.id, contractNumber: c.contrato, dotacao: c.objeto || '',
-          nunotaempenho: '', totalEmpenhado, saldoEmpenho, valorMensal,
-          percentage: valorMensal > 0 ? (saldoEmpenho / valorMensal) * 100 : 0,
+          nunotaempenho: '', totalEmpenhado: totalEmpenhadoLiquido, saldoEmpenho, valorMensal,
+          percentage: totalEmpenhadoLiquido > 0 ? (saldoEmpenho / totalEmpenhadoLiquido) * 100 : 0,
         };
       })
-      .filter(a => a.saldoEmpenho <= a.valorMensal)
+      .filter(a => a.totalEmpenhado > 0 && a.saldoEmpenho <= a.valorMensal)
       .sort((a, b) => a.percentage - b.percentage)
       .slice(0, 10)
   });

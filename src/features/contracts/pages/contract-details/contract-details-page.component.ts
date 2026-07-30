@@ -411,17 +411,21 @@ export class ContractDetailsPageComponent {
     const c = this.contract();
     const rows = this.filteredNesPagamentos();
     const brutoRows = rows.filter(r => r.tipo === 'EMPENHO' || r.tipo === 'REFORCO');
+    const cancelRows = rows.filter(r => r.tipo === 'ANULACAO');
     const pagamentoRows = rows.filter(r => r.tipo === 'PAGAMENTO' && r.obNumber);
-    // Valores financeiros: usa os agregados do contrato (fonte centralizada)
-    const totalEmpenhado = c?.total_empenhado || 0;
-    const totalPago = c?.total_pago || 0;
-    // NE/OB counts: derivados do detalhamento
+    
+    // Calcula os totais diretamente das linhas exibidas no detalhamento do ano atual/RAP
+    const empenhadoBruto = brutoRows.reduce((acc, r) => acc + (r.amount || 0), 0);
+    const cancelado = cancelRows.reduce((acc, r) => acc + (r.amount || 0), 0);
+    const totalEmpenhado = Math.max(0, empenhadoBruto - cancelado);
+    const totalPago = pagamentoRows.reduce((acc, r) => acc + (r.amount || 0), 0);
+
     const neCount = new Set(brutoRows.map(r => r.ne)).size;
     const obCount = pagamentoRows.length;
     return {
       totalEmpenhado,
-      totalEmpenhadoBruto: totalEmpenhado,
-      totalCancelado: 0,
+      totalEmpenhadoBruto: empenhadoBruto,
+      totalCancelado: cancelado,
       totalPago,
       percentPaid: totalEmpenhado > 0 ? Math.round((totalPago / totalEmpenhado) * 100) : 0,
       neCount,

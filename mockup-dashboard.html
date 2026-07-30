@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mockup — Dashboard SICOP v3</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0,1" />
+  <style>
+    /* ── CSS Variables ── */
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --card-hover: #f8fafc;
+      --sidebar: #ffffff;
+      --border: #e5e7eb;
+      --border-light: #f1f5f9;
+      --text: #111827;
+      --text-sec: #6b7280;
+      --text-ter: #9ca3af;
+      --text-muted: #d1d5db;
+      --shadow: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-hover: 0 8px 20px -6px rgba(0,0,0,0.08);
+      --header: rgba(255,255,255,0.85);
+      --shim-from: #f1f5f9;
+      --shim-to: #e2e8f0;
+      --thumb: #d1d5db;
+      --blue: #3b82f6;
+      --amber: #f59e0b;
+      --emerald: #10b981;
+      --purple: #8b5cf6;
+      --red: #ef4444;
+      --indigo: #4f46e5;
+      --radius: 8px;
+    }
+    .dark {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-hover: #334155;
+      --sidebar: #1e293b;
+      --border: #334155;
+      --border-light: #1e293b;
+      --text: #f1f5f9;
+      --text-sec: #94a3b8;
+      --text-ter: #64748b;
+      --text-muted: #475569;
+      --shadow: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-hover: 0 8px 20px -6px rgba(0,0,0,0.4);
+      --header: rgba(30,41,59,0.90);
+      --shim-from: #1e293b;
+      --shim-to: #334155;
+      --thumb: #475569;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { font-family: 'Inter', sans-serif; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      transition: background .3s, color .3s;
+      min-height: 100vh;
+    }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: var(--thumb); border-radius: 4px; }
+
+    /* ── App Shell ── */
+    .shell { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .side { width: 240px; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: transform .3s, background .3s; z-index: 50; }
+    .side-logo { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .side-logo .box { width: 32px; height: 32px; background: var(--blue); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 16px; }
+    .side-logo span { font-weight: 800; font-size: 18px; }
+    .side-nav { flex: 1; padding: 8px; overflow-y: auto; }
+    .side-nav a { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; color: var(--text-sec); transition: all .15s; cursor: pointer; }
+    .side-nav a:hover { background: var(--card-hover); color: var(--text); }
+    .side-nav a.active { background: var(--blue); color: #fff; }
+    .side-nav .sep { height: 1px; background: var(--border); margin: 6px 12px; }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100vh; overflow: hidden; }
+
+    /* ── Top Bar ── */
+    .topbar { height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: var(--header); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); transition: background .3s; gap: 12px; }
+    .topbar-left { display: flex; align-items: center; gap: 10px; }
+    .hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--text-sec); padding: 4px; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .year-sel { display: flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 12px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+    .year-sel:hover { border-color: var(--blue); }
+
+    .api-badge { display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 1px solid; }
+    .api-badge.ok { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
+    .api-badge.ok .dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
+    .dark .api-badge.ok { background: rgba(16,185,129,.12); color: #34d399; border-color: rgba(16,185,129,.3); }
+
+    .theme-btn { width: 34px; height: 34px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--card); color: var(--text-sec); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; font-size: 18px; }
+    .theme-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+    /* ── Scrollable Content ── */
+    .scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px; transition: background .3s; }
+
+    /* ── Card ── */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); transition: all .2s; }
+    .card-hover:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+    .card-accent { border-left: 3px solid var(--blue); }
+    .card-accent-red { border-left: 3px solid var(--red); }
+    .card-accent-amber { border-left: 3px solid var(--amber); }
+    .card-accent-purple { border-left: 3px solid var(--purple); }
+
+    /* ── KPI icon box ── */
+    .kpi-box { width: 40px; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all .2s; }
+
+    /* ── Progress ── */
+    .prog { height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+    .prog-bar { height: 100%; border-radius: 3px; transition: width 1s; }
+
+    /* ── Chart placeholder ── */
+    .cph { background: linear-gradient(135deg, var(--shim-from) 25%, var(--shim-to) 50%, var(--shim-from) 75%); background-size: 200% 200%; animation: shim 2s infinite; border-radius: 6px; }
+    @keyframes shim { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── Skeleton ── */
+    .skel { background: linear-gradient(135deg, var(--shim-from) 25%, var(--shim-to) 50%, var(--shim-from) 75%); background-size: 200% 200%; animation: shim 2s infinite; border-radius: 6px; }
+
+    /* ── Overlay ── */
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1023px) {
+      .side { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); }
+      .side.open { transform: translateX(0); }
+      .overlay.open { display: block; }
+      .hamburger { display: flex; }
+      .scroll { padding: 14px; }
+    }
+
+    /* ── Grid system (lightweight) ── */
+    .g { display: grid; gap: 16px; }
+    .g-1 { grid-template-columns: repeat(1,1fr); }
+    .g-2 { grid-template-columns: repeat(2,1fr); }
+    .g-3 { grid-template-columns: repeat(3,1fr); }
+    .g-4 { grid-template-columns: repeat(4,1fr); }
+    @media (min-width: 768px) { .md\:g-2 { grid-template-columns: repeat(2,1fr); } .md\:g-4 { grid-template-columns: repeat(4,1fr); } .md\:g-3 { grid-template-columns: repeat(3,1fr); } }
+    @media (min-width: 1024px) { .lg\:g-3 { grid-template-columns: repeat(3,1fr); } .lg\:g-4 { grid-template-columns: repeat(4,1fr); } }
+    @media (min-width: 1280px) { .xl\:g-4 { grid-template-columns: repeat(4,1fr); } .xl\:c-3 { grid-column: span 3; } }
+    @media (min-width: 1600px) { .scroll { padding: 24px 32px; } }
+
+    .f { display: flex; }
+    .fc { flex-direction: column; }
+    .fw { flex-wrap: wrap; }
+    .ai-c { align-items: center; }
+    .jc-b { justify-content: space-between; }
+    .jc-c { justify-content: center; }
+    .g-1 { gap: 4px; } .g-2 { gap: 8px; } .g-3 { gap: 12px; } .g-4 { gap: 16px; } .g-6 { gap: 24px; }
+    .mt-1 { margin-top: 4px; } .mt-2 { margin-top: 8px; } .mt-3 { margin-top: 12px; } .mt-4 { margin-top: 16px; }
+    .mb-1 { margin-bottom: 4px; } .mb-2 { margin-bottom: 8px; } .mb-3 { margin-bottom: 12px; } .mb-4 { margin-bottom: 16px; } .mb-6 { margin-bottom: 24px; }
+    .p-4 { padding: 16px; } .p-5 { padding: 20px; } .p-3 { padding: 12px; }
+    .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .w-full { width: 100%; }
+    .flex-1 { flex: 1; }
+    .shrink-0 { flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Overlay -->
+  <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside class="side" id="side">
+    <div class="side-logo">
+      <div class="box">S</div>
+      <span>SICOP</span>
+    </div>
+    <nav class="side-nav">
+      <a class="active"><span class="material-symbols-outlined" style="font-size:20px;">dashboard</span> Dashboard</a>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">description</span> Contratos</a>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">gavel</span> Atas</a>
+      <div class="sep"></div>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">account_balance_wallet</span> Financeiro</a>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">monetization_on</span> Orçamento</a>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">business</span> Fornecedores</a>
+      <div class="sep"></div>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">receipt_long</span> Nota de Empenho</a>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">payments</span> Ordem Bancária</a>
+      <a><span class="material-symbols-outlined" style="font-size:20px;">sync</span> Sincronizar SIGEF</a>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" onclick="toggleSidebar()">
+          <span class="material-symbols-outlined" style="font-size:22px;">menu</span>
+        </button>
+      </div>
+      <div class="topbar-right">
+        <div class="api-badge ok">
+          <span class="dot"></span>
+          API SIGEF Conectada
+        </div>
+        <div class="year-sel">
+          <span class="material-symbols-outlined" style="font-size:16px;color:var(--text-ter);">calendar_today</span>
+          2026
+          <span class="material-symbols-outlined" style="font-size:16px;color:var(--text-ter);">keyboard_arrow_down</span>
+        </div>
+        <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">
+          <span class="material-symbols-outlined" id="themeIcon">dark_mode</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="scroll">
+
+      <!-- Header -->
+      <div class="f ai-c jc-b mb-6">
+        <div>
+          <h1 style="font-size:24px;font-weight:900;letter-spacing:-.3px;">Dashboard Financeiro</h1>
+          <p style="color:var(--text-sec);font-size:13px;font-weight:500;margin-top:2px;">Visão consolidada da execução orçamentária e contratos</p>
+        </div>
+        <div class="f ai-c g-2" style="color:var(--blue);background:rgba(59,130,246,.08);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid rgba(59,130,246,.15);white-space:nowrap;">
+          <span class="material-symbols-outlined" style="font-size:16px;animation:spin 1s linear infinite;">sync</span>
+          Atualizando...
+        </div>
+      </div>
+
+      <!-- ROW 1: ALERT CARDS -->
+      <div class="g g-1 md:g-2 lg:g-3 mb-6">
+
+        <!-- Overdue -->
+        <div class="card card-accent-red">
+          <div class="f ai-c jc-b p-4" style="border-bottom:1px solid rgba(239,68,68,.08);background:rgba(239,68,68,.03);">
+            <div class="f ai-c g-2">
+              <span class="material-symbols-outlined" style="color:var(--red);font-size:18px;">warning</span>
+              <span style="font-size:11px;font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:.03em;">Pagamentos em Atraso</span>
+            </div>
+            <span style="padding:2px 8px;background:rgba(239,68,68,.1);color:var(--red);font-size:10px;font-weight:900;border-radius:4px;">3</span>
+          </div>
+          <div style="padding:10px;max-height:200px;overflow-y:auto;">
+            <div class="f ai-c p-3" style="background:rgba(239,68,68,.03);border-radius:6px;border:1px solid rgba(239,68,68,.1);cursor:pointer;margin-bottom:6px;">
+              <div style="width:34px;height:34px;border-radius:50%;background:rgba(239,68,68,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:10px;">
+                <span class="material-symbols-outlined" style="color:var(--red);font-size:16px;">money_off</span>
+              </div>
+              <div class="flex-1" style="min-width:0;">
+                <div class="f ai-c jc-b">
+                  <span style="font-size:11px;font-weight:900;color:var(--text);" class="trunc">135/2021</span>
+                  <span style="font-size:9px;font-weight:700;color:var(--red);background:rgba(239,68,68,.07);padding:1px 5px;border-radius:3px;flex-shrink:0;margin-left:6px;">2026-07</span>
+                </div>
+                <p style="font-size:10px;color:var(--text-sec);" class="trunc mt-1">Construtora Exemplo Ltda</p>
+              </div>
+              <div style="margin-left:10px;text-align:right;flex-shrink:0;">
+                <p style="font-size:11px;font-weight:900;color:var(--text);">R$ 8.500</p>
+                <span style="font-size:8px;font-weight:900;color:var(--red);text-transform:uppercase;">Vencido</span>
+              </div>
+            </div>
+            <div class="f ai-c p-3" style="background:rgba(239,68,68,.03);border-radius:6px;border:1px solid rgba(239,68,68,.1);cursor:pointer;">
+              <div style="width:34px;height:34px;border-radius:50%;background:rgba(239,68,68,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:10px;">
+                <span class="material-symbols-outlined" style="color:var(--red);font-size:16px;">money_off</span>
+              </div>
+              <div class="flex-1" style="min-width:0;">
+                <div class="f ai-c jc-b">
+                  <span style="font-size:11px;font-weight:900;color:var(--text);" class="trunc">042/2023</span>
+                  <span style="font-size:9px;font-weight:700;color:var(--red);background:rgba(239,68,68,.07);padding:1px 5px;border-radius:3px;flex-shrink:0;margin-left:6px;">2026-06</span>
+                </div>
+                <p style="font-size:10px;color:var(--text-sec);" class="trunc mt-1">Tech Solutions S.A.</p>
+              </div>
+              <div style="margin-left:10px;text-align:right;flex-shrink:0;">
+                <p style="font-size:11px;font-weight:900;color:var(--text);">R$ 12.000</p>
+                <span style="font-size:8px;font-weight:900;color:var(--red);text-transform:uppercase;">Vencido</span>
+              </div>
+            </div>
+          </div>
+          <button style="width:100%;padding:7px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;border-top:1px solid rgba(239,68,68,.08);background:rgba(239,68,68,.03);color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
+            <span class="material-symbols-outlined" style="font-size:14px;">expand_more</span> Ver mais (5)
+          </button>
+        </div>
+
+        <!-- Low Budget -->
+        <div class="card card-accent-amber">
+          <div class="f ai-c jc-b p-4" style="border-bottom:1px solid rgba(245,158,11,.08);background:rgba(245,158,11,.03);">
+            <div class="f ai-c g-2">
+              <span class="material-symbols-outlined" style="color:var(--amber);font-size:18px;">account_balance</span>
+              <span style="font-size:11px;font-weight:900;color:var(--amber);text-transform:uppercase;letter-spacing:.03em;">Saldo de Empenho Baixo</span>
+            </div>
+            <span style="padding:2px 8px;background:rgba(245,158,11,.1);color:var(--amber);font-size:10px;font-weight:900;border-radius:4px;">2</span>
+          </div>
+          <div style="padding:10px;">
+            <div class="f ai-c p-3" style="background:rgba(245,158,11,.03);border-radius:6px;border:1px solid rgba(245,158,11,.1);cursor:pointer;">
+              <div style="width:34px;height:34px;border-radius:50%;background:rgba(245,158,11,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:10px;">
+                <span class="material-symbols-outlined" style="color:var(--amber);font-size:16px;">account_balance_wallet</span>
+              </div>
+              <div class="flex-1" style="min-width:0;">
+                <div class="f ai-c jc-b">
+                  <span style="font-size:11px;font-weight:900;color:var(--text);">088/2025</span>
+                  <span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(245,158,11,.07);padding:1px 5px;border-radius:3px;">15%</span>
+                </div>
+                <p style="font-size:10px;color:var(--text-sec);" class="trunc mt-1">Manutenção Predial</p>
+              </div>
+              <div style="margin-left:10px;text-align:right;flex-shrink:0;">
+                <p style="font-size:11px;font-weight:900;color:var(--text);">R$ 3.200</p>
+                <span style="font-size:8px;font-weight:900;color:var(--amber);text-transform:uppercase;">Saldo</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ATA -->
+        <div class="card card-accent-purple">
+          <div class="f ai-c jc-b p-4" style="border-bottom:1px solid rgba(139,92,246,.08);background:rgba(139,92,246,.03);">
+            <div class="f ai-c g-2">
+              <span class="material-symbols-outlined" style="color:var(--purple);font-size:18px;">gavel</span>
+              <span style="font-size:11px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:.03em;">Atas de Licitação</span>
+            </div>
+            <span style="font-size:10px;color:var(--purple);font-weight:600;">1 Ativa</span>
+          </div>
+          <div style="padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 6px;background:var(--card-hover);border-radius:6px;border:1px solid var(--border);cursor:pointer;text-align:center;">
+              <span style="font-size:22px;font-weight:900;color:var(--text);">2</span>
+              <span style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;margin-top:3px;">A Vencer</span>
+              <span style="font-size:8px;color:var(--amber);font-weight:700;margin-top:2px;">⇢ Verificar</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 6px;background:var(--card-hover);border-radius:6px;border:1px solid var(--border);cursor:pointer;text-align:center;">
+              <span style="font-size:22px;font-weight:900;color:var(--amber);">1</span>
+              <span style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;margin-top:3px;">Adesões Pend.</span>
+              <span style="font-size:8px;color:var(--amber);font-weight:700;margin-top:2px;">⇢ Analisar</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 6px;background:var(--card-hover);border-radius:6px;border:1px solid var(--border);cursor:pointer;text-align:center;">
+              <span style="font-size:22px;font-weight:900;color:var(--red);">0</span>
+              <span style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;margin-top:3px;">Saldo Crítico</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ROW 2: KPI CARDS (4 columns, no overlap) -->
+      <div class="g g-2 md:g-4 mb-6">
+
+        <div class="card card-hover p-4" onclick="alert('Navegar para Contratos')" style="cursor:pointer;">
+          <div class="f ai-c jc-b mb-3">
+            <div class="kpi-box" style="background:rgba(59,130,246,.1);color:var(--blue);">
+              <span class="material-symbols-outlined" style="font-size:22px;">payments</span>
+            </div>
+            <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(59,130,246,.1);color:var(--blue);border:1px solid rgba(59,130,246,.15);">12 Ativos</span>
+          </div>
+          <p style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Total Previsto</p>
+          <p style="font-size:20px;font-weight:900;color:var(--text);letter-spacing:-.2px;">R$ 12,45 Mi</p>
+          <p style="font-size:9px;color:var(--text-ter);font-weight:500;margin-top:6px;">Soma do valor anual dos contratos</p>
+        </div>
+
+        <div class="card card-hover p-4" onclick="alert('Navegar para Orçamento')" style="cursor:pointer;">
+          <div class="f ai-c jc-b mb-3">
+            <div class="kpi-box" style="background:rgba(245,158,11,.1);color:var(--amber);">
+              <span class="material-symbols-outlined" style="font-size:22px;">account_balance_wallet</span>
+            </div>
+          </div>
+          <p style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Total Empenhado</p>
+          <p style="font-size:20px;font-weight:900;color:var(--text);letter-spacing:-.2px;">R$ 6,69 Mi</p>
+          <div class="f ai-c g-1 mt-2">
+            <span style="font-size:10px;font-weight:900;color:var(--amber);">53,7%</span>
+            <span style="font-size:9px;color:var(--text-ter);font-weight:500;">da previsão anual</span>
+          </div>
+        </div>
+
+        <div class="card card-hover p-4" onclick="alert('Navegar para Financeiro')" style="cursor:pointer;">
+          <div class="f ai-c jc-b mb-3">
+            <div class="kpi-box" style="background:rgba(16,185,129,.1);color:var(--emerald);">
+              <span class="material-symbols-outlined" style="font-size:22px;">verified</span>
+            </div>
+          </div>
+          <p style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Total Pago</p>
+          <p style="font-size:20px;font-weight:900;color:var(--text);letter-spacing:-.2px;">R$ 5,65 Mi</p>
+          <div class="f ai-c g-1 mt-2">
+            <span style="font-size:10px;font-weight:900;color:var(--emerald);">84,4%</span>
+            <span style="font-size:9px;color:var(--text-ter);font-weight:500;">da reserva empenhada</span>
+          </div>
+        </div>
+
+        <div class="card card-hover p-4" onclick="alert('Navegar para Financeiro')" style="cursor:pointer;">
+          <div class="f ai-c jc-b mb-3">
+            <div class="kpi-box" style="background:rgba(139,92,246,.1);color:var(--purple);">
+              <span class="material-symbols-outlined" style="font-size:22px;">request_quote</span>
+            </div>
+          </div>
+          <p style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Saldo a Pagar</p>
+          <p style="font-size:20px;font-weight:900;color:var(--text);letter-spacing:-.2px;">R$ 1,04 Mi</p>
+          <div class="f ai-c g-2 mt-2">
+            <div class="prog flex-1"><div class="prog-bar" style="width:73%;background:var(--purple);"></div></div>
+            <span style="font-size:10px;font-weight:700;color:var(--purple);">73%</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ROW 3: EXPENSES BY TYPE -->
+      <div class="g g-1 lg:g-2 mb-6">
+
+        <div class="card card-hover p-5" onclick="alert('Filtrar Materiais')" style="cursor:pointer;">
+          <div class="f ai-c jc-b mb-4">
+            <div class="f ai-c g-4">
+              <div class="kpi-box" style="background:rgba(59,130,246,.1);color:var(--blue);width:48px;height:48px;">
+                <span class="material-symbols-outlined" style="font-size:26px;">inventory_2</span>
+              </div>
+              <div>
+                <p style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">Materiais</p>
+                <p style="font-size:20px;font-weight:900;color:var(--text);">8 <span style="font-size:11px;font-weight:700;color:var(--text-ter);">Contratos</span></p>
+              </div>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(59,130,246,.07);padding:5px 12px;border-radius:6px;border:1px solid rgba(59,130,246,.12);">42%</span>
+          </div>
+          <div class="f ai-c jc-b mb-2" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.04em;">
+            <span>Evolução Financeira</span>
+            <span style="color:var(--blue);">65% Pago</span>
+          </div>
+          <div class="prog mb-3"><div class="prog-bar" style="width:65%;background:var(--blue);"></div></div>
+          <div class="f jc-b ai-c">
+            <div><span style="font-size:8px;color:var(--text-ter);font-weight:500;text-transform:uppercase;">Previsto</span><p style="font-size:11px;font-weight:900;color:var(--text);margin-top:1px;">R$ 5,20 Mi</p></div>
+            <div style="text-align:right;"><span style="font-size:8px;color:var(--text-ter);font-weight:500;text-transform:uppercase;">Liquidado</span><p style="font-size:11px;font-weight:900;color:var(--emerald);margin-top:1px;">R$ 3,38 Mi</p></div>
+          </div>
+        </div>
+
+        <div class="card card-hover p-5" onclick="alert('Filtrar Serviços')" style="cursor:pointer;">
+          <div class="f ai-c jc-b mb-4">
+            <div class="f ai-c g-4">
+              <div class="kpi-box" style="background:rgba(99,102,241,.1);color:var(--indigo);width:48px;height:48px;">
+                <span class="material-symbols-outlined" style="font-size:26px;">engineering</span>
+              </div>
+              <div>
+                <p style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">Serviços</p>
+                <p style="font-size:20px;font-weight:900;color:var(--text);">11 <span style="font-size:11px;font-weight:700;color:var(--text-ter);">Contratos</span></p>
+              </div>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:var(--indigo);background:rgba(99,102,241,.07);padding:5px 12px;border-radius:6px;border:1px solid rgba(99,102,241,.12);">58%</span>
+          </div>
+          <div class="f ai-c jc-b mb-2" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;letter-spacing:.04em;">
+            <span>Evolução Financeira</span>
+            <span style="color:var(--indigo);">72% Pago</span>
+          </div>
+          <div class="prog mb-3"><div class="prog-bar" style="width:72%;background:var(--indigo);"></div></div>
+          <div class="f jc-b ai-c">
+            <div><span style="font-size:8px;color:var(--text-ter);font-weight:500;text-transform:uppercase;">Previsto</span><p style="font-size:11px;font-weight:900;color:var(--text);margin-top:1px;">R$ 7,25 Mi</p></div>
+            <div style="text-align:right;"><span style="font-size:8px;color:var(--text-ter);font-weight:500;text-transform:uppercase;">Liquidado</span><p style="font-size:11px;font-weight:900;color:var(--emerald);margin-top:1px;">R$ 5,22 Mi</p></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ROW 4: CHARTS (2 columns, clean grid, no side column) -->
+      <div class="g g-1 md:g-2 mb-6">
+
+        <!-- Monthly Execution -->
+        <div class="card p-5">
+          <div class="f ai-c jc-b mb-4">
+            <h3 style="font-size:14px;font-weight:800;color:var(--text);">Evolução de Gastos</h3>
+            <span style="font-size:9px;font-weight:600;color:var(--text-ter);background:var(--card-hover);padding:3px 8px;border-radius:4px;">Últ. 12 meses</span>
+          </div>
+          <div class="cph" style="height:190px;display:flex;align-items:center;justify-content:center;color:var(--text-ter);font-size:12px;font-weight:500;">
+            <span class="material-symbols-outlined" style="margin-right:6px;font-size:18px;">bar_chart</span>
+            Gráfico D3 — Barras Mensais
+          </div>
+          <div class="f jc-c g-4 mt-3 pt-3" style="border-top:1px solid var(--border-light);">
+            <span class="f ai-c" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--blue);margin-right:5px;"></span> Total Executado
+            </span>
+          </div>
+        </div>
+
+        <!-- Expected vs Paid -->
+        <div class="card p-5">
+          <div class="f ai-c jc-b mb-4">
+            <h3 style="font-size:14px;font-weight:800;color:var(--text);">Previsto vs Pago</h3>
+            <span style="font-size:9px;font-weight:600;color:var(--text-ter);background:var(--card-hover);padding:3px 8px;border-radius:4px;">Ano 2026</span>
+          </div>
+          <div class="cph" style="height:190px;display:flex;align-items:center;justify-content:center;color:var(--text-ter);font-size:12px;font-weight:500;">
+            <span class="material-symbols-outlined" style="margin-right:6px;font-size:18px;">bar_chart</span>
+            Gráfico D3 — Grupado
+          </div>
+          <div class="f jc-c g-4 mt-3 pt-3" style="border-top:1px solid var(--border-light);">
+            <span class="f ai-c" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">
+              <span style="width:8px;height:8px;border-radius:2px;background:#60a5fa;margin-right:5px;"></span> Previsto
+            </span>
+            <span class="f ai-c" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--emerald);margin-right:5px;"></span> Pago
+            </span>
+          </div>
+        </div>
+
+        <!-- Status Donut -->
+        <div class="card p-5 fc ai-c">
+          <h3 style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:14px;width:100%;">Status dos Contratos</h3>
+          <div class="cph" style="width:160px;height:160px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-ter);font-size:11px;font-weight:500;">
+            <span class="material-symbols-outlined" style="margin-right:3px;font-size:16px;">donut_large</span> D3 Donut
+          </div>
+          <div class="f fw jc-c" style="gap:8px 16px;margin-top:14px;">
+            <span class="f ai-c" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:5px;"></span> Vigentes (8 · 42%)
+            </span>
+            <span class="f ai-c" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">
+              <span style="width:7px;height:7px;border-radius:50%;background:var(--amber);margin-right:5px;"></span> Finalizando (4 · 21%)
+            </span>
+            <span class="f ai-c" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">
+              <span style="width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:5px;"></span> Rescindidos (1 · 5%)
+            </span>
+            <span class="f ai-c" style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">
+              <span style="width:7px;height:7px;border-radius:50%;background:var(--text-muted);margin-right:5px;"></span> Encerrados (6 · 32%)
+            </span>
+          </div>
+        </div>
+
+        <!-- Expiring + Summary stacked -->
+        <div class="fc g-4">
+
+          <div class="card p-5" style="border-color:rgba(245,158,11,.2);">
+            <div class="f ai-c jc-b mb-3">
+              <div class="f ai-c g-2">
+                <h3 style="font-size:14px;font-weight:800;color:var(--text);">Fim de Vigência</h3>
+                <span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:rgba(245,158,11,.12);color:var(--amber);font-size:10px;font-weight:900;">3</span>
+              </div>
+              <span style="padding:2px 8px;background:rgba(245,158,11,.07);color:var(--amber);font-size:9px;font-weight:900;border-radius:4px;border:1px solid rgba(245,158,11,.12);">PRÓX. 120 DIAS</span>
+            </div>
+            <div style="max-height:170px;overflow-y:auto;">
+              <div class="f ai-c jc-b p-3" style="border:1px solid rgba(239,68,68,.18);background:rgba(239,68,68,.04);border-radius:6px;cursor:pointer;margin-bottom:6px;">
+                <div><p style="font-size:12px;font-weight:700;color:var(--text);">001/2026</p><p style="font-size:9px;color:var(--text-sec);">DPEMA Serviços</p></div>
+                <div class="f ai-c g-1"><span style="width:6px;height:6px;border-radius:50%;background:var(--red);"></span><span style="font-size:10px;font-weight:900;color:var(--red);">32 dias</span></div>
+              </div>
+              <div class="f ai-c jc-b p-3" style="border:1px solid rgba(245,158,11,.18);background:rgba(245,158,11,.04);border-radius:6px;cursor:pointer;">
+                <div><p style="font-size:12px;font-weight:700;color:var(--text);">042/2023</p><p style="font-size:9px;color:var(--text-sec);">Tech Solutions S.A.</p></div>
+                <div class="f ai-c g-1"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber);"></span><span style="font-size:10px;font-weight:900;color:var(--amber);">75 dias</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-5" style="border-radius:var(--radius);background:linear-gradient(135deg,var(--indigo),#4338ca);color:#fff;position:relative;overflow:hidden;">
+            <div style="position:relative;z-index:2;">
+              <p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:5px;">Média de Execução</p>
+              <p style="font-size:26px;font-weight:900;letter-spacing:-.2px;">53,7%</p>
+              <div class="prog mt-3" style="background:rgba(255,255,255,.2);height:5px;"><div class="prog-bar" style="width:53.7%;background:#fff;"></div></div>
+              <p style="font-size:10px;font-weight:500;margin-top:6px;opacity:.8;">Saldo remanescente de <strong style="font-weight:800;">R$ 5,76 Mi</strong></p>
+            </div>
+            <span class="material-symbols-outlined" style="position:absolute;bottom:-12px;right:-12px;font-size:80px;opacity:.1;transform:rotate(12deg);">trending_up</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ROW 5: COMPARISON CHART (full width) -->
+      <div class="card p-5 md:p-6 mb-6">
+        <div class="f fc md:f ai-c jc-b g-3 mb-5">
+          <div>
+            <h3 style="font-size:15px;font-weight:900;color:var(--text);">Comparativo Financeiro por Contrato</h3>
+            <p style="font-size:10px;color:var(--text-ter);margin-top:1px;font-weight:600;text-transform:uppercase;letter-spacing:.02em;">Execução acumulada — Ano 2026</p>
+          </div>
+          <div class="f ai-c g-4">
+            <div class="f ai-c g-2"><span style="width:10px;height:10px;border-radius:2px;background:#60a5fa;"></span><span style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">Previsto</span></div>
+            <div class="f ai-c g-2"><span style="width:10px;height:10px;border-radius:2px;background:var(--emerald);"></span><span style="font-size:9px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">Pago</span></div>
+          </div>
+        </div>
+        <div class="cph" style="height:280px;display:flex;align-items:center;justify-content:center;color:var(--text-ter);font-size:12px;font-weight:500;">
+          <span class="material-symbols-outlined" style="margin-right:6px;font-size:18px;">bar_chart</span>
+          Gráfico D3 — Horizontal scroll
+        </div>
+      </div>
+
+      <!-- ROW 6: RECENT PAYMENTS -->
+      <div class="card mb-6">
+        <div class="f fc md:f ai-c jc-b g-3 p-4" style="border-bottom:1px solid var(--border-light);">
+          <h3 style="font-size:15px;font-weight:900;color:var(--text);">Últimos Pagamentos Localizados</h3>
+          <button style="font-size:10px;font-weight:700;color:var(--blue);background:none;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:3px;padding:3px 0;">
+            Ver Histórico Completo <span class="material-symbols-outlined" style="font-size:13px;">chevron_right</span>
+          </button>
+        </div>
+        <div style="overflow-x:auto;">
+          <!-- Desktop table -->
+          <table style="width:100%;display:none;" id="dt">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border-light);">
+                <th style="padding:10px 16px;font-size:9px;font-weight:900;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;text-align:left;">Nº Contrato</th>
+                <th style="padding:10px 16px;font-size:9px;font-weight:900;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;text-align:left;">Contratada / Fornecedor</th>
+                <th style="padding:10px 16px;font-size:9px;font-weight:900;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;text-align:center;">Data Pagamento</th>
+                <th style="padding:10px 16px;font-size:9px;font-weight:900;color:var(--text-ter);text-transform:uppercase;letter-spacing:.08em;text-align:right;">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="transition:background .15s;">
+                <td style="padding:12px 16px;"><span style="padding:2px 6px;background:var(--card-hover);font-size:9px;font-weight:700;color:var(--text-sec);border:1px solid var(--border);border-radius:3px;">001/2026</span><span style="display:block;font-size:8px;color:var(--text-ter);margin-top:1px;">OB 2026OB000001</span></td>
+                <td style="padding:12px 16px;"><div class="f ai-c"><div style="width:28px;height:28px;background:rgba(59,130,246,.1);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--blue);font-weight:900;font-size:9px;margin-right:8px;">DP</div><span style="font-size:12px;font-weight:700;color:var(--text);">Defensoria Pública</span></div></td>
+                <td style="padding:12px 16px;text-align:center;"><span style="font-size:12px;font-weight:900;color:var(--text);">15/01/2026</span><span style="display:block;font-size:8px;color:var(--emerald);font-weight:700;text-transform:uppercase;">PAGO</span></td>
+                <td style="padding:12px 16px;text-align:right;"><span style="font-size:12px;font-weight:900;color:var(--emerald);">R$ 174.860</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <!-- Mobile cards -->
+          <div id="mc">
+            <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+              <div class="f ai-c jc-b">
+                <div class="f ai-c">
+                  <div style="width:36px;height:36px;background:rgba(59,130,246,.1);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--blue);font-weight:900;font-size:10px;margin-right:10px;flex-shrink:0;">DP</div>
+                  <div><p style="font-size:12px;font-weight:700;color:var(--text);">Defensoria Pública</p><span style="font-size:8px;font-weight:900;color:var(--text-ter);text-transform:uppercase;">OB 2026OB000001</span></div>
+                </div>
+                <div style="text-align:right;"><p style="font-size:12px;font-weight:900;color:var(--emerald);">R$ 174.860</p><p style="font-size:8px;color:var(--text-ter);">15/01/2026</p></div>
+              </div>
+              <div class="f ai-c jc-b" style="padding-top:8px;border-top:1px solid var(--border-light);">
+                <span style="font-size:8px;font-weight:700;color:var(--text-ter);text-transform:uppercase;">Contrato:</span>
+                <span style="padding:2px 6px;background:var(--card-hover);font-size:8px;font-weight:900;color:var(--text-sec);border:1px solid var(--border);border-radius:3px;">001/2026</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 7: INCONSISTÊNCIAS -->
+      <div class="card" style="border-color:rgba(245,158,11,.25);border-left:3px solid var(--amber);">
+        <div class="p-4" style="border-bottom:1px solid rgba(245,158,11,.08);background:rgba(245,158,11,.04);">
+          <div class="f ai-c g-2">
+            <span class="material-symbols-outlined" style="color:var(--amber);font-size:16px;">error_outline</span>
+            <span style="font-size:11px;font-weight:900;color:var(--amber);text-transform:uppercase;letter-spacing:.03em;">Inconsistências Detectadas — Dashboard Atual</span>
+          </div>
+        </div>
+        <div style="padding:14px 16px;">
+          <div class="g g-1" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px;">
+            <div class="f g-2" style="padding:8px 12px;background:rgba(245,158,11,.03);border-radius:6px;border:1px solid rgba(245,158,11,.06);">
+              <span style="width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:var(--amber);flex-shrink:0;margin-top:1px;">1</span>
+              <div><strong style="font-size:11px;font-weight:700;">navigate.emit() quebrado</strong><p style="font-size:10px;color:var(--text-sec);margin-top:1px;">Cards Materiais/Serviços usam <code style="font-size:9px;background:var(--card-hover);padding:1px 3px;border-radius:2px;">(click)="navigate.emit('contracts')"</code> sem <code style="font-size:9px;background:var(--card-hover);padding:1px 3px;border-radius:2px;">@Output()</code></p></div>
+            </div>
+            <div class="f g-2" style="padding:8px 12px;background:rgba(245,158,11,.03);border-radius:6px;border:1px solid rgba(245,158,11,.06);">
+              <span style="width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:var(--amber);flex-shrink:0;margin-top:1px;">2</span>
+              <div><strong style="font-size:11px;font-weight:700;">Sidebar sem toggle mobile</strong><p style="font-size:10px;color:var(--text-sec);margin-top:1px;">Hamburger existe mas <code style="font-size:9px;background:var(--card-hover);padding:1px 3px;border-radius:2px;">toggleSidebar()</code> não abre/fecha a sidebar</p></div>
+            </div>
+            <div class="f g-2" style="padding:8px 12px;background:rgba(245,158,11,.03);border-radius:6px;border:1px solid rgba(245,158,11,.06);">
+              <span style="width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:var(--amber);flex-shrink:0;margin-top:1px;">3</span>
+              <div><strong style="font-size:11px;font-weight:700;">Skeleton loading genérico</strong><p style="font-size:10px;color:var(--text-sec);margin-top:1px;">4 divs "pulse" sem forma definida, não espelham o layout real</p></div>
+            </div>
+            <div class="f g-2" style="padding:8px 12px;background:rgba(245,158,11,.03);border-radius:6px;border:1px solid rgba(245,158,11,.06);">
+              <span style="width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:var(--amber);flex-shrink:0;margin-top:1px;">4</span>
+              <div><strong style="font-size:11px;font-weight:700;">lowBudgetAlerts sem filtro de ano</strong><p style="font-size:10px;color:var(--text-sec);margin-top:1px;">Usa <code style="font-size:9px;background:var(--card-hover);padding:1px 3px;border-radius:2px;">contractService.contracts()</code> sem filtrar pelo ano-base</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="text-align:center;font-size:9px;color:var(--text-ter);font-weight:500;padding:16px 0 4px;border-top:1px solid var(--border-light);margin-top:24px;">
+        Mockup conceitual — Dashboard SICOP v3 · Julho 2026 · Tema: <span id="tl">Claro</span>
+      </div>
+
+    </div><!-- /scroll -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+  function toggleSidebar() {
+    document.getElementById('side').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+  function toggleTheme() {
+    const h = document.documentElement;
+    const dk = h.classList.toggle('dark');
+    dk ? h.classList.remove('light') : h.classList.add('light');
+    document.getElementById('themeIcon').textContent = dk ? 'light_mode' : 'dark_mode';
+    document.getElementById('tl').textContent = dk ? 'Escuro' : 'Claro';
+  }
+  function updTable() {
+    const md = window.innerWidth >= 768;
+    document.getElementById('dt').style.display = md ? 'table' : 'none';
+    document.getElementById('mc').style.display = md ? 'none' : 'block';
+  }
+  window.addEventListener('resize', updTable);
+  updTable();
+</script>
+
+</body>
+</html>

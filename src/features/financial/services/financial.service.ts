@@ -758,7 +758,8 @@ export class FinancialService {
           return obNe === neValue && parseInt(String(obUg), 10) === ugNum && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
         });
 
-        for (const ob of budgetPaidObs) {
+        for (let obi = 0; obi < budgetPaidObs.length; obi++) {
+          const ob = budgetPaidObs[obi];
           const vl = Math.abs(Number(ob.vltotal) || 0);
           if (vl === 0) continue;
           const obNum = ob.nuordembancaria || `unknown_${ob.id}`;
@@ -770,9 +771,11 @@ export class FinancialService {
             linkedParcela = docToParcelaMap.get(ob.nudocumento)!;
           }
 
+          const uniqueObKey = ppDoc ? `${obNum}-${ppDoc}` : (budgetPaidObs.length > 1 ? `${obNum}-${obi}` : obNum);
+
           transactionsToUpsert.push({
             contract_id: contractId,
-            sigef_id: `cache-liq-${obNum}`,
+            sigef_id: `cache-liq-${uniqueObKey}`,
             description: `PAGAMENTO OB ${obNum}${ppDoc ? ` (PP ${ppDoc})` : ''}`.toUpperCase(),
             commitment_id: neValue,
             date: pagDate || fmtDate(budget.data_disponibilidade),
@@ -815,7 +818,7 @@ export class FinancialService {
               .delete()
               .eq('contract_id', contractId)
               .eq('commitment_id', neValue)
-              .like('sigef_id', 'cache-mov-%')
+              .or('sigef_id.like.cache-mov-%,sigef_id.like.cache-com-%,sigef_id.like.cache-ref-%,sigef_id.like.cache-can-%')
               .not('sigef_id', 'in', `(${[...newSigefIds].map(id => `"${id}"`).join(',')})`);
           }
           if (hasNewLiq && newSigefIds.size > 0) {
