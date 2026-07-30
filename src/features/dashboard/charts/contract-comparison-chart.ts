@@ -73,8 +73,8 @@ export class ContractComparisonChart {
     const colors = { expected: '#3B82F6', paid: '#22C55E' };
     svg.selectAll('.g').data(data).join('g').attr('transform', d => `translate(${x0(d.contract)},0)`)
       .selectAll('rect').data(d => [
-        { key:'expected', value:d.expected, label:'Previsto Anual', contract:d.contract },
-        { key:'paid', value:d.paid, label:'Pago Efetivo', contract:d.contract },
+        { key:'expected', value:d.expected, label:'Previsto Anual', contract:d.contract, contractId: d.contractId },
+        { key:'paid', value:d.paid, label:'Pago Efetivo', contract:d.contract, contractId: d.contractId },
       ]).join('rect')
       .attr('x', d => x1(d.key) || 0).attr('y', d => y(d.value))
       .attr('width', x1.bandwidth()).attr('height', d => ch - y(d.value))
