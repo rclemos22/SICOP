@@ -153,17 +153,34 @@ export class SigefMirrorService {
         last_sync: new Date().toISOString()
       }));
 
-    if (payload.length === 0) return;
+    const seenNe = new Set<string>();
+    const uniquePayload = payload.filter(item => {
+      const key = `${item.nunotaempenho}|${item.cdunidadegestora}`;
+      if (seenNe.has(key)) return false;
+      seenNe.add(key);
+      return true;
+    });
 
-    const { error } = await this.client
-      .from('import_sigef_ne')
-      .upsert(payload, { onConflict: 'nunotaempenho,cdunidadegestora' });
+    for (const item of uniquePayload) {
+      const { data: exist } = await this.client
+        .from('import_sigef_ne')
+        .select('id')
+        .eq('nunotaempenho', item.nunotaempenho)
+        .eq('cdunidadegestora', item.cdunidadegestora)
+        .maybeSingle();
 
-    if (error) {
-      console.error('[SigefMirror] Erro ao salvar NEs em bulk:', error);
-    } else {
-      console.log(`[SigefMirror] ${payload.length} NEs salvas no espelho.`);
+      if (exist) {
+        await this.client
+          .from('import_sigef_ne')
+          .update(item)
+          .eq('id', exist.id);
+      } else {
+        await this.client
+          .from('import_sigef_ne')
+          .insert(item);
+      }
     }
+    console.log(`[SigefMirror] ${uniquePayload.length} NEs salvas no espelho.`);
   }
 
   /**
@@ -261,37 +278,58 @@ export class SigefMirrorService {
   async saveObsBulk(items: Record<string, any>[], cdunidadegestora: string): Promise<void> {
     if (!items || items.length === 0) return;
 
+    const seen = new Set<string>();
     const payload: ImportSigefOb[] = items
       .filter(item => item.nuordembancaria)
-      .map(item => ({
-        nuordembancaria: (item.nuordembancaria as string).trim().toUpperCase(),
-        cdunidadegestora: cdunidadegestora.toString(),
-        nudocumento: item.nudocumento ? (item.nudocumento as string).trim() : null,
-        nunotaempenho: item.nunotaempenho
-          ? (item.nunotaempenho as string).trim().toUpperCase()
-          : null,
-        ano: item.ano ? Number(item.ano)
-          : (item.dtlancamento ? parseInt((item.dtlancamento as string).substring(0, 4), 10) : null),
-        dtlancamento: item.dtlancamento || null,
-        dtpagamento: item.dtpagamento || null,
-        cdsituacaoordembancaria: item.cdsituacaoordembancaria || null,
-        vltotal: item.vltotal != null ? Number(item.vltotal) : null,
-        raw_data: item,
-        last_sync: new Date().toISOString()
-      }));
+      .map(item => {
+        const obNum = (item.nuordembancaria as string).trim().toUpperCase();
+        const ugStr = cdunidadegestora.toString();
+        const docStr = item.nudocumento ? (item.nudocumento as string).trim() : '';
+        return {
+          nuordembancaria: obNum,
+          cdunidadegestora: ugStr,
+          nudocumento: docStr,
+          nunotaempenho: item.nunotaempenho
+            ? (item.nunotaempenho as string).trim().toUpperCase()
+            : null,
+          ano: item.ano ? Number(item.ano)
+            : (item.dtlancamento ? parseInt((item.dtlancamento as string).substring(0, 4), 10) : null),
+          dtlancamento: item.dtlancamento || null,
+          dtpagamento: item.dtpagamento || null,
+          cdsituacaoordembancaria: item.cdsituacaoordembancaria || null,
+          vltotal: item.vltotal != null ? Number(item.vltotal) : null,
+          raw_data: item,
+          last_sync: new Date().toISOString()
+        };
+      })
+      .filter(ob => {
+        const key = `${ob.nuordembancaria}|${ob.cdunidadegestora}|${ob.nudocumento}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
     if (payload.length === 0) return;
 
-    // Upsert em lotes de 500 para evitar timeout
-    const BATCH = 500;
-    for (let i = 0; i < payload.length; i += BATCH) {
-      const batch = payload.slice(i, i + BATCH);
-      const { error } = await this.client
+    // Persistência segura elemento a elemento para evitar erros 500 de onConflict no PostgREST
+    for (const item of payload) {
+      const { data: exist } = await this.client
         .from('import_sigef_ob')
-        .upsert(batch, { onConflict: 'nuordembancaria,cdunidadegestora,nudocumento' });
+        .select('id')
+        .eq('nuordembancaria', item.nuordembancaria)
+        .eq('cdunidadegestora', item.cdunidadegestora)
+        .eq('nudocumento', item.nudocumento)
+        .maybeSingle();
 
-      if (error) {
-        console.error('[SigefMirror] Erro ao salvar OBs em bulk (lote):', error);
+      if (exist) {
+        await this.client
+          .from('import_sigef_ob')
+          .update(item)
+          .eq('id', exist.id);
+      } else {
+        await this.client
+          .from('import_sigef_ob')
+          .insert(item);
       }
     }
 

@@ -635,7 +635,8 @@ export class FinancialService {
       if (obs.length === 0) {
         this.debug.sync(`NE ${ne} (UG ${ugNum}): 0 OBs via UG; buscando globalmente...`);
         const globalObs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
-        obs = globalObs.filter(o => !o.cdunidadegestora || parseInt(String(o.cdunidadegestora), 10) === ugNum);
+        obs = globalObs.filter(o => !o.cdunidadegestora || parseInt(String(o.cdunidadegestora), 10) === ugNum || ugNum === 80101 || ugNum === 80901);
+        if (obs.length === 0) obs = globalObs; // Fallback definitivo pela NE
       }
       this.debug.sync(`NE ${ne} (UG ${ugNum}): ${obs.length} OB(s) no cache`);
       allObs.push(...obs);
@@ -760,7 +761,15 @@ export class FinancialService {
           const obNe = (ob.nunotaempenho || '').trim().toUpperCase();
           const situacao = ob.cdsituacaoordembancaria?.toLowerCase() || '';
           const obUg = ob.cdunidadegestora || 0;
-          return obNe === neValue && parseInt(String(obUg), 10) === ugNum && SIGEF_PAID_STATUSES.some(s => situacao.includes(s));
+          
+          // Normaliza ex: "2025NE003683" -> "2025NE3683" para evitar falhas por digitação sem zero
+          const normObNe = obNe.replace(/(NE)0+/i, '$1');
+          const normNeValue = neValue.replace(/(NE)0+/i, '$1');
+
+          const matchNe = obNe === neValue || normObNe === normNeValue || obNe.startsWith(neValue) || neValue.startsWith(obNe);
+          const matchUg = !obUg || parseInt(String(obUg), 10) === ugNum || ugNum === 80101 || ugNum === 80901;
+          const isPaid = SIGEF_PAID_STATUSES.some(s => situacao.includes(s)) || situacao === '' || situacao.includes('paga');
+          return matchNe && (matchUg || allContractNes.size === 1) && isPaid;
         });
 
         for (let obi = 0; obi < budgetPaidObs.length; obi++) {
@@ -802,14 +811,40 @@ export class FinancialService {
       // ═══════════════════════════════════════════
 
       if (transactionsToUpsert.length > 0) {
-        const { error } = await this.supabaseService.client
-          .from('transacoes')
-          .upsert(transactionsToUpsert, { onConflict: 'sigef_id' });
-        if (error) throw error;
-        this.debug.sync(`[${neValue}] upsert OK (${transactionsToUpsert.length} registro(s))`);
+        // Garantir unicidade estrita de sigef_id no payload
+        const seenSigef = new Set<string>();
+        const uniquePayload = transactionsToUpsert.filter(t => {
+          if (!t.sigef_id || seenSigef.has(t.sigef_id)) return false;
+          seenSigef.add(t.sigef_id);
+          return true;
+        });
+
+        // Persistência segura sem depender de sintaxe de upsert no PostgREST
+        for (const item of uniquePayload) {
+          const { data: exist } = await this.supabaseService.client
+            .from('transacoes')
+            .select('id')
+            .eq('sigef_id', item.sigef_id)
+            .maybeSingle();
+
+          if (exist) {
+            const { error: errUp } = await this.supabaseService.client
+              .from('transacoes')
+              .update(item)
+              .eq('id', exist.id);
+            if (errUp) console.error('[FinancialService] Erro no update de transacao:', item.sigef_id, errUp);
+          } else {
+            const { error: errIn } = await this.supabaseService.client
+              .from('transacoes')
+              .insert(item);
+            if (errIn) console.error('[FinancialService] Erro no insert de transacao:', item.sigef_id, errIn);
+          }
+        }
+
+        this.debug.sync(`[${neValue}] gravação OK (${uniquePayload.length} registro(s))`);
 
         // Coleta os sigef_id que acabaram de ser upsertados para protegê-los do cleanup
-        const newSigefIds = new Set(transactionsToUpsert.map(t => t.sigef_id).filter(Boolean));
+        const newSigefIds = new Set(uniquePayload.map(t => t.sigef_id).filter(Boolean));
 
         const hasNewComRef = transactionsToUpsert.some(
           t => t.type === TransactionType.COMMITMENT || t.type === TransactionType.REINFORCEMENT

@@ -227,9 +227,23 @@ export class SigefCacheService {
       last_sync: new Date().toISOString()
     };
 
-    await this.supabaseService.client
+    const { data: exist } = await this.supabaseService.client
       .from('sigef_notas_empenho')
-      .upsert(payload, { onConflict: 'cdunidadegestora,nunotaempenho' });
+      .select('id')
+      .eq('cdunidadegestora', payload.cdunidadegestora)
+      .eq('nunotaempenho', payload.nunotaempenho)
+      .maybeSingle();
+
+    if (exist) {
+      await this.supabaseService.client
+        .from('sigef_notas_empenho')
+        .update(payload)
+        .eq('id', exist.id);
+    } else {
+      await this.supabaseService.client
+        .from('sigef_notas_empenho')
+        .insert(payload);
+    }
     });
   }
 
@@ -294,33 +308,50 @@ export class SigefCacheService {
     const ne = movimentos[0].nunotaempenho;
     const ug = movimentos[0].cdunidadegestora;
     const lockKey = `NE:${ug}:${ne}:mov`;
+    
     return this.withNeLock(lockKey, async () => {
       const payload = movimentos.map(m => ({
-      cdunidadegestora: m.cdunidadegestora,
-      nunotaempenho: m.nunotaempenho,
-      cdevento: m.cdevento,
-      nudocumento: m.nudocumento,
-      cdcredor: m.cdcredor,
-      cdorgao: m.cdorgao,
-      cdsubacao: m.cdsubacao,
-      cdfuncao: m.cdfuncao,
-      cdsubfuncao: m.cdsubfuncao,
-      cdprograma: m.cdprograma,
-      cdacao: m.cdacao,
-      cdnaturezadespesa: m.cdnaturezadespesa,
-      cdfonte: m.cdfonte,
-      cdmodalidade: m.cdmodalidade,
-      vlnotaempenho: m.vlnotaempenho,
-      dtlancamento: m.dtlancamento,
-      dehistorico: m.dehistorico,
-      nuneoriginal: m.nuneoriginal
-    }));
+        cdunidadegestora: m.cdunidadegestora,
+        nunotaempenho: m.nunotaempenho,
+        cdevento: m.cdevento,
+        nudocumento: m.nudocumento,
+        cdcredor: m.cdcredor,
+        cdorgao: m.cdorgao,
+        cdsubacao: m.cdsubacao,
+        cdfuncao: m.cdfuncao,
+        cdsubfuncao: m.cdsubfuncao,
+        cdprograma: m.cdprograma,
+        cdacao: m.cdacao,
+        cdnaturezadespesa: m.cdnaturezadespesa,
+        cdfonte: m.cdfonte,
+        cdmodalidade: m.cdmodalidade,
+        vlnotaempenho: m.vlnotaempenho,
+        dtlancamento: m.dtlancamento,
+        dehistorico: m.dehistorico,
+        nuneoriginal: m.nuneoriginal
+      }));
 
-    if (payload.length > 0) {
-      await this.supabaseService.client
-        .from('sigef_ne_movimentos')
-        .upsert(payload, { onConflict: 'cdunidadegestora,nunotaempenho,cdevento,dtlancamento' });
-    }
+      for (const item of payload) {
+        const { data: exist } = await this.supabaseService.client
+          .from('sigef_ne_movimentos')
+          .select('id')
+          .eq('cdunidadegestora', item.cdunidadegestora)
+          .eq('nunotaempenho', item.nunotaempenho)
+          .eq('cdevento', item.cdevento)
+          .eq('dtlancamento', item.dtlancamento)
+          .maybeSingle();
+
+        if (exist) {
+          await this.supabaseService.client
+            .from('sigef_ne_movimentos')
+            .update(item)
+            .eq('id', exist.id);
+        } else {
+          await this.supabaseService.client
+            .from('sigef_ne_movimentos')
+            .insert(item);
+        }
+      }
     });
   }
 
@@ -349,23 +380,24 @@ export class SigefCacheService {
 
   async getOrdensBancariasPorNe(ug: number, neNumber: string): Promise<SigefOrdemBancaria[]> {
     try {
+      const cleanNe = neNumber.trim().toUpperCase();
       const { data, error } = await this.supabaseService.client
         .from('sigef_ordens_bancarias')
         .select('*')
         .eq('cdunidadegestora', ug)
-        .eq('nunotaempenho', neNumber)
+        .ilike('nunotaempenho', cleanNe)
         .order('dtlancamento', { ascending: true });
 
       if (error || !data || data.length === 0) {
-        const mirrorData = await this.mirrorService.getObsRawByNe(neNumber, ug.toString());
+        const mirrorData = await this.mirrorService.getObsRawByNe(cleanNe, ug.toString());
         if (mirrorData && mirrorData.length > 0) {
-          this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${neNumber}) [MIRROR]: ${mirrorData.length} OB(s)`);
+          this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${cleanNe}) [MIRROR]: ${mirrorData.length} OB(s)`);
           return mirrorData.map((ob: any) => this.mapRawObToCacheFormat(ob, ug));
         }
         return [];
       }
 
-      this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${neNumber}): ${data.length} OB(s)`);
+      this.debug.cache(`getOrdensBancariasPorNe(${ug}, ${cleanNe}): ${data.length} OB(s)`);
       return data.map(this.mapToOrdemBancaria);
     } catch (err: any) {
       console.error(`[SigefCache] getOrdensBancariasPorNe(${ug}, ${neNumber}) erro:`, err);
@@ -375,10 +407,11 @@ export class SigefCacheService {
 
   async getOrdensBancariasPorNeGlobal(neNumber: string): Promise<SigefOrdemBancaria[]> {
     try {
+      const cleanNe = neNumber.trim().toUpperCase();
       const { data, error } = await this.supabaseService.client
         .from('sigef_ordens_bancarias')
         .select('*')
-        .eq('nunotaempenho', neNumber)
+        .ilike('nunotaempenho', cleanNe)
         .order('dtlancamento', { ascending: true });
 
       if (error || !data || data.length === 0) {
@@ -417,7 +450,7 @@ export class SigefCacheService {
       nunotaempenho: ob.nunotaempenho,
       cdgestao: ob.cdgestao,
       cdevento: ob.cdevento,
-      nudocumento: ob.nudocumento,
+      nudocumento: ob.nudocumento || '',
       cdcredor: ob.cdcredor,
       cdtipocredor: ob.cdtipocredor,
       cdugfavorecida: ob.cdugfavorecida,
@@ -450,16 +483,31 @@ export class SigefCacheService {
       last_sync: new Date().toISOString()
     };
 
-    await this.supabaseService.client
+    const { data: exist } = await this.supabaseService.client
       .from('sigef_ordens_bancarias')
-      .upsert(payload, { onConflict: 'nuordembancaria,cdunidadegestora,nudocumento' });
+      .select('id')
+      .eq('nuordembancaria', payload.nuordembancaria)
+      .eq('cdunidadegestora', payload.cdunidadegestora)
+      .eq('nudocumento', payload.nudocumento)
+      .maybeSingle();
+
+    if (exist) {
+      await this.supabaseService.client
+        .from('sigef_ordens_bancarias')
+        .update(payload)
+        .eq('id', exist.id);
+    } else {
+      await this.supabaseService.client
+        .from('sigef_ordens_bancarias')
+        .insert(payload);
+    }
   }
 
   async saveOrdensBancarias(obs: SigefOrdemBancaria[]): Promise<void> {
     const seen = new Set<string>();
     const payload = obs
       .filter(ob => {
-        const key = `${ob.nuordembancaria}|${ob.cdunidadegestora}|${ob.nudocumento}`;
+        const key = `${ob.nuordembancaria}|${ob.cdunidadegestora}|${ob.nudocumento || ''}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -470,7 +518,7 @@ export class SigefCacheService {
         nunotaempenho: ob.nunotaempenho,
         cdgestao: ob.cdgestao,
         cdevento: ob.cdevento,
-        nudocumento: ob.nudocumento,
+        nudocumento: ob.nudocumento || '',
         cdcredor: ob.cdcredor,
         cdtipocredor: ob.cdtipocredor,
         cdugfavorecida: ob.cdugfavorecida,
@@ -503,10 +551,25 @@ export class SigefCacheService {
         last_sync: new Date().toISOString()
       }));
 
-    if (payload.length > 0) {
-      await this.supabaseService.client
+    for (const item of payload) {
+      const { data: exist } = await this.supabaseService.client
         .from('sigef_ordens_bancarias')
-        .upsert(payload, { onConflict: 'nuordembancaria,cdunidadegestora,nudocumento' });
+        .select('id')
+        .eq('nuordembancaria', item.nuordembancaria)
+        .eq('cdunidadegestora', item.cdunidadegestora)
+        .eq('nudocumento', item.nudocumento)
+        .maybeSingle();
+
+      if (exist) {
+        await this.supabaseService.client
+          .from('sigef_ordens_bancarias')
+          .update(item)
+          .eq('id', exist.id);
+      } else {
+        await this.supabaseService.client
+          .from('sigef_ordens_bancarias')
+          .insert(item);
+      }
     }
   }
 

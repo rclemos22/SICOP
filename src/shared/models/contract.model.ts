@@ -95,6 +95,10 @@ export function getEffectiveStatus(contract: Pick<Contract, 'status'>, daysRemai
     return ContractStatus.RESCINDIDO;
   }
 
+  if (contract.status === ContractStatus.ENCERRADO) {
+    return ContractStatus.ENCERRADO;
+  }
+
   if (daysRemaining < 0) {
     return ContractStatus.ENCERRADO;
   }

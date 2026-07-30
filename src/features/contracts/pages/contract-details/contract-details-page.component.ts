@@ -342,8 +342,7 @@ export class ContractDetailsPageComponent {
   filteredNesPagamentos = computed(() => {
     const c = this.contract();
     const rows = this.nesPagamentos();
-    if (!c || c.tipo !== 'serviço') return rows;
-    if (rows.length === 0) return rows;
+    if (!c || rows.length === 0) return rows;
     const selectedYear = this.appContext.anoExercicio();
     
     const neBalancesAtStartOfYear = new Map<string, number>();

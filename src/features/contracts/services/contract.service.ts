@@ -4,7 +4,7 @@ import { AppContextService } from '../../../core/services/app-context.service';
 import { ErrorHandlerService } from '../../../core/services/error-handler.service';
 import { SupabaseService } from '../../../core/services/supabase.service';
 import {
-  Contract, ContractStatus, Aditivo
+  Contract, ContractStatus, Aditivo, getEffectiveStatus
 } from '../../../shared/models/contract.model';
 import { Result, ok, fail } from '../../../shared/models/result.model';
 
@@ -367,11 +367,11 @@ export class ContractService {
     }
 
     // Usar utilitário do model para garantir consistência no status
-    // Importante: Pick de status para satisfazer a interface
-    const statusEfetivo = (raw.status === 'RESCINDIDO') ? ContractStatus.RESCINDIDO 
-      : (raw.status === 'ENCERRADO') ? ContractStatus.ENCERRADO
-      : (raw.status === 'VIGENTE' && diasRestantes <= 120) ? ContractStatus.FINALIZANDO
+    // Contratos vencidos (diasRestantes < 0) viram ENCERRADO, mesmo se DB ainda constar VIGENTE
+    const rawStatus = raw.status === 'ENCERRADO' ? ContractStatus.ENCERRADO
+      : raw.status === 'RESCINDIDO' ? ContractStatus.RESCINDIDO
       : ContractStatus.VIGENTE;
+    const statusEfetivo = getEffectiveStatus({ status: rawStatus }, diasRestantes);
 
     // Aplicar mudança de razão social do aditivo mais recente (se data_inicio_novo <= hoje)
     const aditivoRazaoSocial = aditivos
