@@ -397,7 +397,7 @@ export class SigefCacheService {
       this.debug.cache(`getOrdensBancariasPorNeGlobal(${neNumber}): ${data.length} OB(s) brutas`);
       const seen = new Set<string>();
       const unique = data.filter(ob => {
-        const key = ob.nuordembancaria?.trim().toUpperCase();
+        const key = `${ob.nuordembancaria || ''}|${ob.cdunidadegestora || ''}|${ob.nudocumento || ''}`.toUpperCase();
         if (!key || seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -867,7 +867,7 @@ export class SigefCacheService {
   private deduplicateObs(obs: any[]): any[] {
     const seen = new Set<string>();
     return obs.filter(ob => {
-      const key = ob.nuordembancaria?.trim().toUpperCase();
+      const key = `${ob.nuordembancaria || ''}|${ob.cdunidadegestora || ''}|${ob.nudocumento || ''}`.toUpperCase();
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;

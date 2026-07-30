@@ -631,7 +631,12 @@ export class FinancialService {
       loadedKeys.add(key);
 
       const ugNum = parseInt(ug, 10);
-      const obs = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, ne);
+      let obs = await this.sigefCacheService.getOrdensBancariasPorNe(ugNum, ne);
+      if (obs.length === 0) {
+        this.debug.sync(`NE ${ne} (UG ${ugNum}): 0 OBs via UG; buscando globalmente...`);
+        const globalObs = await this.sigefCacheService.getOrdensBancariasPorNeGlobal(ne);
+        obs = globalObs.filter(o => !o.cdunidadegestora || parseInt(String(o.cdunidadegestora), 10) === ugNum);
+      }
       this.debug.sync(`NE ${ne} (UG ${ugNum}): ${obs.length} OB(s) no cache`);
       allObs.push(...obs);
     }
