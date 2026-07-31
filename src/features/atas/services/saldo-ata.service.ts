@@ -238,6 +238,21 @@ export class SaldoAtaService {
           .eq('id', id);
 
         if (error) throw error;
+
+        // Atualizar todos os itens vinculados em ata_adesao_itens definindo quantidade_autorizada = quantidade_solicitada
+        const { data: subItens } = await this.supabaseService.client
+          .from('ata_adesao_itens')
+          .select('id, quantidade_solicitada')
+          .eq('adesao_id', id);
+
+        if (subItens && subItens.length > 0) {
+          for (const sub of subItens) {
+            await this.supabaseService.client
+              .from('ata_adesao_itens')
+              .update({ quantidade_autorizada: sub.quantidade_solicitada })
+              .eq('id', sub.id);
+          }
+        }
       }
 
       return ok(null);
@@ -268,6 +283,16 @@ export class SaldoAtaService {
 
   async cancelarAdesao(id: string): Promise<Result<null>> {
     try {
+      const { data: adesao } = await this.supabaseService.client
+        .from('ata_adesoes')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (adesao?.status === 'AUTORIZADA') {
+        return fail('Solicitações de adesão autorizadas não podem ser canceladas.');
+      }
+
       const { error } = await this.supabaseService.client
         .from('ata_adesoes')
         .update({ status: 'CANCELADA' })
@@ -278,6 +303,36 @@ export class SaldoAtaService {
     } catch (err: any) {
       this.errorHandler.handle(err, 'SaldoAtaService.cancelarAdesao');
       return fail(err.message || 'Erro ao cancelar adesão');
+    }
+  }
+
+  async excluirAdesao(id: string): Promise<Result<null>> {
+    try {
+      const { data: adesao } = await this.supabaseService.client
+        .from('ata_adesoes')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (adesao?.status === 'AUTORIZADA') {
+        return fail('Solicitações de adesão autorizadas não podem ser excluídas.');
+      }
+
+      await this.supabaseService.client
+        .from('ata_adesao_itens')
+        .delete()
+        .eq('adesao_id', id);
+
+      const { error } = await this.supabaseService.client
+        .from('ata_adesoes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return ok(null);
+    } catch (err: any) {
+      this.errorHandler.handle(err, 'SaldoAtaService.excluirAdesao');
+      return fail(err.message || 'Erro ao excluir adesão');
     }
   }
 

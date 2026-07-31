@@ -342,9 +342,25 @@ export class AtaSaldoPanelComponent implements OnInit {
   }
 
   async cancelarAdesao(adesao: AtaAdesao) {
+    if (adesao.status === 'AUTORIZADA') {
+      alert('Solicitações de adesão autorizadas não podem ser canceladas.');
+      return;
+    }
     if (!confirm(`Cancelar adesão de ${adesao.razao_orgao}?`)) return;
     const result = await this.saldoService.cancelarAdesao(adesao.id!);
     if (!result.error) await this.loadData();
+    else alert(result.error);
+  }
+
+  async excluirAdesao(adesao: AtaAdesao) {
+    if (adesao.status === 'AUTORIZADA') {
+      alert('Solicitações de adesão autorizadas não podem ser excluídas.');
+      return;
+    }
+    if (!confirm(`Deseja excluir a solicitação de adesão de ${adesao.razao_orgao}?`)) return;
+    const result = await this.saldoService.excluirAdesao(adesao.id!);
+    if (!result.error) await this.loadData();
+    else alert(result.error);
   }
 
   async exportPdf() {

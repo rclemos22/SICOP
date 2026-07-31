@@ -470,10 +470,10 @@
                         <span class="material-symbols-outlined text-[16px]">cancel</span>
                       </button>
                     }
-                    @if (a.status === 'AUTORIZADA' || a.status === 'PENDENTE') {
-                      <button (click)="cancelarAdesao(a)"
+                    @if (a.status !== 'AUTORIZADA') {
+                      <button (click)="excluirAdesao(a)"
                         class="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                        title="Cancelar">
+                        title="Excluir solicitação">
                         <span class="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                     }
