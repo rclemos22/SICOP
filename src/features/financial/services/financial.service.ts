@@ -17,9 +17,33 @@ export interface NesPagamentoRow {
   amount: number;
   date: string;
 }
+
+/**
+ * Resumo financeiro de um contrato calculado a partir da tabela `transacoes`
+ * (fonte canônica), em vez dos totais persistidos em `contratos`, que podem
+ * estar desatualizados (ex.: anulação aplicada 2x, OB carregada após o último sync).
+ */
+export interface ContractFinanceSummary {
+  contractId: string;
+  contract: string;
+  contratada: string;
+  status: string;
+  tipo?: string;
+  /** Empenho líquido = COMMITMENT + REINFORCEMENT - CANCELLATION (nunca negativo) */
+  empenhado: number;
+  /** Soma das LIQUIDATION */
+  pago: number;
+  /** max(0, empenhado - pago) */
+  saldo: number;
+  /** true quando os totais persistidos divergem do calculado (dados desatualizados) */
+  divergencia: boolean;
+  storedEmpenhado?: number;
+  storedPago?: number;
+}
 import { getUnidadeLabel } from '../../../shared/models/budget.model';
 import { BudgetService } from '../../budget/services/budget.service';
 import { ContractService } from '../../contracts/services/contract.service';
+import { SyncAuditService } from '../../../core/services/sync-audit.service';
 
 @Injectable({
   providedIn: 'root'
@@ -31,18 +55,40 @@ export class FinancialService {
   private budgetService = inject(BudgetService);
   private contractService = inject(ContractService);
   private debug = inject(DebugService);
+  private auditService = inject(SyncAuditService);
 
   private _transactions = signal<Transaction[]>([]);
   private _loading = signal<boolean>(false);
   private _error = signal<string | null>(null);
   private _backfillDone = false;
+  private _financeSummaries = signal<Map<string, ContractFinanceSummary>>(new Map());
 
   public transactions = this._transactions.asReadonly();
   public loading = this._loading.asReadonly();
   public error = this._error.asReadonly();
+  public financeSummaries = this._financeSummaries.asReadonly();
 
   constructor() {
     this.loadAllTransactions();
+    this.loadContractFinanceSummaries();
+  }
+
+  private async withRetry<T>(fn: () => PromiseLike<T>, maxRetries = 3, delayMs = 500): Promise<T> {
+    let lastErr: any;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastErr = err;
+        const isNetworkErr = err?.message?.includes('Failed to fetch') || err?.name === 'TypeError' || err?.status === 0;
+        if (isNetworkErr && attempt < maxRetries) {
+          await new Promise(res => setTimeout(res, delayMs * attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastErr;
   }
 
   async loadAllTransactions(silent?: boolean): Promise<void> {
@@ -160,6 +206,9 @@ export class FinancialService {
 
       this._transactions.set(transactions);
 
+      // Recalcular resumo financeiro (fonte canônica para KPIs do dashboard)
+      await this.loadContractFinanceSummaries(true);
+
       // Backfill único: preenche campos faltantes nas transações existentes
       if (!this._backfillDone) {
         this._backfillDone = true;
@@ -173,6 +222,89 @@ export class FinancialService {
     } finally {
       if (!silent) this._loading.set(false);
     }
+  }
+
+  /**
+   * Calcula o resumo financeiro de cada contrato diretamente da tabela `transacoes`
+   * (fonte canônica), em vez de depender dos totais persistidos em `contratos`
+   * que podem estar desatualizados (anulação aplicada 2x, OB carregada após o último sync).
+   *
+   * - empenhado = COMMITMENT + REINFORCEMENT - CANCELLATION (nunca negativo)
+   * - pago      = soma das LIQUIDATION
+   * - saldo     = max(0, empenhado - pago)
+   *
+   * Marca `divergencia=true` quando o total persistido difere do calculado,
+   * permitindo que o dashboard valide e exiba o valor correto.
+   */
+  async loadContractFinanceSummaries(silent?: boolean): Promise<void> {
+    try {
+      const [transacoesResult, contratosResult] = await Promise.all([
+        this.supabaseService.client
+          .from('transacoes')
+          .select('contract_id, type, amount'),
+        this.supabaseService.client
+          .from('contratos')
+          .select('id, contrato, contratada, status, tipo, total_empenhado, total_pago')
+          .neq('status', 'EXCLUIDO'),
+      ]);
+
+      if (transacoesResult.error) throw transacoesResult.error;
+
+      const totals = new Map<string, { empenhado: number; pago: number }>();
+      for (const t of transacoesResult.data || []) {
+        const cid = t.contract_id;
+        if (!cid) continue;
+        const amt = Math.abs(Number(t.amount) || 0);
+        let cur = totals.get(cid);
+        if (!cur) { cur = { empenhado: 0, pago: 0 }; totals.set(cid, cur); }
+        if (t.type === 'COMMITMENT' || t.type === 'REINFORCEMENT') cur.empenhado += amt;
+        else if (t.type === 'CANCELLATION') cur.empenhado = Math.max(0, cur.empenhado - amt);
+        else if (t.type === 'LIQUIDATION') cur.pago += amt;
+      }
+
+      const map = new Map<string, ContractFinanceSummary>();
+      const divergentes: string[] = [];
+      for (const c of contratosResult.data || []) {
+        const t = totals.get(c.id) || { empenhado: 0, pago: 0 };
+        const empenhado = t.empenhado;
+        const pago = t.pago;
+        const saldo = Math.max(0, empenhado - pago);
+        const storedEmpenhado = Number(c.total_empenhado) || 0;
+        const storedPago = Number(c.total_pago) || 0;
+        const divergencia =
+          Math.abs(storedEmpenhado - empenhado) > 0.01 ||
+          Math.abs(storedPago - pago) > 0.01;
+        if (divergencia) divergentes.push(c.contrato);
+        map.set(c.id, {
+          contractId: c.id,
+          contract: c.contrato,
+          contratada: c.contratada,
+          status: c.status,
+          tipo: c.tipo,
+          empenhado,
+          pago,
+          saldo,
+          divergencia,
+          storedEmpenhado,
+          storedPago,
+        });
+      }
+
+      this._financeSummaries.set(map);
+
+      if (divergentes.length > 0) {
+        console.warn(
+          `[FinancialService] Validação financeira: ${divergentes.length} contrato(s) com totais persistidos divergentes das transações (o dashboard usa o valor calculado): ${divergentes.join(', ')}`
+        );
+      }
+    } catch (err: any) {
+      console.error('[FinancialService] Erro ao calcular resumo financeiro:', err);
+      if (!silent) this.errorHandler.handle(err, 'FinancialService.loadContractFinanceSummaries');
+    }
+  }
+
+  getFinanceSummary(contractId: string): ContractFinanceSummary | undefined {
+    return this._financeSummaries().get(contractId);
   }
 
   /** Carrega dados do cache SIGEF como fallback quando transacoes está vazio */
@@ -295,6 +427,15 @@ export class FinancialService {
         };
       };
 
+      // NEs de empenho/reforço/anulação já persistidos no banco (fonte canônica).
+      // Evita que o fallback do espelho duplique movimentos já sincronizados,
+      // já que a chave do DB usa o NE como document_number (sem cdevento).
+      const existingNonLiq = new Set(
+        transactions
+          .filter(t => t.type !== TransactionType.LIQUIDATION)
+          .map(t => `${t.commitment_id}|${t.type}|${Math.round(t.amount * 100)}`)
+      );
+
       (movData.data || []).forEach((m: any) => {
         const rd = m.raw_data || {};
         const vl = rd.vlnotaempenho;
@@ -307,6 +448,8 @@ export class FinancialService {
         const dedupKey = `${ne}|${type}|${rd.cdevento || ''}|${amount}`;
         if (existingKeys?.has(dedupKey)) return;
         existingKeys?.add(dedupKey);
+        // Movimento já existe no banco para esta NE/tipo/valor -> não duplicar
+        if (existingNonLiq.has(`${ne}|${type}|${Math.round(amount * 100)}`)) return;
 
         const enriched = enrichByNe(ne, rd, null);
         const ugCode = m.cdunidadegestora || rd.cdunidadegestora || '';
@@ -587,7 +730,7 @@ export class FinancialService {
       parcela_referencia: raw.parcela_referencia,
       sigef_id: raw.sigef_id,
       contract_number: contractNumber,
-      payment_month: raw.payment_month,
+      payment_month: raw.payment_month || (raw.date ? String(raw.date).substring(0, 7) : undefined),
       unidade_gestora_label: raw.unidade_gestora_label,
       document_number: raw.document_number,
       ob_number: raw.ob_number,
@@ -800,7 +943,6 @@ export class FinancialService {
             unidade_gestora_label: getUnidadeLabel(ug),
             document_number: ppDoc,
             ob_number: obNum,
-            payment_month: pagDate ? pagDate.substring(0, 7) : undefined,
             parcela_pago_em: ob.dtpagamento || null,
             ...(linkedParcela ? { parcela_referencia: linkedParcela } : {})
           });
@@ -821,23 +963,53 @@ export class FinancialService {
 
         // Persistência segura sem depender de sintaxe de upsert no PostgREST
         for (const item of uniquePayload) {
-          const { data: exist } = await this.supabaseService.client
-            .from('transacoes')
-            .select('id')
-            .eq('sigef_id', item.sigef_id)
-            .maybeSingle();
+          const { data: exist } = await this.withRetry(() =>
+            this.supabaseService.client
+              .from('transacoes')
+              .select('id')
+              .eq('sigef_id', item.sigef_id)
+              .maybeSingle()
+          );
 
           if (exist) {
-            const { error: errUp } = await this.supabaseService.client
-              .from('transacoes')
-              .update(item)
-              .eq('id', exist.id);
-            if (errUp) console.error('[FinancialService] Erro no update de transacao:', item.sigef_id, errUp);
+            const { error: errUp } = await this.withRetry(() =>
+              this.supabaseService.client
+                .from('transacoes')
+                .update(item)
+                .eq('id', exist.id)
+            );
+            if (errUp) {
+              console.error('[FinancialService] Erro no update de transacao:', item.sigef_id, errUp);
+              this.auditService.addFailure({
+                stage: 'TRANSACTION_INSERT',
+                errorType: 'DATABASE_ERROR',
+                contractId,
+                ne: item.commitment_id || neValue,
+                ob: item.ob_number,
+                pp: item.document_number,
+                errorMessage: `Falha ao atualizar transação (${item.sigef_id}): ${errUp.message}`,
+                details: JSON.stringify(errUp)
+              });
+            }
           } else {
-            const { error: errIn } = await this.supabaseService.client
-              .from('transacoes')
-              .insert(item);
-            if (errIn) console.error('[FinancialService] Erro no insert de transacao:', item.sigef_id, errIn);
+            const { error: errIn } = await this.withRetry(() =>
+              this.supabaseService.client
+                .from('transacoes')
+                .insert(item)
+            );
+            if (errIn) {
+              console.error('[FinancialService] Erro no insert de transacao:', item.sigef_id, errIn);
+              this.auditService.addFailure({
+                stage: 'TRANSACTION_INSERT',
+                errorType: 'DATABASE_ERROR',
+                contractId,
+                ne: item.commitment_id || neValue,
+                ob: item.ob_number,
+                pp: item.document_number,
+                errorMessage: `Falha ao inserir transação (${item.sigef_id}): ${errIn.message}`,
+                details: JSON.stringify(errIn)
+              });
+            }
           }
         }
 
@@ -853,22 +1025,26 @@ export class FinancialService {
 
         try {
           if (hasNewComRef && newSigefIds.size > 0) {
-            await this.supabaseService.client
-              .from('transacoes')
-              .delete()
-              .eq('contract_id', contractId)
-              .eq('commitment_id', neValue)
-              .or('sigef_id.like.cache-mov-%,sigef_id.like.cache-com-%,sigef_id.like.cache-ref-%,sigef_id.like.cache-can-%')
-              .not('sigef_id', 'in', `(${[...newSigefIds].map(id => `"${id}"`).join(',')})`);
+            await this.withRetry(() =>
+              this.supabaseService.client
+                .from('transacoes')
+                .delete()
+                .eq('contract_id', contractId)
+                .eq('commitment_id', neValue)
+                .or('sigef_id.like.cache-mov-%,sigef_id.like.cache-com-%,sigef_id.like.cache-ref-%,sigef_id.like.cache-can-%')
+                .not('sigef_id', 'in', `(${[...newSigefIds].map(id => `"${id}"`).join(',')})`)
+            );
           }
           if (hasNewLiq && newSigefIds.size > 0) {
-            await this.supabaseService.client
-              .from('transacoes')
-              .delete()
-              .eq('contract_id', contractId)
-              .eq('commitment_id', neValue)
-              .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%')
-              .not('sigef_id', 'in', `(${[...newSigefIds].map(id => `"${id}"`).join(',')})`);
+            await this.withRetry(() =>
+              this.supabaseService.client
+                .from('transacoes')
+                .delete()
+                .eq('contract_id', contractId)
+                .eq('commitment_id', neValue)
+                .or('sigef_id.like.cache-aggr-%,sigef_id.like.cache-ob-%,sigef_id.like.cache-liq-%')
+                .not('sigef_id', 'in', `(${[...newSigefIds].map(id => `"${id}"`).join(',')})`)
+            );
           }
         } catch (cleanupErr: any) {
           console.warn(`[${neValue}] Erro na limpeza de registros legados (não crítico):`, cleanupErr.message);
@@ -878,6 +1054,14 @@ export class FinancialService {
       } catch (err: any) {
         const msg = `NE ${neValue}: ${err.message || 'Erro desconhecido'}`;
         console.error('[FinancialService] Erro ao sincronizar transacoes para contrato:', contractId, msg);
+        this.auditService.addFailure({
+          stage: 'TRANSACTION_INSERT',
+          errorType: 'DATABASE_ERROR',
+          contractId,
+          ne: neValue,
+          errorMessage: msg,
+          details: err.stack || err.message
+        });
         syncErrors.push(msg);
       }
     }

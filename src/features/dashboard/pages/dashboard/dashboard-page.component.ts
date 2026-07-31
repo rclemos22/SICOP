@@ -60,6 +60,7 @@ export class DashboardPageComponent implements OnInit {
   readonly totalCommittedValue = this.dashboardService.totalCommittedValue;
   readonly totalPaidValue = this.dashboardService.totalPaidValue;
   readonly totalBalanceToPay = this.dashboardService.totalBalanceToPay;
+  readonly financeDivergentContracts = this.dashboardService.financeDivergentContracts;
   readonly expensesByType = this.dashboardService.expensesByType;
   readonly expiringContracts = this.dashboardService.expiringContracts;
   readonly lowBudgetAlerts = this.dashboardService.lowBudgetAlerts;
@@ -138,6 +139,11 @@ export class DashboardPageComponent implements OnInit {
 
   getLinkedObsForInstallment(contractId: string, reference: string) {
     return this.dashboardService.getLinkedObsForInstallment(contractId, reference);
+  }
+
+  financeDivergenceTitle(): string {
+    const names = this.financeDivergentContracts().map(d => d.contract).join(', ');
+    return `Totais recalculados pelas transações: ${names}`;
   }
 
   goToContracts() { this.router.navigate(['/contracts']); }

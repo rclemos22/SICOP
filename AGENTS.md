@@ -204,6 +204,16 @@ Angular 21 standalone + zoneless, Tailwind CSS, Supabase (PostgreSQL), D3.js, js
 - **Problema**: `sigef_id` não tinha UNIQUE constraint + `transacoes` não tinha PRIMARY KEY. Upsert com `onConflict: 'sigef_id'` retornava HTTP 400 (código PGRST204). Transações não eram salvas, `updateContractTotals` recalculava de dados vazios.
 - **Correção**: migration trata NULLs em id, adiciona PK + UNIQUE, e força recarga do schema via `NOTIFY pgrst, 'reload schema'`.
 
+### 30a. Dashboard — validação dos cards financeiros (Jul 2026)
+- **Causa raiz**: os cards liam os totais persistidos em `contratos` (`total_empenhado`/`total_pago`/`saldo_a_pagar`), que estavam **desatualizados/corrompidos** em 16/33 contratos (anulação aplicada 2x — ex.: 087/2025 com `total_empenhado = -522.820,08`; OB carregada após o último sync — ex.: 80/2025 com 6.054,76 vs 115.277,77 corretos). O "Saldo a Pagar" global caía para ~R$ 9k porque saldos negativos de contratos com pago > empenho "compensavam" os positivos.
+- **Fix**:
+  - `financial.service.ts`: novo `loadContractFinanceSummaries()` calcula por contrato, direto da tabela `transacoes` (fonte canônica): `empenhado = COMMITMENT+REINFORCEMENT−CANCELLATION` (≥0), `pago = LIQUIDATION`, `saldo = max(0, empenhado−pago)`; marca `divergencia` quando o valor persistido difere. Exposto via signal `financeSummaries` + `getFinanceSummary(id)`.
+  - `financial.service.ts:327`: dedup do fallback de cache corrigido — movimentos do espelho cuja NE/tipo/valor já existem no banco não são mais re-adicionados (a chave antiga `ne|type|cdevento|amount` não batia com a do DB `ne|type|ne|amount`, duplicando ~R$ 672k de empenho na memória).
+  - `dashboard.service.ts`: `totalCommittedValue`/`totalPaidValue`/`totalBalanceToPay`/`paymentComparisonByContract`/`expensesByType` agora usam `financeOf(c)` (resumo validado, com fallback para o persistido). `totalBalanceToPay` = soma dos saldos **individuais** (já clamped), não `max(0, total−pago)` global.
+  - `paymentComparisonByMonth` (Previsto vs Pago): exclui contratos de material (pagamento à vista não é mensal) e usa `effectiveMonthlyValue` (`valor_mensal` ou fallback `valor_anual/12`) — 10 contratos não tinham `valor_mensal` (ex.: 110/2025, R$ 5,7M anual) e mostravam Previsto = 0.
+  - Dashboard HTML: badge âmbar "N contrato(s) com totais recalculados" no card Comparativo, com tooltip listando os contratos.
+- **SQL**: `sql/23_RECALCULAR_TOTAIS_FINANCEIROS.sql` corrige os totais persistidos de `contratos` e `dotacoes` a partir das `transacoes` (para o restante do app — listas, detalhe, financeiro — que ainda lê o persistido).
+
 ### 30. Centralização de dados financeiros — correções de consistência (Jul 2026)
 - **`financial.service.ts:970-978`**: removido `saldo_a_pagar` do UPDATE em `updateContractTotals()` — valor é sempre recalculado na leitura (`mapRawToContract`), escrita é redundante.
 - **`contract.service.ts:476`**: removidos `total_empenhado`, `total_pago`, `saldo_a_pagar`, `data_ultimo_pagamento` do `allowedFields` em `updateContract()` — impede sobrescrita manual acidental.

@@ -57,6 +57,12 @@ export interface PaymentComparisonContract {
   diff: number;
 }
 
+export interface FinanceDivergence {
+  contract: string;
+  stored: number;
+  computed: number;
+}
+
 export interface ExpensesByType {
   materialCount: number;
   serviceCount: number;
@@ -156,6 +162,31 @@ export class DashboardService {
     return installmentDate < today;
   }
 
+  /**
+   * Totais financeiros validados de um contrato.
+   * Prioriza o resumo calculado a partir da tabela `transacoes` (fonte canônica);
+   * se ainda não carregado, cai para os totais persistidos.
+   */
+  private financeOf(c: Contract): { empenhado: number; pago: number; saldo: number } {
+    const s = this.financialService.getFinanceSummary(c.id);
+    if (s) {
+      return { empenhado: s.empenhado, pago: s.pago, saldo: s.saldo };
+    }
+    const e = Number(c.total_empenhado) || 0;
+    const p = Number(c.total_pago) || 0;
+    return { empenhado: e, pago: p, saldo: Math.max(0, e - p) };
+  }
+
+  /**
+   * Valor mensal efetivo para o comparativo "Previsto vs Pago".
+   * Usa `valor_mensal` quando cadastrado; senão deriva de `valor_anual / 12`.
+   */
+  private effectiveMonthlyValue(c: Contract): number {
+    if (c.valor_mensal && c.valor_mensal > 0) return c.valor_mensal;
+    const anual = Number(c.valor_anual) || 0;
+    return anual > 0 ? anual / 12 : 0;
+  }
+
   // ── Computed: Contracts filtered by selected year ──────────────────────
 
   readonly filteredContracts = computed(() => {
@@ -177,8 +208,9 @@ export class DashboardService {
       
       const isActiveInYear = start <= fimAno && end >= inicioAno;
       const hasPaymentsThisYear = paidThisYear.has(c.id);
-      
-      const hasGlobalRAP = (Number(c.total_empenhado) || 0) - (Number(c.total_pago) || 0) > 0.01;
+
+      // Usa totais validados (transações) em vez dos persistidos, que podem estar desatualizados
+      const hasGlobalRAP = this.financeOf(c).saldo > 0.01;
       
       return isActiveInYear || hasPaymentsThisYear || (hasGlobalRAP && start <= fimAno);
     });
@@ -233,8 +265,17 @@ export class DashboardService {
       monthly[key] = { expected: 0, paid: 0 };
     }
 
+    // Contratos de serviço com cadência mensal. Materiais são pagos à vista e
+    // não devem entrar num comparativo mensal previsto vs pago.
+    const monthlyServiceIds = new Set<string>();
+
     contracts.forEach(c => {
-      if (!c.valor_mensal || !c.data_inicio) return;
+      if (c.tipo === 'material') return;
+      if (!c.data_inicio) return;
+      const vm = this.effectiveMonthlyValue(c);
+      if (vm <= 0) return;
+      monthlyServiceIds.add(c.id);
+
       const start = new Date(c.data_inicio);
       const end = c.data_fim_efetiva ? new Date(c.data_fim_efetiva) : new Date(c.data_fim);
       const cur = new Date(start);
@@ -242,7 +283,7 @@ export class DashboardService {
       while (cur <= end && cur.getFullYear() <= year) {
         if (cur.getFullYear() === year) {
           const key = `${year}-${String(cur.getMonth() + 1).padStart(2, '0')}`;
-          if (monthly[key]) monthly[key].expected += c.valor_mensal;
+          if (monthly[key]) monthly[key].expected += vm;
         }
         cur.setMonth(cur.getMonth() + 1);
       }
@@ -250,6 +291,7 @@ export class DashboardService {
 
     transactions.forEach(t => {
       if (t.type !== TransactionType.LIQUIDATION) return;
+      if (!monthlyServiceIds.has(t.contract_id)) return;
       const d = new Date(t.date);
       if (d.getFullYear() === year) {
         const key = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -267,12 +309,25 @@ export class DashboardService {
 
     return contracts
       .map(c => {
-        const netCommitted = Number(c.total_empenhado) || 0;
-        const paid = Number(c.total_pago) || 0;
-        return { contractId: c.id, contract: c.contrato, contratada: c.contratada, expected: netCommitted, paid, diff: Math.max(0, netCommitted - paid) };
+        const f = this.financeOf(c);
+        return { contractId: c.id, contract: c.contrato, contratada: c.contratada, expected: f.empenhado, paid: f.pago, diff: f.saldo };
       })
       .filter(d => d.expected > 0 || d.paid > 0)
       .sort((a, b) => b.expected - a.expected);
+  });
+
+  // ── Validação financeira ────────────────────────────────────────────────
+  // Contratos cujos totais persistidos divergem do calculado pelas transações.
+  // O dashboard já exibe os valores calculados (corretos); este indicador só documenta a divergência.
+
+  readonly financeDivergentContracts = computed<FinanceDivergence[]>(() => {
+    const result: FinanceDivergence[] = [];
+    this.financialService.financeSummaries().forEach(s => {
+      if (s.divergencia) {
+        result.push({ contract: s.contract, stored: s.storedEmpenhado ?? 0, computed: s.empenhado });
+      }
+    });
+    return result.sort((a, b) => a.contract.localeCompare(b.contract, undefined, { numeric: true }));
   });
 
   // ── Totals ─────────────────────────────────────────────────────────────
@@ -287,17 +342,24 @@ export class DashboardService {
     const active = this.filteredContracts().filter(
       c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO
     );
-    return active.reduce((acc, c) => acc + (c.total_empenhado || 0), 0);
+    return active.reduce((acc, c) => acc + this.financeOf(c).empenhado, 0);
   });
 
   readonly totalPaidValue = computed(() => {
     const active = this.filteredContracts().filter(
       c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO
     );
-    return active.reduce((acc, c) => acc + (c.total_pago || 0), 0);
+    return active.reduce((acc, c) => acc + this.financeOf(c).pago, 0);
   });
 
-  readonly totalBalanceToPay = computed(() => Math.max(0, this.totalCommittedValue() - this.totalPaidValue()));
+  // Saldo a pagar = soma dos saldos individuais (já não-negativos). Um pagamento
+  // maior que o empenho num contrato não "compensa" o saldo positivo de outro.
+  readonly totalBalanceToPay = computed(() => {
+    const active = this.filteredContracts().filter(
+      c => c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO
+    );
+    return active.reduce((acc, c) => acc + this.financeOf(c).saldo, 0);
+  });
 
   // ── Expenses by Type (Material vs Service) ─────────────────────────────
 
@@ -316,8 +378,8 @@ export class DashboardService {
       const isMaterial = tipo === 'material';
       const isServico = tipo === 'serviço' || tipo === 'servico';
       const isVigente = c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO;
-      // total_pago do contrato (populado via syncSigefTransactions → dotacoes → trigger → contratos)
-      const paid = Number(c.total_pago) || 0;
+      // total_pago validado pelas transações (fonte canônica), não o persistido que pode estar desatualizado
+      const paid = this.financeOf(c).pago;
 
       if (isMaterial) {
         result.materialCount++;
