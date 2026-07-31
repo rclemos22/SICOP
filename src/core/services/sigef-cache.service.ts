@@ -3,6 +3,7 @@ import { SupabaseService } from './supabase.service';
 import { DebugService } from './debug.service';
 import { ErrorHandlerService } from './error-handler.service';
 import { SigefMirrorService } from './sigef-mirror.service';
+import { SyncAuditService } from './sync-audit.service';
 
 export interface SigefNotaEmpenho {
   id?: string;
@@ -135,6 +136,7 @@ export class SigefCacheService {
   private errorHandler = inject(ErrorHandlerService);
   private debug = inject(DebugService);
   private mirrorService = inject(SigefMirrorService);
+  private auditService = inject(SyncAuditService);
 
   private _loading = signal<boolean>(false);
   readonly loading = this._loading.asReadonly();
@@ -561,14 +563,38 @@ export class SigefCacheService {
         .maybeSingle();
 
       if (exist) {
-        await this.supabaseService.client
+        const { error: errUp } = await this.supabaseService.client
           .from('sigef_ordens_bancarias')
           .update(item)
           .eq('id', exist.id);
+        if (errUp) {
+          console.error('[SigefCache] Erro ao atualizar sigef_ordens_bancarias:', item.nuordembancaria, errUp);
+          this.auditService.addFailure({
+            stage: 'CACHE_SAVE',
+            errorType: 'DATABASE_ERROR',
+            ne: item.nunotaempenho,
+            ob: item.nuordembancaria,
+            pp: item.nudocumento,
+            errorMessage: `Erro ao atualizar sigef_ordens_bancarias: ${errUp.message}`,
+            details: JSON.stringify(errUp)
+          });
+        }
       } else {
-        await this.supabaseService.client
+        const { error: errIn } = await this.supabaseService.client
           .from('sigef_ordens_bancarias')
           .insert(item);
+        if (errIn) {
+          console.error('[SigefCache] Erro ao inserir sigef_ordens_bancarias:', item.nuordembancaria, errIn);
+          this.auditService.addFailure({
+            stage: 'CACHE_SAVE',
+            errorType: 'DATABASE_ERROR',
+            ne: item.nunotaempenho,
+            ob: item.nuordembancaria,
+            pp: item.nudocumento,
+            errorMessage: `Erro ao inserir sigef_ordens_bancarias: ${errIn.message}`,
+            details: JSON.stringify(errIn)
+          });
+        }
       }
     }
   }

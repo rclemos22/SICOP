@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { SigefService } from './sigef.service';
 import { SigefMirrorService } from './sigef-mirror.service';
 import { SupabaseService } from './supabase.service';
+import { SyncAuditService } from './sync-audit.service';
 
 interface RegisteredNE {
   nunotaempenho: string;
@@ -39,6 +40,7 @@ export class SigefBulkSyncService {
   private sigefService = inject(SigefService);
   private mirrorService = inject(SigefMirrorService);
   private supabase = inject(SupabaseService);
+  private auditService = inject(SyncAuditService);
 
   private get client() { return this.supabase.client; }
 
@@ -202,6 +204,13 @@ export class SigefBulkSyncService {
           const msg = `${label}: ${err?.message || 'Erro desconhecido'}`;
           errors.push(msg);
           console.error('[BulkSync]', msg);
+          this.auditService.addFailure({
+            stage: 'API_DOWNLOAD',
+            errorType: 'API_ERROR',
+            ne: nunotaempenho,
+            errorMessage: msg,
+            details: err?.stack || err?.message
+          });
           await this._markPeriodError(inicioNE, fimNE, 'NE', msg);
         }
 
@@ -237,6 +246,13 @@ export class SigefBulkSyncService {
           const msg = `${label}: ${err?.message || 'Erro desconhecido'}`;
           errors.push(msg);
           console.error('[BulkSync]', msg);
+          this.auditService.addFailure({
+            stage: 'API_DOWNLOAD',
+            errorType: 'API_ERROR',
+            ne: nunotaempenho,
+            errorMessage: msg,
+            details: err?.stack || err?.message
+          });
           await this._markPeriodError(inicioNE, fimNE, 'OB', msg);
         }
 

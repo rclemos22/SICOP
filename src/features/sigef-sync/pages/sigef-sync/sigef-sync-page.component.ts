@@ -1,15 +1,17 @@
-import { Component, inject, signal, OnDestroy, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { SigefSchedulerService } from '../../../../core/services/sigef-scheduler.service';
 import { SigefBulkSyncService } from '../../../../core/services/sigef-bulk-sync.service';
-import { SigefSyncService, SyncTask } from '../../../../core/services/sigef-sync.service';
-import { SyncHistoryService, SyncLogEntry } from '../../../../core/services/sync-history.service';
+import { SigefSyncService } from '../../../../core/services/sigef-sync.service';
+import { SyncHistoryService } from '../../../../core/services/sync-history.service';
+import { SyncAuditService, SyncFailureItem } from '../../../../core/services/sync-audit.service';
 import { FinancialService } from '../../../financial/services/financial.service';
 
 @Component({
   selector: 'app-sigef-sync-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="flex-1 overflow-y-auto p-6 md:px-10 md:py-8 h-full">
 
@@ -18,7 +20,7 @@ import { FinancialService } from '../../../financial/services/financial.service'
         <div>
           <h1 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Sincronizar SIGEF</h1>
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Gerencie a sincronização dos dados com a API oficial do SIGEF.
+            Gerencie a sincronização dos dados com a API oficial do SIGEF e audite a integridade das NE, OB e PP.
           </p>
         </div>
         <div class="text-xs text-slate-400">
@@ -219,6 +221,137 @@ import { FinancialService } from '../../../financial/services/financial.service'
         </div>
       }
 
+      <!-- Painel de Auditoria e Integridade (NE / OB / PP / Banco) -->
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+              [class.bg-green-100]="auditFailures().length === 0"
+              [class.dark:bg-green-900\/30]="auditFailures().length === 0"
+              [class.bg-red-100]="auditFailures().length > 0"
+              [class.dark:bg-red-900\/30]="auditFailures().length > 0">
+              <span class="material-symbols-outlined text-[24px]"
+                [class.text-green-600]="auditFailures().length === 0"
+                [class.dark:text-green-400]="auditFailures().length === 0"
+                [class.text-red-600]="auditFailures().length > 0"
+                [class.dark:text-red-400]="auditFailures().length > 0">
+                {{ auditFailures().length === 0 ? 'verified_user' : 'report' }}
+              </span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                Auditoria de Integridade (NE / OB / PP / Banco)
+                @if (auditFailures().length > 0) {
+                  <span class="px-2 py-0.5 text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 rounded-full">
+                    {{ auditFailures().length }} erro(s)
+                  </span>
+                } @else {
+                  <span class="px-2 py-0.5 text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 rounded-full">
+                    100% OK
+                  </span>
+                }
+              </h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Rastreia se houve qualquer falha ao salvar NE, OB, PP (Processo de Pagamento) ou transações no banco de dados.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            @if (auditFailures().length > 0) {
+              <button (click)="exportarAuditoriaCsv()"
+                class="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">download</span>
+                Exportar CSV
+              </button>
+
+              <button (click)="limparAuditoria()"
+                class="px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                Limpar
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (auditFailures().length === 0) {
+          <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3">
+            <span class="material-symbols-outlined text-green-600 dark:text-green-400 text-[28px]">check_circle</span>
+            <div>
+              <p class="text-xs font-bold text-green-800 dark:text-green-300">100% dos dados gravados com sucesso!</p>
+              <p class="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                Todas as Notas de Empenho, Ordens Bancárias, Processos de Pagamento (PP) e transações do banco de dados foram sincronizadas sem nenhuma falha.
+              </p>
+            </div>
+          </div>
+        } @else {
+          <!-- Busca rápida audit -->
+          <div class="mb-3 flex items-center gap-2">
+            <div class="relative flex-1">
+              <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-[18px]">search</span>
+              <input
+                type="text"
+                [ngModel]="searchAudit()"
+                (ngModelChange)="searchAudit.set($event)"
+                placeholder="Filtrar inconsistências por NE, OB, PP ou mensagem..."
+                class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+            <span class="text-xs text-slate-400">
+              Exibindo {{ filteredFailures().length }} de {{ auditFailures().length }}
+            </span>
+          </div>
+
+          <!-- Tabela de Inconsistências -->
+          <div class="overflow-x-auto max-h-[300px] overflow-y-auto border border-red-200 dark:border-red-900/50 rounded-lg">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-red-100/70 dark:bg-red-950/60 text-red-900 dark:text-red-200 font-bold sticky top-0">
+                <tr>
+                  <th class="p-2.5">Data/Hora</th>
+                  <th class="p-2.5">Estágio</th>
+                  <th class="p-2.5">NE</th>
+                  <th class="p-2.5">OB</th>
+                  <th class="p-2.5">PP / Doc</th>
+                  <th class="p-2.5">Mensagem / Erro do Banco</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-red-100 dark:divide-red-900/30">
+                @for (item of filteredFailures(); track item.id) {
+                  <tr class="bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/40 dark:hover:bg-red-900/20 transition-colors">
+                    <td class="p-2.5 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                      {{ formatTime(item.timestamp) }}
+                    </td>
+                    <td class="p-2.5 whitespace-nowrap">
+                      <span class="px-2 py-0.5 font-semibold rounded text-[10px]"
+                        [class.bg-blue-100]="item.stage === 'API_DOWNLOAD'"
+                        [class.text-blue-800]="item.stage === 'API_DOWNLOAD'"
+                        [class.bg-yellow-100]="item.stage === 'CACHE_SAVE'"
+                        [class.text-yellow-800]="item.stage === 'CACHE_SAVE'"
+                        [class.bg-red-100]="item.stage === 'TRANSACTION_INSERT'"
+                        [class.text-red-800]="item.stage === 'TRANSACTION_INSERT'"
+                      >
+                        {{ getStageLabel(item.stage) }}
+                      </span>
+                    </td>
+                    <td class="p-2.5 font-mono font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                      {{ item.ne || '-' }}
+                    </td>
+                    <td class="p-2.5 font-mono text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                      {{ item.ob || '-' }}
+                    </td>
+                    <td class="p-2.5 font-mono text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                      {{ item.pp || '-' }}
+                    </td>
+                    <td class="p-2.5 text-red-700 dark:text-red-300 font-medium">
+                      {{ item.errorMessage }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
       <!-- History Log -->
       <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
         <div class="flex items-center justify-between mb-3">
@@ -283,6 +416,7 @@ export class SigefSyncPageComponent implements OnInit, OnDestroy {
   protected syncService = inject(SigefSyncService);
   private syncHistory = inject(SyncHistoryService);
   private financialService = inject(FinancialService);
+  protected auditService = inject(SyncAuditService);
 
   protected message = signal<string | null>(null);
   protected bulkProgress = this.bulkSyncService.progress;
@@ -294,6 +428,22 @@ export class SigefSyncPageComponent implements OnInit, OnDestroy {
   protected syncQueue = this.syncService.syncQueue;
   protected syncStatus = this.syncService.syncStatus;
   protected logEntries = this.syncHistory.entries;
+  protected auditFailures = this.auditService.failures;
+
+  protected searchAudit = signal('');
+
+  protected filteredFailures = computed(() => {
+    const q = this.searchAudit().toLowerCase().trim();
+    const items = this.auditFailures();
+    if (!q) return items;
+    return items.filter(f =>
+      (f.ne && f.ne.toLowerCase().includes(q)) ||
+      (f.ob && f.ob.toLowerCase().includes(q)) ||
+      (f.pp && f.pp.toLowerCase().includes(q)) ||
+      (f.contractNumber && f.contractNumber.toLowerCase().includes(q)) ||
+      (f.errorMessage && f.errorMessage.toLowerCase().includes(q))
+    );
+  });
 
   private _timer: any;
 
@@ -318,8 +468,26 @@ export class SigefSyncPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  getStageLabel(stage: SyncFailureItem['stage']): string {
+    switch (stage) {
+      case 'API_DOWNLOAD': return 'Download API';
+      case 'CACHE_SAVE': return 'Cache Espelho';
+      case 'TRANSACTION_INSERT': return 'Banco (Transações)';
+      case 'TOTALS_CALC': return 'Cálculo Saldos';
+      default: return stage;
+    }
+  }
+
   limparHistorico(): void {
     this.syncHistory.clear();
+  }
+
+  limparAuditoria(): void {
+    this.auditService.clearFailures();
+  }
+
+  exportarAuditoriaCsv(): void {
+    this.auditService.exportCsv();
   }
 
   async sincronizarTotal() {
