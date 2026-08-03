@@ -171,18 +171,19 @@ export class AtaPdfService {
       const saldoRows = itens.map(item => {
         const saldo = saldos.find(s => s.item_id === item.id);
         const aderido = saldo?.quantidade_aderida ?? 0;
-        const limiteColetivo = item.quantidade * 2.0;
-        const pct = limiteColetivo > 0 ? ((aderido / limiteColetivo) * 100).toFixed(2) : '0.00';
+        const isUnico = item.quantidade <= 1;
+        const saldoAdesao = isUnico ? 0 : (saldo?.saldo_adesao_total ?? Math.max(0, (item.quantidade * 2.0) - aderido));
+        const pctAdesao = isUnico ? 'Indisponível' : `${((saldoAdesao / item.quantidade) * 100).toFixed(2)}%`;
         return [
           String(item.numero_item),
           item.descricao,
           item.unidade || '-',
           this.fmtInt(item.quantidade),
-          this.fmtInt(item.quantidade * 2.0),
-          this.fmtInt(item.quantidade * 0.5),
+          isUnico ? 'Indisponível' : this.fmtInt(item.quantidade * 2.0),
+          isUnico ? 'Indisponível' : this.fmtInt(item.quantidade * 0.5),
           this.fmtInt(aderido),
-          this.fmtInt(saldo?.saldo_adesao_total ?? 0),
-          `${pct}%`,
+          isUnico ? 'Indisponível' : this.fmtInt(saldoAdesao),
+          pctAdesao,
         ];
       });
 

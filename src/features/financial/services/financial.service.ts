@@ -241,7 +241,7 @@ export class FinancialService {
       const [transacoesResult, contratosResult] = await Promise.all([
         this.supabaseService.client
           .from('transacoes')
-          .select('contract_id, type, amount'),
+          .select('contract_id, type, amount, sigef_id, manual_payment'),
         this.supabaseService.client
           .from('contratos')
           .select('id, contrato, contratada, status, tipo, total_empenhado, total_pago')
@@ -252,6 +252,7 @@ export class FinancialService {
 
       const totals = new Map<string, { empenhado: number; pago: number }>();
       for (const t of transacoesResult.data || []) {
+        if (t.manual_payment === true || (t.sigef_id && t.sigef_id.startsWith('manual-pay'))) continue;
         const cid = t.contract_id;
         if (!cid) continue;
         const amt = Math.abs(Number(t.amount) || 0);

@@ -306,18 +306,49 @@ export class DashboardService {
 
   readonly paymentComparisonByContract = computed<PaymentComparisonContract[]>(() => {
     const contracts = this.filteredContracts();
+    const year = this.appContext.anoExercicio();
+    const allBudgets = this.budgetService.allDotacoes();
+    const transactions = this.financialService.transactions();
+
+    // Mapeamento de dotações do ano vigente por contrato
+    const dotacoesMap = new Map<string, number>();
+    for (const b of allBudgets) {
+      if (!b.contract_id) continue;
+      const bYear = b.data_disponibilidade ? new Date(b.data_disponibilidade).getFullYear() : 0;
+      if (bYear === year || (b.dotacao && b.dotacao.includes(String(year)))) {
+        const cur = dotacoesMap.get(b.contract_id) || 0;
+        dotacoesMap.set(b.contract_id, cur + (b.valor_dotacao || 0));
+      }
+    }
+
+    // Mapeamento dos pagamentos (LIQUIDATION) do ano vigente por contrato
+    const paidMap = new Map<string, number>();
+    for (const t of transactions) {
+      if (!t.contract_id || t.type !== TransactionType.LIQUIDATION) continue;
+      if (t.manual_payment === true || (t.sigef_id && t.sigef_id.startsWith('manual-pay'))) continue;
+      const d = new Date(t.date);
+      if (d.getFullYear() === year) {
+        const cur = paidMap.get(t.contract_id) || 0;
+        paidMap.set(t.contract_id, cur + t.amount);
+      }
+    }
 
     return contracts
       .map(c => {
         const f = this.financeOf(c);
-        return { contractId: c.id, contract: c.contrato, contratada: c.contratada, expected: f.empenhado, paid: f.pago, diff: f.saldo };
+        // Dotação do ano vigente (se houver em dotacoes, usa; senão fallback para c.valor_anual)
+        const dotacaoAno = dotacoesMap.get(c.id) || 0;
+        const expected = dotacaoAno > 0 ? dotacaoAno : Math.max(c.valor_anual || 0, f.empenhado);
+        const paid = paidMap.has(c.id) ? paidMap.get(c.id)! : f.pago;
+        const diff = Math.max(0, expected - paid);
+        return { contractId: c.id, contract: c.contrato, contratada: c.contratada, expected, paid, diff };
       })
       .filter(d => d.expected > 0 || d.paid > 0)
       .sort((a, b) => b.expected - a.expected);
   });
 
   // ── Validação financeira ────────────────────────────────────────────────
-  // Contratos cujos totais persistidos divergem do calculado pelas transações.
+  // Contratos cujos totais persistidos divergem do calculated pelas transações.
   // O dashboard já exibe os valores calculados (corretos); este indicador só documenta a divergência.
 
   readonly financeDivergentContracts = computed<FinanceDivergence[]>(() => {
@@ -365,6 +396,30 @@ export class DashboardService {
 
   readonly expensesByType = computed<ExpensesByType>(() => {
     const contracts = this.filteredContracts();
+    const year = this.appContext.anoExercicio();
+    const allBudgets = this.budgetService.allDotacoes();
+    const transactions = this.financialService.transactions();
+
+    const dotacoesMap = new Map<string, number>();
+    for (const b of allBudgets) {
+      if (!b.contract_id) continue;
+      const bYear = b.data_disponibilidade ? new Date(b.data_disponibilidade).getFullYear() : 0;
+      if (bYear === year || (b.dotacao && b.dotacao.includes(String(year)))) {
+        const cur = dotacoesMap.get(b.contract_id) || 0;
+        dotacoesMap.set(b.contract_id, cur + (b.valor_dotacao || 0));
+      }
+    }
+
+    const paidMap = new Map<string, number>();
+    for (const t of transactions) {
+      if (!t.contract_id || t.type !== TransactionType.LIQUIDATION) continue;
+      if (t.manual_payment === true || (t.sigef_id && t.sigef_id.startsWith('manual-pay'))) continue;
+      const d = new Date(t.date);
+      if (d.getFullYear() === year) {
+        const cur = paidMap.get(t.contract_id) || 0;
+        paidMap.set(t.contract_id, cur + t.amount);
+      }
+    }
 
     const result: ExpensesByType = {
       materialCount: 0, serviceCount: 0,
@@ -376,18 +431,18 @@ export class DashboardService {
     contracts.forEach(c => {
       const tipo = (c.tipo || '').toLowerCase();
       const isMaterial = tipo === 'material';
-      const isServico = tipo === 'serviço' || tipo === 'servico';
-      const isVigente = c.status === ContractStatus.VIGENTE || c.status === ContractStatus.FINALIZANDO;
-      // total_pago validado pelas transações (fonte canônica), não o persistido que pode estar desatualizado
-      const paid = this.financeOf(c).pago;
+      const f = this.financeOf(c);
+      const dotacaoAno = dotacoesMap.get(c.id) || 0;
+      const planejado = dotacaoAno > 0 ? dotacaoAno : Math.max(c.valor_anual || 0, f.empenhado);
+      const paid = paidMap.has(c.id) ? paidMap.get(c.id)! : f.pago;
 
       if (isMaterial) {
         result.materialCount++;
-        if (isVigente) result.materialPlanejado += (c.valor_anual || 0);
+        result.materialPlanejado += planejado;
         result.materialPago += paid;
-      } else if (isServico) {
+      } else {
         result.serviceCount++;
-        if (isVigente) result.servicePlanejado += (c.valor_anual || 0);
+        result.servicePlanejado += planejado;
         result.servicePago += paid;
       }
     });

@@ -106,6 +106,7 @@ export interface SaldoItem {
   // Saldo total disponível para adesões (limite coletivo 200% - já aderido)
   saldo_adesao_total: number;
   percentual_utilizado: number;
+  percentual_disponivel_adesao?: number;
   numero_ata: string;
   numero_processo: string;
   ata_status: string;

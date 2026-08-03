@@ -1338,25 +1338,6 @@ export class ContractDetailsPageComponent {
           throw error;
         }
 
-        await this.supabaseService.client
-          .from('transacoes')
-          .insert({
-            contract_id: c.id,
-            sigef_id: `manual-pay-${c.id}-${installment.reference}`,
-            description: `PAGAMENTO MANUAL - ${installment.reference}`,
-            commitment_id: '',
-            date: new Date().toISOString().split('T')[0],
-            type: TransactionType.LIQUIDATION,
-            amount: installment.valor,
-            department: 'Pagamento Manual',
-            budget_description: 'Pagamento Manual',
-            parcela_referencia: installment.reference,
-            ob_number: 'MANUAL',
-            document_number: `MANUAL-${installment.reference}`,
-            manual_payment: true,
-          });
-
-        await this.financialService.updateContractTotals(c.id);
         await this.contractService.loadContracts(undefined, true);
       }
     } catch (err: any) {

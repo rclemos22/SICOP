@@ -216,11 +216,11 @@
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
         <div>
           <h3 class="text-base font-bold text-gray-900 dark:text-white">Comparativo Financeiro por Contrato</h3>
-          <p class="text-[10px] text-gray-400 mt-1 uppercase tracking-tight font-medium">Execução acumulada - Ano {{ appContext.anoExercicio() }}</p>
+          <p class="text-[10px] text-gray-400 mt-1 uppercase tracking-tight font-medium">Dotação Orçamentária {{ appContext.anoExercicio() }} vs Efetivamente Pago</p>
         </div>
         <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-400"></span><span class="text-[9px] font-bold text-gray-500 uppercase">Previsto</span></div>
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-green-500"></span><span class="text-[9px] font-bold text-gray-500 uppercase">Pago</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-400"></span><span class="text-[9px] font-bold text-gray-500 uppercase">Dotação ({{ appContext.anoExercicio() }})</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-green-500"></span><span class="text-[9px] font-bold text-gray-500 uppercase">Pago ({{ appContext.anoExercicio() }})</span></div>
           @if (financeDivergentContracts().length > 0) {
             <span class="text-[9px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400 px-2 py-1 border border-amber-200 dark:border-amber-800 rounded" [title]="financeDivergenceTitle()">
               {{ financeDivergentContracts().length }} contrato(s) com totais recalculados

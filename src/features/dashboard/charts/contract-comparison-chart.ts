@@ -73,7 +73,7 @@ export class ContractComparisonChart {
     const colors = { expected: '#3B82F6', paid: '#22C55E' };
     svg.selectAll('.g').data(data).join('g').attr('transform', d => `translate(${x0(d.contract)},0)`)
       .selectAll('rect').data(d => [
-        { key:'expected', value:d.expected, label:'Previsto Anual', contract:d.contract, contractId: d.contractId },
+        { key:'expected', value:d.expected, label:'Dotação Vigente', contract:d.contract, contractId: d.contractId },
         { key:'paid', value:d.paid, label:'Pago Efetivo', contract:d.contract, contractId: d.contractId },
       ]).join('rect')
       .attr('x', d => x1(d.key) || 0).attr('y', d => y(d.value))
@@ -82,8 +82,11 @@ export class ContractComparisonChart {
       .on('click', (event, d) => viewContract(d.contractId))
       .on('mouseover', function (event, d) {
         d3.select(this).attr('opacity',.8);
-        const fmt = `R$ ${d.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-        tip.html(`<strong>${d.contract}</strong><br>${d.label}: ${fmt}`).classed('hidden',false);
+        const itemData = data.find(item => item.contract === d.contract);
+        const dotacaoFmt = itemData ? `R$ ${itemData.expected.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00';
+        const pagoFmt = itemData ? `R$ ${itemData.paid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00';
+        const pct = (itemData && itemData.expected > 0) ? ((itemData.paid / itemData.expected) * 100).toFixed(1) : '0.0';
+        tip.html(`<strong>Contrato ${d.contract}</strong><br>• Dotação Vigente: ${dotacaoFmt}<br>• Pago Efetivo: ${pagoFmt}<br>• Execução Orçamentária: ${pct}%`).classed('hidden',false);
       }).on('mousemove', function (event) {
         const [x, y] = d3.pointer(event, container);
         tip.style('left', (x + 10) + 'px').style('top', (y - 20) + 'px');

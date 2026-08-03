@@ -154,16 +154,31 @@
                         [class]="riskLevel(item.percentual_utilizado).class">
                         {{ riskLevel(item.percentual_utilizado).label }}
                       </span>
+                      @if (item.quantidade_registrada <= 1) {
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                          <span class="material-symbols-outlined text-[13px] mr-1">block</span>
+                          Indisponível para adesão
+                        </span>
+                      }
                     </div>
                     <p class="text-sm font-bold text-gray-900 dark:text-white mt-0.5 truncate">{{ item.descricao_item }}</p>
                   </div>
-                  <span class="text-xs font-bold whitespace-nowrap shrink-0 ml-2"
-                    [class.text-green-600]="item.percentual_utilizado < 50"
-                    [class.text-amber-600]="item.percentual_utilizado >= 50 && item.percentual_utilizado < 80"
-                    [class.text-orange-600]="item.percentual_utilizado >= 80 && item.percentual_utilizado < 100"
-                    [class.text-red-600]="item.percentual_utilizado >= 100">
-                    {{ item.percentual_utilizado }}% utilizado
-                  </span>
+                  <div class="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+                    <span class="text-xs font-bold whitespace-nowrap"
+                      [class.text-green-600]="item.percentual_utilizado < 50"
+                      [class.text-amber-600]="item.percentual_utilizado >= 50 && item.percentual_utilizado < 80"
+                      [class.text-orange-600]="item.percentual_utilizado >= 80 && item.percentual_utilizado < 100"
+                      [class.text-red-600]="item.percentual_utilizado >= 100">
+                      {{ item.percentual_utilizado }}% utilizado (Consumo)
+                    </span>
+                    @if (item.quantidade_registrada <= 1) {
+                      <span class="text-[11px] font-semibold text-gray-400 dark:text-gray-500 italic">Indisponível para adesão</span>
+                    } @else {
+                      <span class="text-[11px] font-semibold text-violet-600 dark:text-violet-400 font-mono">
+                        {{ percentualDisponivelAdesao(item) }}% disponível p/ adesão
+                      </span>
+                    }
+                  </div>
                 </div>
 
                 <!-- Progress Bar com indicadores de limite legal -->
@@ -200,7 +215,13 @@
                   </div>
                   <div class="text-center">
                     <div class="text-violet-500">Adesão (200%)</div>
-                    <div class="font-mono font-bold text-violet-600">{{ item.saldo_adesao_total }}</div>
+                    <div class="font-mono font-bold text-violet-600">
+                      @if (item.quantidade_registrada <= 1) {
+                        <span class="text-gray-400 text-[11px]">Indisponível</span>
+                      } @else {
+                        {{ item.saldo_adesao_total }}
+                      }
+                    </div>
                   </div>
                   <div class="text-center">
                     <div class="text-purple-500">Valor Unit.</div>
@@ -211,11 +232,18 @@
                 <!-- Limites Legais do Item -->
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-800 pt-2 mt-1">
                   <span class="font-semibold">Limites:</span>
-                  <span>Individual (50%): <strong class="text-orange-600 dark:text-orange-400">{{ item.quantidade_registrada * 0.5 | number:'1.2-2' }}</strong></span>
-                  <span>Coletivo (200%): <strong class="text-red-600 dark:text-red-400">{{ item.quantidade_registrada * 2.0 | number:'1.2-2' }}</strong></span>
-                  <span>Saldo adesão: <strong class="text-blue-600 dark:text-blue-400">{{ (item.saldo_adesao ?? Math.max(0, (item.quantidade_registrada * 2.0) - item.quantidade_aderida)) | number:'1.2-2' }}</strong></span>
-                  <span>Consumo próprio: <strong class="text-emerald-600 dark:text-emerald-400">{{ item.saldo_consumo_interno | number:'1.2-2' }}</strong></span>
-                  <span>Disponível adesão: <strong class="text-violet-600 dark:text-violet-400">{{ item.saldo_adesao_total | number:'1.2-2' }}</strong></span>
+                  @if (item.quantidade_registrada <= 1) {
+                    <span class="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[12px]">info</span>
+                      Item com 1 unidade registrada — Indisponível para adesão por outros órgãos (Art. 86, §3º da Lei 14.133/2021)
+                    </span>
+                  } @else {
+                    <span>Individual (50%): <strong class="text-orange-600 dark:text-orange-400">{{ item.quantidade_registrada * 0.5 | number:'1.2-2' }}</strong></span>
+                    <span>Coletivo (200%): <strong class="text-red-600 dark:text-red-400">{{ item.quantidade_registrada * 2.0 | number:'1.2-2' }}</strong></span>
+                    <span>Saldo adesão: <strong class="text-blue-600 dark:text-blue-400">{{ (item.saldo_adesao ?? Math.max(0, (item.quantidade_registrada * 2.0) - item.quantidade_aderida)) | number:'1.2-2' }}</strong></span>
+                    <span>Consumo próprio: <strong class="text-emerald-600 dark:text-emerald-400">{{ item.saldo_consumo_interno | number:'1.2-2' }}</strong></span>
+                    <span>Disponível adesão: <strong class="text-violet-600 dark:text-violet-400">{{ item.saldo_adesao_total | number:'1.2-2' }} ({{ percentualDisponivelAdesao(item) }}%)</strong></span>
+                  }
                 </div>
               </div>
             }
@@ -344,24 +372,35 @@
                 <div class="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-800">
                   @for (item of saldos(); track item.item_id) {
                     @let qtd = getItemQuantidade(item.item_id);
-                    <div class="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800/50 cursor-pointer"
-                      (click)="toggleItemSelecionado(item.item_id)">
-                      <input type="checkbox"
-                        [checked]="qtd > 0"
-                        class="w-4 h-4 rounded border-gray-300 text-sco-blue focus:ring-sco-blue cursor-pointer">
-                      <span class="text-xs font-bold text-gray-500 font-mono w-8 shrink-0">Item {{ item.numero_item }}</span>
-                      <span class="text-sm text-gray-900 dark:text-white flex-1 min-w-0 truncate">{{ item.descricao_item }}</span>
-                      @if (qtd > 0) {
-                        <input type="number" step="0.01" min="0"
-                          [value]="qtd"
-                          (click)="$event.stopPropagation()"
-                          (input)="onItemQtdInput($event, item.item_id)"
-                          class="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white text-right"
-                          placeholder="Qtd">
-                      } @else {
-                        <span class="text-xs text-gray-400 w-24 text-right">0</span>
-                      }
-                    </div>
+                    @if (item.quantidade_registrada <= 1) {
+                      <div class="flex items-center gap-3 px-3 py-2 bg-gray-50/50 dark:bg-gray-800/20 opacity-60">
+                        <input type="checkbox" disabled class="w-4 h-4 rounded border-gray-300">
+                        <span class="text-xs font-bold text-gray-400 font-mono w-8 shrink-0">Item {{ item.numero_item }}</span>
+                        <span class="text-xs text-gray-500 flex-1 min-w-0 truncate">{{ item.descricao_item }}</span>
+                        <span class="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                          Indisponível (1 un.)
+                        </span>
+                      </div>
+                    } @else {
+                      <div class="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800/50 cursor-pointer"
+                        (click)="toggleItemSelecionado(item.item_id)">
+                        <input type="checkbox"
+                          [checked]="qtd > 0"
+                          class="w-4 h-4 rounded border-gray-300 text-sco-blue focus:ring-sco-blue cursor-pointer">
+                        <span class="text-xs font-bold text-gray-500 font-mono w-8 shrink-0">Item {{ item.numero_item }}</span>
+                        <span class="text-sm text-gray-900 dark:text-white flex-1 min-w-0 truncate">{{ item.descricao_item }}</span>
+                        @if (qtd > 0) {
+                          <input type="number" step="0.01" min="0"
+                            [value]="qtd"
+                            (click)="$event.stopPropagation()"
+                            (input)="onItemQtdInput($event, item.item_id)"
+                            class="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-sco-blue outline-none dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white text-right"
+                            placeholder="Qtd">
+                        } @else {
+                          <span class="text-xs text-gray-400 w-24 text-right">0</span>
+                        }
+                      </div>
+                    }
                   }
                 </div>
               </div>

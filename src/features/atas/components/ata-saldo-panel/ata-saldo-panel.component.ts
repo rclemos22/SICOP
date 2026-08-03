@@ -375,6 +375,12 @@ export class AtaSaldoPanelComponent implements OnInit {
     return this.saldos().find(s => s.item_id === ataItemId);
   }
 
+  percentualDisponivelAdesao(item: SaldoItem): number {
+    if (item.quantidade_registrada <= 1) return 0;
+    if (item.percentual_disponivel_adesao != null) return item.percentual_disponivel_adesao;
+    return Number((((item.saldo_adesao_total) / item.quantidade_registrada) * 100).toFixed(2));
+  }
+
   // ---- Utility ----
   percentBarClass(pct: number): string {
     if (pct >= 100) return 'bg-red-500';

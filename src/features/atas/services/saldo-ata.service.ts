@@ -426,6 +426,14 @@ export class SaldoAtaService {
 
     const item = saldo.data;
 
+    if (item.quantidade_registrada <= 1) {
+      return {
+        permitido: false,
+        motivo: 'Item com apenas 1 unidade registrada é indisponível para adesão por outros órgãos (Art. 86, §3º da Lei 14.133/2021).',
+        maximoPermitido: 0,
+      };
+    }
+
     // Art. 86, § 3º — Limite individual: cada órgão não participante não pode exceder 50%
     const limiteIndividual = item.quantidade_registrada * 0.5;
 
@@ -525,43 +533,71 @@ export class SaldoAtaService {
   // ---- Mappers ----
 
   private mapToSaldoItem(raw: any): SaldoItem {
+    const quantidade_registrada = Number(raw.quantidade_registrada) || 0;
+    const quantidade_consumida_interna = Number(raw.quantidade_consumida_interna) || 0;
+    const quantidade_aderida = Number(raw.quantidade_aderida) || 0;
+
+    const saldo_consumo_interno = raw.saldo_consumo_interno != null
+      ? Number(raw.saldo_consumo_interno)
+      : Math.max(0, quantidade_registrada - quantidade_consumida_interna);
+
+    // Para item com <= 1 unidade registrada, adesão é indisponível
+    const saldo_adesao_total = quantidade_registrada <= 1
+      ? 0
+      : (raw.saldo_adesao_total != null
+          ? Number(raw.saldo_adesao_total)
+          : Math.max(0, (quantidade_registrada * 2.0) - quantidade_aderida));
+
+    const percentual_utilizado = quantidade_registrada > 0
+      ? Number(((quantidade_consumida_interna / quantidade_registrada) * 100).toFixed(2))
+      : 0;
+
+    const percentual_disponivel_adesao = quantidade_registrada > 1
+      ? Number(((saldo_adesao_total / quantidade_registrada) * 100).toFixed(2))
+      : 0;
+
     return {
       item_id: raw.item_id,
       ata_id: raw.ata_id,
       numero_item: Number(raw.numero_item) || 0,
       descricao_item: raw.descricao_item ?? '',
       unidade: raw.unidade ?? undefined,
-      quantidade_registrada: Number(raw.quantidade_registrada) || 0,
+      quantidade_registrada,
       valor_unitario: Number(raw.valor_unitario) || 0,
-      quantidade_consumida_interna: Number(raw.quantidade_consumida_interna) || 0,
-      quantidade_aderida: Number(raw.quantidade_aderida) || 0,
+      quantidade_consumida_interna,
+      quantidade_aderida,
       saldo_disponivel: Number(raw.saldo_disponivel) || 0,
-      saldo_consumo_interno: raw.saldo_consumo_interno != null ? Number(raw.saldo_consumo_interno) : Math.max(0, (Number(raw.quantidade_registrada) || 0) - (Number(raw.quantidade_consumida_interna) || 0)),
-      saldo_adesao_total: raw.saldo_adesao_total != null ? Number(raw.saldo_adesao_total) : Math.max(0, ((Number(raw.quantidade_registrada) || 0) * 2.0) - (Number(raw.quantidade_aderida) || 0)),
-      percentual_utilizado: Number(raw.percentual_utilizado) || 0,
+      saldo_consumo_interno,
+      saldo_adesao_total,
+      percentual_utilizado,
+      percentual_disponivel_adesao,
       numero_ata: raw.numero_ata ?? '',
       numero_processo: raw.numero_processo ?? '',
       ata_status: raw.ata_status ?? '',
-      limite_individual: raw.limite_individual != null ? Number(raw.limite_individual) : undefined,
-      limite_coletivo: raw.limite_coletivo != null ? Number(raw.limite_coletivo) : undefined,
-      saldo_adesao: raw.saldo_adesao != null ? Number(raw.saldo_adesao) : undefined,
+      limite_individual: quantidade_registrada <= 1 ? 0 : (raw.limite_individual != null ? Number(raw.limite_individual) : quantidade_registrada * 0.5),
+      limite_coletivo: quantidade_registrada <= 1 ? 0 : (raw.limite_coletivo != null ? Number(raw.limite_coletivo) : quantidade_registrada * 2.0),
+      saldo_adesao: quantidade_registrada <= 1 ? 0 : (raw.saldo_adesao != null ? Number(raw.saldo_adesao) : saldo_adesao_total),
     };
   }
 
   private mapToSaldoResumo(raw: any): SaldoResumo {
+    const totalReg = Number(raw.total_quantidade_registrada) || 0;
+    const totalCons = Number(raw.total_quantidade_consumida) || 0;
+    const percentual_geral = totalReg > 0 ? Number(((totalCons / totalReg) * 100).toFixed(2)) : 0;
+
     return {
       ata_id: raw.ata_id,
       numero_ata: raw.numero_ata ?? '',
       numero_processo: raw.numero_processo ?? '',
       ata_status: raw.ata_status ?? '',
       total_itens: Number(raw.total_itens) || 0,
-      total_quantidade_registrada: Number(raw.total_quantidade_registrada) || 0,
-      total_quantidade_consumida: Number(raw.total_quantidade_consumida) || 0,
+      total_quantidade_registrada: totalReg,
+      total_quantidade_consumida: totalCons,
       total_quantidade_aderida: Number(raw.total_quantidade_aderida) || 0,
       total_saldo_disponivel: Number(raw.total_saldo_disponivel) || 0,
-      total_saldo_consumo_interno: raw.total_saldo_consumo_interno != null ? Number(raw.total_saldo_consumo_interno) : Math.max(0, (Number(raw.total_quantidade_registrada) || 0) - (Number(raw.total_quantidade_consumida) || 0)),
-      total_saldo_adesao_total: raw.total_saldo_adesao_total != null ? Number(raw.total_saldo_adesao_total) : Math.max(0, ((Number(raw.total_quantidade_registrada) || 0) * 2.0) - (Number(raw.total_quantidade_aderida) || 0)),
-      percentual_geral: Number(raw.percentual_geral) || 0,
+      total_saldo_consumo_interno: raw.total_saldo_consumo_interno != null ? Number(raw.total_saldo_consumo_interno) : Math.max(0, totalReg - totalCons),
+      total_saldo_adesao_total: Number(raw.total_saldo_adesao_total) || 0,
+      percentual_geral,
     };
   }
 }
